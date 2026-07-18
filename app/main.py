@@ -1,10 +1,10 @@
 import psycopg2
 import time
 
-from fastapi import FastAPI, Response, status, HTTPException, Depends
+from fastapi import FastAPI
 from psycopg2.extras import RealDictCursor
-from . import models, schemas, utils
-from .database import engine, get_db
+from . import models
+from .database import engine
 from .routers import post, user
 
 models.Base.metadata.create_all(bind=engine)
