@@ -1,3 +1,4 @@
+from sqlalchemy.orm import relationship
 from .database import Base
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.sql.sqltypes import TIMESTAMP
@@ -18,6 +19,8 @@ class Post(Base):
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+
+    user = relationship("User")
 
 
 class User(Base):
