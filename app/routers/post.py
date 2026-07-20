@@ -3,13 +3,14 @@ from fastapi import status, HTTPException, Response, Depends, APIRouter
 from sqlalchemy.orm import Session
 from ..database import get_db
 from typing import List, Optional
+from sqlalchemy import func
 
 from ..oauth2 import get_current_user
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
-@router.get("/", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.PostOut])
 def get_posts(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
@@ -26,7 +27,15 @@ def get_posts(
         .offset(skip)
         .all()
     )
-    return posts
+
+    results = (
+        db.query(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+        .group_by(models.Post.id)
+        .all()
+    )
+
+    return results
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)

@@ -24,9 +24,15 @@ class UserOut(BaseModel):
 class Post(PostBase):
     id: int
     created_at: datetime
-    model_config = ConfigDict(from_attributes=True)
     user_id: int
     user: UserOut
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PostOut(BaseModel):
+    Post: Post
+    votes: int
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(BaseModel):
