@@ -5,6 +5,8 @@ from app.main import app
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.oauth2 import create_access_token
+from app import models
+
 import pytest
 
 SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name}_test"
@@ -57,3 +59,31 @@ def token(test_user):
 def authorized_client(client, token):
     client.headers = {**client.headers, "Authorization": f"Bearer {token}"}
     return client
+
+
+@pytest.fixture
+def test_posts(test_user, session):
+    posts_data = [
+        {
+            "title": "first title",
+            "content": "first content",
+            "user_id": test_user["id"],
+        },
+        {
+            "title": "2n title",
+            "content": "2nd content",
+            "user_id": test_user["id"],
+        },
+        {
+            "title": "3rd title",
+            "content": "3rd content",
+            "user_id": test_user["id"],
+        },
+    ]
+
+    posts = [models.Post(**post) for post in posts_data]
+
+    session.add_all(posts)
+    session.commit()
+    posts = session.query(models.Post).all()
+    return posts
