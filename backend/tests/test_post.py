@@ -1,6 +1,6 @@
 import pytest
 
-from app import schemas
+from backend.app import schemas
 
 
 def test_get_all_post(authorized_client, test_posts):

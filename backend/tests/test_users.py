@@ -1,8 +1,8 @@
 import jwt
 import pytest
 
-from app import schemas
-from app.config import settings
+from backend.app import schemas
+from backend.app import settings
 
 
 def test_create_user(client):
@@ -39,7 +39,7 @@ def test_login_user(client, test_user):
         (None, "password123", 422),
         ("hello123@gmail.com", None, 422),
     ],
-)  
+)
 def test_incorrect_login(test_user, client, email, password, status_code):
     res = client.post("/login", data={"username": email, "password": password})
     assert res.status_code == status_code

@@ -1,5 +1,7 @@
 import pytest
-from app import models
+
+from backend.app import models
+
 
 @pytest.fixture
 def test_vote(test_posts, session, test_user):
