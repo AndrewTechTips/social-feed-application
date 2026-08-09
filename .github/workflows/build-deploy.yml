@@ -17,6 +17,10 @@ jobs:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${{secrets.ACCESS_TOKEN_EXPIRE_MINUTES}}
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi
 
+    defaults:
+      run:
+        working-directory: ./backend
+
     services:
       postgres:
         image: postgres
@@ -70,7 +74,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: ./
+          context: ./backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
