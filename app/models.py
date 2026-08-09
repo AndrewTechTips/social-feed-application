@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import ForeignKey, String, text
-from sqlalchemy.types import TIMESTAMP
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql.expression import text
+from sqlalchemy.types import TIMESTAMP
 
-class Base(DeclarativeBase):
-    pass
+from .database import Base
+
 
 class Post(Base):
     __tablename__ = "posts"
