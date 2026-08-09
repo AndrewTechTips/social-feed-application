@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app import schemas
+from . import schemas
 from . import database, models
 from .config import settings
 
