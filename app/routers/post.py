@@ -24,6 +24,7 @@ def get_posts(
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
         .group_by(models.Post.id)
         .where(models.Post.title.contains(search))
+        .order_by(models.Post.created_at.desc())
         .limit(limit)
         .offset(skip)
     )
