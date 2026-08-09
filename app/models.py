@@ -1,46 +1,38 @@
-from sqlalchemy.orm import relationship
-from .database import Base
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
-from sqlalchemy.sql.sqltypes import TIMESTAMP
+from datetime import datetime
+
+from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import ForeignKey, String, text
+from sqlalchemy.types import TIMESTAMP
 from sqlalchemy.sql.expression import text
 
+class Base(DeclarativeBase):
+    pass
 
 class Post(Base):
     __tablename__ = "posts"
 
-    id = Column(Integer, primary_key=True, nullable=False)
-    title = Column(String, nullable=False)
-    content = Column(String, nullable=False)
-    published = Column(Boolean, server_default="TRUE", nullable=False)
-    created_at = Column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str]      # Automatically deducted (VARCHAR, nullable=False)
+    content: Mapped[str]
+    published: Mapped[bool] = mapped_column(server_default="TRUE")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-
-    user = relationship("User")
+    user: Mapped["User"] = relationship()
 
 
 class User(Base):
 
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, nullable=False)
-    email = Column(String, nullable=False, unique=True)
-    password = Column(String, nullable=False)
-    created_at = Column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(unique=True)
+    password: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
 
 class Vote(Base):
     __tablename__ = "votes"
 
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
-    post_id = Column(
-        Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
