@@ -121,7 +121,6 @@ def update_post(
     for key, value in updated_post.model_dump().items():
         setattr(post, key, value)
 
-
     db.commit()
     db.refresh(post)
     return post
