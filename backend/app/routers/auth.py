@@ -18,12 +18,16 @@ def login(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not utils.verify(user_credentials.password, user.password):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = oauth2.create_access_token(data={"user_id": user.id})
