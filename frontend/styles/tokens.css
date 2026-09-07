@@ -1,0 +1,189 @@
+/* ============================================================================
+   tokens.css — the whole design system in variables.
+   One accent hue (honey amber). 8px spacing rhythm. Dark theme is the default;
+   light is a deliberate cool off-white, never warm cream.
+   ========================================================================== */
+
+:root {
+  /* — type ------------------------------------------------------------------ */
+  --font-serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+
+  --fs-brand: 1.15rem;
+  --fs-h1: clamp(1.7rem, 1.15rem + 2.4vw, 2.4rem);
+  --fs-h2: clamp(1.3rem, 1.1rem + 0.9vw, 1.6rem);
+  --fs-title: 1.3rem; /* feed card title */
+  --fs-read: 1.125rem; /* post body — 18px */
+  --fs-body: 0.9375rem; /* 15px */
+  --fs-ui: 0.875rem; /* 14px controls */
+  --fs-meta: 0.8125rem; /* 13px */
+  --fs-micro: 0.75rem;
+
+  --lh-read: 1.65;
+  --lh-tight: 1.18;
+  --lh-ui: 1.45;
+  --measure: 66ch;
+
+  /* — space (8px rhythm, one 4px half-step, one 12px) --------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+  --s-9: 96px;
+
+  /* — radius (varies by role, on purpose) -------------------------------- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  /* — motion ----------------------------------------------------------------- */
+  --t-fast: 120ms;
+  --t-mid: 200ms;
+  --t-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.9, 0.35);
+
+  /* — glass -------------------------------------------------------------------- */
+  --blur: 14px;
+  --blur-strong: 20px;
+  --saturate: 1.6;
+
+  /* — layout -------------------------------------------------------------------- */
+  --page-max: 1200px;
+  --col-max: 640px;
+  --header-h: 60px;
+
+  /* ── dark palette (default) ─────────────────────────────────────────────── */
+  --bg: #0c1315;
+  --bg-2: #0f1a1d;
+  --surface-solid: #131d20;
+  --card-bg: color-mix(in srgb, #131d20 62%, transparent);
+  --glass-bg: rgba(19, 29, 32, 0.55);
+  --glass-bg-fallback: rgba(19, 29, 32, 0.92);
+  --panel-bg: rgba(17, 26, 29, 0.72);
+  --panel-bg-fallback: rgba(17, 26, 29, 0.97);
+
+  --text: #e7edec;
+  --text-dim: #93a3a1;
+  --text-faint: #7c8b87;
+
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --hairline: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.22),
+    transparent
+  );
+
+  --accent: #f0a63c;
+  --accent-soft: rgba(240, 166, 60, 0.14);
+  --accent-ink: #2a1c05; /* text on an amber fill */
+  --link: #f0a63c;
+
+  --danger: #e8705d;
+  --danger-soft: rgba(232, 112, 93, 0.14);
+  --danger-ink: #2a0c07;
+
+  --focus: #7fd6c4; /* teal ring — never the accent, so focus always reads */
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-hover: 0 14px 34px -16px rgba(0, 0, 0, 0.55);
+  --shadow-panel: 0 26px 64px -22px rgba(0, 0, 0, 0.62);
+
+  --aurora-warm: rgba(240, 166, 60, 0.16);
+  --aurora-cool: rgba(64, 176, 156, 0.14);
+  --aurora-alpha: 1;
+
+  color-scheme: dark;
+}
+
+/* ── light palette — cool, faintly teal; not cream ───────────────────────── */
+:root[data-theme="light"] {
+  --bg: #eef1f1;
+  --bg-2: #e5eae9;
+  --surface-solid: #f8faf9;
+  --card-bg: #fbfcfc;
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-fallback: rgba(248, 250, 249, 0.94);
+  --panel-bg: rgba(255, 255, 255, 0.68);
+  --panel-bg-fallback: rgba(250, 251, 250, 0.98);
+
+  --text: #17211f;
+  --text-dim: #4f5d59;
+  --text-faint: #67746e;
+
+  --border: rgba(18, 40, 37, 0.16);
+  --border-strong: rgba(18, 40, 37, 0.28);
+  --hairline: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.9),
+    transparent
+  );
+
+  --accent: #e2952f;
+  --accent-soft: rgba(176, 112, 26, 0.13);
+  --accent-ink: #2a1c05;
+  --link: #9a5f12;
+
+  --danger: #c0492f;
+  --danger-soft: rgba(192, 73, 47, 0.12);
+  --danger-ink: #fff;
+
+  --focus: #1f8a76;
+
+  --shadow-card: 0 1px 2px rgba(18, 40, 37, 0.06);
+  --shadow-hover: 0 14px 30px -16px rgba(18, 40, 37, 0.26);
+  --shadow-panel: 0 24px 54px -24px rgba(18, 40, 37, 0.3);
+
+  --aurora-warm: rgba(226, 149, 47, 0.12);
+  --aurora-cool: rgba(47, 138, 118, 0.1);
+
+  color-scheme: light;
+}
+
+/* No-JS / pre-script fallback: honour the OS preference. The inline bootstrap
+   normally sets data-theme before paint, so this rarely gets a chance to run. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef1f1;
+    --bg-2: #e5eae9;
+    --surface-solid: #f8faf9;
+    --card-bg: #fbfcfc;
+    --glass-bg: rgba(255, 255, 255, 0.6);
+    --glass-bg-fallback: rgba(248, 250, 249, 0.94);
+    --panel-bg: rgba(255, 255, 255, 0.68);
+    --panel-bg-fallback: rgba(250, 251, 250, 0.98);
+    --text: #17211f;
+    --text-dim: #53625e;
+    --text-faint: #67746e;
+    --border: rgba(18, 40, 37, 0.12);
+    --border-strong: rgba(18, 40, 37, 0.24);
+    --accent: #e2952f;
+    --accent-soft: rgba(176, 112, 26, 0.13);
+    --link: #9a5f12;
+    --danger: #c0492f;
+    --danger-ink: #fff;
+    --focus: #1f8a76;
+    --shadow-hover: 0 14px 30px -16px rgba(18, 40, 37, 0.26);
+    --shadow-panel: 0 24px 54px -24px rgba(18, 40, 37, 0.3);
+    --aurora-warm: rgba(226, 149, 47, 0.12);
+    --aurora-cool: rgba(47, 138, 118, 0.1);
+    color-scheme: light;
+  }
+}
+
+/* Solid fallback when the browser can't blur behind an element. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root {
+    --glass-bg: var(--glass-bg-fallback);
+    --panel-bg: var(--panel-bg-fallback);
+  }
+}

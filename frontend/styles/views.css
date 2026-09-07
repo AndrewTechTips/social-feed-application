@@ -1,0 +1,287 @@
+/* ============================================================================
+   views.css — per-screen layout: feed, post detail, auth, compose.
+   Content lives in a single ~640px reading column; the page frame goes wider.
+   ========================================================================== */
+
+/* — shared column ---------------------------------------------------------------- */
+.column {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-bottom: var(--s-5);
+  padding: var(--s-2) var(--s-2) var(--s-2) 0;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  text-decoration: none;
+}
+.back:hover {
+  color: var(--text);
+}
+.back svg {
+  flex: none;
+}
+
+/* — feed ----------------------------------------------------------------------- */
+.feed {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+.feed__list {
+  display: flow-root;
+}
+.card--in {
+  animation: card-in var(--t-slow) var(--ease) both;
+  animation-delay: var(--d, 0ms);
+  will-change: transform, opacity;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.feed__status {
+  margin-top: var(--s-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+.feed__status--pad {
+  margin-top: var(--s-8);
+}
+.feed__sentinel {
+  height: 1px;
+}
+.feed__more {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+.feed__error {
+  margin-top: var(--s-6);
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+.feed__error .btn {
+  margin-top: var(--s-3);
+}
+
+/* — post detail --------------------------------------------------------------- */
+.detail {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+.detail__title {
+  font-size: var(--fs-h1);
+  margin-bottom: var(--s-4);
+}
+.detail__byline {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+}
+.detail__byline .name {
+  color: var(--text-dim);
+}
+.detail__byline .stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+.detail__content {
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  color: color-mix(in srgb, var(--text) 94%, transparent);
+  max-width: var(--measure);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-7);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+}
+.detail__actions .grow {
+  flex: 1;
+}
+
+/* — auth (sign in / register) --------------------------------------------- */
+.auth {
+  display: grid;
+  place-items: center;
+  min-height: calc(100dvh - var(--header-h) - var(--s-9));
+  padding-block: var(--s-6);
+}
+.auth__card {
+  width: 100%;
+  max-width: 22rem;
+  padding: var(--s-6) var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-card);
+}
+.auth__mark {
+  display: flex;
+  justify-content: center;
+  color: var(--text-dim);
+  margin-bottom: var(--s-4);
+}
+.auth__title {
+  font-size: var(--fs-h2);
+  text-align: center;
+  margin-bottom: var(--s-2);
+}
+.auth__sub {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  margin-bottom: var(--s-5);
+}
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.auth__form .btn {
+  margin-top: var(--s-1);
+}
+.form-error {
+  color: var(--danger);
+  font-size: var(--fs-ui);
+  text-align: center;
+  min-height: 1em;
+}
+.auth__alt {
+  margin-top: var(--s-5);
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+
+/* — compose / edit ----------------------------------------------------------- */
+.compose {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+.compose__title {
+  font-size: var(--fs-h2);
+  margin-bottom: var(--s-5);
+}
+.compose__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  position: relative;
+}
+.compose__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: var(--hairline);
+}
+.compose__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+.counter {
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.counter--over {
+  color: var(--danger);
+}
+.compose__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.title-input {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  padding: var(--s-3);
+}
+
+/* — narrow screens: header collapses to two rows ------------------------ */
+@media (max-width: 640px) {
+  #view {
+    padding-top: var(--s-5);
+  }
+  .site-header__inner {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand account"
+      "search search";
+    row-gap: var(--s-2);
+  }
+  .brand {
+    grid-area: brand;
+  }
+  .account {
+    grid-area: account;
+  }
+  .search {
+    grid-area: search;
+    max-width: none;
+  }
+  .account__email {
+    display: none;
+  }
+  .detail__content {
+    font-size: 1.0625rem;
+  }
+  .compose__panel {
+    padding: var(--s-4);
+  }
+}
+
+@media (max-width: 380px) {
+  .compose__actions {
+    flex-direction: column-reverse;
+  }
+  .compose__actions .btn {
+    width: 100%;
+  }
+}

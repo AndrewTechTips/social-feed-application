@@ -1,0 +1,7 @@
+# Playwright / npm — test-only, not part of the shipped app
+node_modules/
+tests/.report/
+tests/.artifacts/
+tests/.cache/
+test-results/
+playwright-report/

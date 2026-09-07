@@ -1,0 +1,191 @@
+/* ============================================================================
+   base.css — reset, font, page shell, aurora, shared primitives.
+   ========================================================================== */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../assets/fonts/newsreader.woff2") format("woff2");
+  font-weight: 340 660;
+  font-display: swap;
+  font-style: normal;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-underline-offset: 0.18em;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* the [hidden] attribute must win over component display rules */
+[hidden] {
+  display: none !important;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--link);
+  text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 460;
+  line-height: var(--lh-tight);
+  letter-spacing: 0.005em;
+}
+
+:where(p, li) {
+  text-wrap: pretty;
+}
+
+/* — focus: restyled, never removed ---------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* — page shell ----------------------------------------------------------------- */
+#view {
+  display: block;
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: var(--s-6) var(--s-4) var(--s-9);
+  padding-inline: max(var(--s-4), env(safe-area-inset-left))
+    max(var(--s-4), env(safe-area-inset-right));
+}
+#view:focus {
+  outline: none;
+}
+
+/* Route cross-fade — opacity only, short. */
+.route-enter {
+  animation: route-in var(--t-mid) var(--ease) both;
+}
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* — aurora: two slow blooms, well behind the text ------------------------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      120% 80% at 50% -20%,
+      var(--bg-2),
+      transparent 60%
+    ),
+    var(--bg);
+  opacity: var(--aurora-alpha, 1);
+}
+.aurora-bloom {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform;
+}
+.aurora-bloom--warm {
+  top: -30vmax;
+  left: -15vmax;
+  background: radial-gradient(circle, var(--aurora-warm), transparent 68%);
+  animation: drift-a 34s var(--ease) infinite alternate;
+}
+.aurora-bloom--cool {
+  bottom: -34vmax;
+  right: -18vmax;
+  background: radial-gradient(circle, var(--aurora-cool), transparent 68%);
+  animation: drift-b 42s var(--ease) infinite alternate;
+}
+@keyframes drift-a {
+  to {
+    transform: translate3d(8vmax, 6vmax, 0) scale(1.12);
+  }
+}
+@keyframes drift-b {
+  to {
+    transform: translate3d(-7vmax, -5vmax, 0) scale(1.08);
+  }
+}
+
+/* — reduced motion: keep state changes, drop the ambient stuff ----------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .aurora-bloom {
+    animation: none;
+  }
+}
