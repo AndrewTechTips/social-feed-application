@@ -1,0 +1,26 @@
+# Build context = repo root. Keep the image small and free of secrets.
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.idea
+.vscode
+
+# never bake secrets into an image
+.env
+*.env
+!**/.env.example
+
+# docs / dev-only files
+*.md
+docker-compose*.yml
+backend/requirements-dev.txt
+
+# frontend (added later) - its own image
+node_modules
+dist

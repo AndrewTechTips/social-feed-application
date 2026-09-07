@@ -1,0 +1,45 @@
+# Production-like stack:  docker compose -f docker-compose.prod.yml up -d
+# Pulls the image built by CI. Override the tag with IMAGE in .env if needed.
+services:
+  # One-shot: bring the schema up to date, then exit. `api` waits for it.
+  migrate:
+    image: ${IMAGE:-andrewsteel/fastapi:latest}
+    command: alembic -c backend/alembic.ini upgrade head
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOSTNAME=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${IMAGE:-andrewsteel/fastapi:latest}
+    ports:
+      - "80:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOSTNAME=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${DATABASE_USERNAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-db:
