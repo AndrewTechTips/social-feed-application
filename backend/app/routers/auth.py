@@ -26,7 +26,7 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not utils.verify(user_credentials.password, user.password):
+    if not utils.verify_password(user_credentials.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Credentials",

@@ -60,3 +60,10 @@ def test_create_user_password_rules(client, password, status_code):
         "/users/", json={"email": "pwrules@example.com", "password": password}
     )
     assert res.status_code == status_code
+
+
+def test_create_user_duplicate_email(client, test_user):
+    res = client.post(
+        "/users/", json={"email": test_user["email"], "password": "password1234"}
+    )
+    assert res.status_code == 409

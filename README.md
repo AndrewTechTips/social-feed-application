@@ -84,7 +84,7 @@ uvicorn backend.app.main:app --reload
 ## Tests
 
 ```bash
-cd backend && PYTHONPATH=. pytest -q
+cd backend && pytest -q
 ```
 
 Needs a reachable Postgres and a `<DATABASE_NAME>_test` database (the suite creates

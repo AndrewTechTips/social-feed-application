@@ -1,5 +1,6 @@
 from fastapi import status, HTTPException, Depends, APIRouter, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..limiter import limiter
@@ -14,12 +15,19 @@ def create_user(
     request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)
 ):
 
-    hashed_password = utils.hash(user.password)
-    user.password = hashed_password
+    user.password = utils.hash_password(user.password)
 
     new_user = models.User(**user.model_dump())
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # email column is UNIQUE — a second signup with the same address lands here
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        )
     db.refresh(new_user)
 
     return new_user

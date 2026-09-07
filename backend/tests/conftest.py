@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from backend.app import models
@@ -104,5 +104,5 @@ def test_posts(test_user, session, test_user2):
 
     session.add_all(posts)
     session.commit()
-    posts = session.query(models.Post).all()
+    posts = session.scalars(select(models.Post)).all()
     return posts
