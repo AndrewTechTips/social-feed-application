@@ -21,18 +21,34 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class Post(PostBase):
+class PostUpdate(BaseModel):
+    """Body for PATCH /posts/{id} — every field optional, only sent ones change."""
+
+    title: Optional[str] = None
+    content: Optional[str] = None
+    published: Optional[bool] = None
+
+
+class PostOut(PostBase):
     id: int
     created_at: datetime
+    updated_at: datetime
     user_id: int
     user: UserOut
+    votes: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 
-class PostOut(BaseModel):
-    Post: Post
-    votes: int
-    model_config = ConfigDict(from_attributes=True)
+class PostPage(BaseModel):
+    """A page of posts plus the metadata a UI needs to render pagination."""
+
+    items: list[PostOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    has_next: bool
+    has_prev: bool
 
 
 class UserCreate(BaseModel):
