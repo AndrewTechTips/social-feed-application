@@ -1,0 +1,7 @@
+# Development / test dependencies.
+# Install everything (runtime + dev) with:  pip install -r requirements-dev.txt
+-r requirements.txt
+
+black==26.5.1
+httpx2==2.7.0  # HTTP client used by starlette.testclient in Starlette 1.x
+pytest==9.1.1
