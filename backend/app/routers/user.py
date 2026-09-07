@@ -1,14 +1,18 @@
-from fastapi import status, HTTPException, Depends, APIRouter
+from fastapi import status, HTTPException, Depends, APIRouter, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..database import get_db
+from ..limiter import limiter
 from .. import models, schemas, utils
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.UserOut)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")
+def create_user(
+    request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)
+):
 
     hashed_password = utils.hash(user.password)
     user.password = hashed_password

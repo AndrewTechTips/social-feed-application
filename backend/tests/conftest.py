@@ -36,6 +36,9 @@ def client(session):
             session.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    # Rate limiter state is in-memory and would leak across tests; turn it off so
+    # tests are deterministic. It has its own dedicated test above/below.
+    app.state.limiter.enabled = False
     yield TestClient(app)
 
 

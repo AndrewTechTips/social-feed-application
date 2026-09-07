@@ -1,5 +1,6 @@
 import bcrypt
 
+
 def hash(password: str) -> str:
     pwd_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
@@ -12,4 +13,6 @@ def verify(plain_password: str, hashed_password: str) -> bool:
     password_byte_enc = plain_password.encode("utf-8")
     hashed_password_bytes = hashed_password.encode("utf-8")
 
-    return bcrypt.checkpw(password=password_byte_enc, hashed_password=hashed_password_bytes)
+    return bcrypt.checkpw(
+        password=password_byte_enc, hashed_password=hashed_password_bytes
+    )

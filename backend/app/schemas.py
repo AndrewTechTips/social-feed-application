@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class PostBase(BaseModel):
@@ -37,7 +37,17 @@ class PostOut(BaseModel):
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value: str) -> str:
+        # bcrypt hashes at most 72 *bytes*; a longer value raises at hash time.
+        # Field(max_length=...) counts characters, so we check bytes here to
+        # also cover multibyte passwords (accented letters, emoji).
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("password must be at most 72 bytes long")
+        return value
 
 
 class UserLogin(BaseModel):

@@ -43,3 +43,20 @@ def test_login_user(client, test_user):
 def test_incorrect_login(test_user, client, email, password, status_code):
     res = client.post("/login", data={"username": email, "password": password})
     assert res.status_code == status_code
+
+
+@pytest.mark.parametrize(
+    "password, status_code",
+    [
+        ("short", 422),  # under 8 characters
+        ("a" * 8, 201),  # exactly the minimum
+        ("a" * 72, 201),  # exactly the bcrypt limit (72 ASCII bytes)
+        ("a" * 73, 422),  # one byte over
+        ("é" * 40, 422),  # 40 characters but 80 bytes -> rejected by the byte check
+    ],
+)
+def test_create_user_password_rules(client, password, status_code):
+    res = client.post(
+        "/users/", json={"email": "pwrules@example.com", "password": password}
+    )
+    assert res.status_code == status_code
