@@ -190,6 +190,7 @@ export function voteControl(post, { inline = false } = {}) {
         "vote" + (inline ? " vote--inline" : "") + (on ? " vote--on" : ""),
       type: "button",
       "aria-pressed": String(on),
+      "aria-busy": "false",
       "aria-label": label(on, count),
     },
     caret,
@@ -218,7 +219,12 @@ export function voteControl(post, { inline = false } = {}) {
     void btn.offsetWidth; // restart the pop animation
     if (next) btn.classList.add("vote--pulse");
 
+    // A second click while the first is still in flight is ignored — two
+    // racing vote calls settle in whichever order the network feels like.
+    // aria-busy says so out loud: assistive tech announces it, and it gives a
+    // test something to wait on other than a guess about latency.
     busy = true;
+    btn.setAttribute("aria-busy", "true");
     try {
       await api.post("/vote/", { post_id: post.id, dir: next ? 1 : 0 });
     } catch (err) {
@@ -234,6 +240,7 @@ export function voteControl(post, { inline = false } = {}) {
       }
     } finally {
       busy = false;
+      btn.setAttribute("aria-busy", "false");
     }
   });
 

@@ -78,6 +78,15 @@ export function hasVoted(id) {
   return state.voted.has(id);
 }
 
+export function clearVotes() {
+  state.voted = new Set();
+  try {
+    localStorage.removeItem(VOTES_KEY);
+  } catch (e) {
+    /* nothing to clear */
+  }
+}
+
 export function setVoted(id, on) {
   if (on) state.voted.add(id);
   else state.voted.delete(id);

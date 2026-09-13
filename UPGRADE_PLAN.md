@@ -361,11 +361,22 @@ what's furthest behind the engineering.
 
 ### Tier 1 — High-impact
 
-**1.1 — Demo mode + GitHub Pages deploy — 1.5–2 days — §3 for the full breakdown.**
+**1.1 ✅ — Demo mode + GitHub Pages deploy — 1.5–2 days — §3 for the full breakdown.**
 Everything else in this document is worth less if the link at the top of the README doesn't
 work. Do this immediately after Tier 0.
 *Touches:* `frontend/js/demo/*`, `js/config.js`, `js/api.js`, `.github/workflows/pages.yml`,
 `playwright.config.js`, both READMEs.
+
+> **Done (2026-09-13).** `js/demo/backend.js` (the API in the browser, ~150ms latency),
+> `js/demo/seed.json` (14 posts, 5 authors, one long, one draft), `js/demo/strip.js`
+> (the notice, folded per-tab only), `apiFetch` in `config.js` as the one seam,
+> `localStorage` under `commons.demo.v1`, and `.github/workflows/pages.yml`.
+> The whole e2e suite now runs against **both** APIs — 90 tests, 42 shared × 2 plus 6
+> demo-only. Three things the demo's realistic latency exposed, all fixed: specs that
+> waited on `.card` were matching loading skeletons (now a named `CARD` selector), the
+> vote control silently swallowed a second click while a request was in flight (now
+> says so with `aria-busy`), and "Reset the demo" left the app holding a dead session.
+> **Still needs Pages enabled by hand** before the README link resolves.
 
 **1.2 — Command palette (⌘K / Ctrl-K) — 6–8 h.**
 *Borrowed from:* Raycast and Linear. Specifically two things, and not a third —

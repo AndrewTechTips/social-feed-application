@@ -1,0 +1,129 @@
+{
+  "_comment": [
+    "The content the published demo opens on. It is also what docs/seed_demo.py",
+    "writes into a throwaway database for the README screenshots, so the live",
+    "site and the images in the README show the same feed.",
+    "",
+    "Addresses are @example.com (RFC 2606). The real backend validates email",
+    "with email-validator, which rejects reserved TLDs like .test and .invalid",
+    "outright — so seed data written against those would be demo-only fiction",
+    "that the actual API would refuse. These addresses register cleanly against",
+    "the real thing.",
+    "",
+    "Ages are minutes_ago rather than timestamps: the feed then reads as",
+    "'16m ago / 3h ago / 5d ago' whenever someone opens it, instead of drifting",
+    "further into the past the longer this file sits in git.",
+    "",
+    "votes[].post is a 1-based index into posts[], not a post id."
+  ],
+
+  "users": [
+    { "email": "maren.holt@example.com", "password": "commons-demo-pw" },
+    { "email": "j.okafor@example.com", "password": "commons-demo-pw" },
+    { "email": "tessa.ward@example.com", "password": "commons-demo-pw" },
+    { "email": "rafa.linden@example.com", "password": "commons-demo-pw" },
+    { "email": "del.arriaga@example.com", "password": "commons-demo-pw" }
+  ],
+
+  "posts": [
+    {
+      "author": "maren.holt@example.com",
+      "minutes_ago": 25920,
+      "title": "The library that stays open all night",
+      "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there. You just walk in.\n\nI've been going on Thursdays for about a year now. The regulars have worked out an unspoken arrangement about the good chairs — the two by the radiator go to whoever arrived first, and nobody has ever said this out loud.\n\nWhat strikes me is how little it needs to work. A door that opens, some light, and an assumption that people will mostly be decent about the chairs."
+    },
+    {
+      "author": "del.arriaga@example.com",
+      "minutes_ago": 20160,
+      "title": "What I learned rebuilding a wall that didn't need rebuilding",
+      "content": "The wall at the bottom of the garden had a lean to it. Not a dangerous lean — it had held that angle, I'm told, since before the house changed hands in the eighties. But it bothered me in a way I found difficult to justify to anyone including myself, and last spring I took it down.\n\nThe first thing you learn is that a dry stone wall is not a stack. It's a structure where every stone is doing a job, and the job is mostly about friction and weight going down through the other stones into the ground. There is no mortar. There is nothing holding it together except the fact that each piece is resting on two below it and being rested on by two above.\n\nThe second thing you learn is that whoever built it the first time was better at it than you are. I had the whole thing in numbered piles across the lawn, photographs from four angles, and a book. It still took me until the second weekend to understand that the long flat stones I'd been saving for the top were meant to go *through* the wall, crosswise, tying the two faces together. They're called throughstones. Without them you don't have a wall, you have two thin walls leaning on each other and hoping.\n\nThat was the moment it stopped being a chore and became interesting. The lean I'd objected to wasn't failure. It was a wall that had been built by someone who knew the ground moved, given a deliberate batter so it would settle *into* itself rather than apart. I had spent two weekends correcting a decision that was better than mine.\n\nI rebuilt it with the lean. It took six weekends in total and it is, I think, slightly worse than what was there before — a little rougher in the coursing, a little less patient at the corners. I'm not sorry. There's a particular kind of respect you can only arrive at by taking something apart and discovering it was already right.\n\nThe stones are the same stones. That's the part I keep coming back to. Nothing about the material changed; the only thing that changed is that now I know why it's standing."
+    },
+    {
+      "author": "j.okafor@example.com",
+      "minutes_ago": 15840,
+      "title": "Against the infinite feed",
+      "content": "Every feed I use is designed so that it never ends, and I've started to think that's the whole problem. Not the algorithm, not the ads — just the absence of a bottom.\n\nA newspaper ends. A letter ends. You finish it and you've finished something. The endless scroll removes the one signal that tells you it's fine to stop, and then we blame ourselves for not stopping."
+    },
+    {
+      "author": "tessa.ward@example.com",
+      "minutes_ago": 11520,
+      "title": "Notes on repairing a kettle",
+      "content": "The element had gone, which I'm told is the usual thing. Twelve pounds for the part and about forty minutes, most of it spent finding a screwdriver small enough.\n\nThe replacement kettle would have been thirty-five, so the saving is real but modest, and that isn't really why I did it. I did it because a kettle you have opened up is a different object afterwards — you know what's in there."
+    },
+    {
+      "author": "rafa.linden@example.com",
+      "minutes_ago": 7200,
+      "title": "Cold water, six in the morning",
+      "content": "The trick nobody mentions is that the hard part isn't the water. It's the eleven minutes between the alarm and the water, which is where every argument against it gets made.\n\nOnce you're in, it's simple. Loud, but simple."
+    },
+    {
+      "author": "maren.holt@example.com",
+      "minutes_ago": 4320,
+      "title": "A short defence of the corner shop",
+      "content": "It costs more. That's true and there's no arguing it away. But the corner shop knows that I buy the same four things, and last winter when I was ill for a fortnight, someone noticed I hadn't been in."
+    },
+    {
+      "author": "del.arriaga@example.com",
+      "minutes_ago": 2880,
+      "title": "Nobody taught me how to end a phone call",
+      "content": "Every other part of a conversation has a form you can learn. Greetings, introductions, the polite enquiry about someone's mother. Endings are left entirely to improvisation, which is why we all do the same four false starts before one of us finally says right.\n\nI've begun just saying \"I'm going to go now\" and it turns out this is fine. Nobody has been offended yet."
+    },
+    {
+      "author": "j.okafor@example.com",
+      "minutes_ago": 1440,
+      "title": "What the allotment taught me about deadlines",
+      "content": "You cannot rush a leek. This sounds like a fridge magnet, and I resented it for two full seasons before I understood it properly.\n\nThe work is real and it matters, but the timeline belongs to the leek. Most of the planning I did was an attempt to negotiate with something that does not negotiate."
+    },
+    {
+      "author": "tessa.ward@example.com",
+      "minutes_ago": 420,
+      "title": "Three weeks without a phone in the bedroom",
+      "content": "I bought a clock. That's the entire intervention — an actual clock, seven pounds, with hands on it.\n\nI'm sleeping better, though I'd be lying if I said I knew it was the phone. It might just be that I've started going to bed at a sensible hour because there's nothing else to do in there."
+    },
+    {
+      "author": "rafa.linden@example.com",
+      "minutes_ago": 180,
+      "title": "The bus timetable is a work of fiction",
+      "content": "The 14 is scheduled every twelve minutes. In practice it arrives in pairs, roughly every twenty-five, and the second one is always empty.\n\nI've stopped checking. The walk to the next stop takes eight minutes and I've never once regretted taking it."
+    },
+    {
+      "author": "maren.holt@example.com",
+      "minutes_ago": 60,
+      "title": "Learning an instrument at thirty-four",
+      "content": "Badly, is the answer. Loudly and badly, with the window shut.\n\nBut I can play three songs now that I could not play in January, and nobody had to give me permission to try."
+    },
+    {
+      "author": "tessa.ward@example.com",
+      "minutes_ago": 40,
+      "published": false,
+      "title": "Winter swimming, unfinished",
+      "content": "Still working out what I actually think about this one. Something about the difference between a habit and a personality, and I don't have the end of it yet."
+    },
+    {
+      "author": "j.okafor@example.com",
+      "minutes_ago": 16,
+      "title": "On lending books you expect to lose",
+      "content": "I've given away maybe sixty books and had perhaps fifteen come back. For a long time I found this annoying enough to keep a list.\n\nI threw the list out. The books are doing more good wherever they are than they were doing on the shelf, arranged by colour, being looked at by me."
+    },
+    {
+      "author": "del.arriaga@example.com",
+      "minutes_ago": 4,
+      "title": "The good mug",
+      "content": "There are nine mugs in the cupboard and one of them is the good mug. Everyone in the house knows which one. Nobody has ever explained the criteria, and I am not confident any of us could."
+    }
+  ],
+
+  "votes": [
+    { "post": 1, "by": ["j.okafor@example.com", "tessa.ward@example.com"] },
+    { "post": 2, "by": ["maren.holt@example.com", "j.okafor@example.com", "tessa.ward@example.com", "rafa.linden@example.com"] },
+    { "post": 3, "by": ["maren.holt@example.com", "rafa.linden@example.com", "del.arriaga@example.com"] },
+    { "post": 4, "by": ["j.okafor@example.com", "del.arriaga@example.com"] },
+    { "post": 5, "by": ["tessa.ward@example.com"] },
+    { "post": 7, "by": ["maren.holt@example.com", "rafa.linden@example.com"] },
+    { "post": 8, "by": ["maren.holt@example.com", "tessa.ward@example.com", "del.arriaga@example.com"] },
+    { "post": 9, "by": ["rafa.linden@example.com"] },
+    { "post": 10, "by": ["j.okafor@example.com", "maren.holt@example.com"] },
+    { "post": 11, "by": ["del.arriaga@example.com"] },
+    { "post": 13, "by": ["maren.holt@example.com", "tessa.ward@example.com", "rafa.linden@example.com"] }
+  ]
+}

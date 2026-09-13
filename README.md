@@ -5,16 +5,12 @@
 </p>
 
 <p align="center">
-  <a href="#"><strong>Live demo</strong></a>
+  <a href="https://andrewtechtips.github.io/social-feed-application/"><strong>Live demo</strong></a>
   ·
   <a href="#running-it">Run it locally</a>
   ·
   <a href="#decisions-i-made">Decisions I made</a>
 </p>
-
-<!-- TODO: the live demo link above is a placeholder until the GitHub Pages
-     deploy lands (UPGRADE_PLAN.md, item 1.1). It will be:
-     https://andrewtechtips.github.io/social-feed-application/ -->
 
 <p align="center">
   <a href="https://github.com/AndrewTechTips/social-feed-application/actions/workflows/build-deploy.yml">
@@ -36,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step. |
-| **Tested** | 76 pytest tests (94% coverage) · 42 Playwright end-to-end tests |
+| **Tested** | 76 pytest tests (94% coverage) · 90 Playwright end-to-end tests, run against two API implementations |
 | **Shipped** | Docker · GitHub Actions → Docker Hub |
 
 ---
@@ -60,6 +56,32 @@ feed. Reading is public; writing needs a token.
 
 <sub>Every image here is a real capture of the running app —
 see <a href="docs/README-capture.md">docs/README-capture.md</a> to regenerate them.</sub>
+
+---
+
+## About that live demo
+
+The link at the top is hosted on GitHub Pages, which serves static files and
+nothing else — there is nowhere for FastAPI to run. So rather than publish a link
+that opens on *"Can't reach the server"*, the published build answers its own
+requests: [`frontend/js/demo/backend.js`](frontend/js/demo/backend.js)
+reimplements the API in the browser, against
+[a seeded feed](frontend/js/demo/seed.json) of real posts. It says so on the
+page, and it says so on every visit.
+
+Everything works — post, upvote, edit, delete, search, paginate, drafts staying
+private. Changes are kept in `localStorage`, so they survive a refresh and reach
+nobody else; **Reset the demo** puts it back.
+
+What makes it more than a mock: the end-to-end suite runs **the same 42 specs
+against both** the demo adapter and `mock_api.py`, so the site people click and
+the API this project ships can't quietly drift apart. `?demo=1` turns it on
+locally against the real files:
+
+```bash
+cd frontend && python3 -m http.server 5173
+open "http://localhost:5173/?demo=1"
+```
 
 ---
 
@@ -133,15 +155,17 @@ frontend/
   index.html           shell: header, <main> mount, aria-live toasts, theme bootstrap
   styles/              tokens.css · base.css · components.css · views.css
   js/
-    config.js          API_BASE
+    config.js          picks the API: the real one, or the in-browser demo
     api.js             fetch wrapper — auth header, JSON, error normalisation, 401/403/429
     store.js           tiny reactive store: session, feed cache, local vote mirror
     router.js          hash router with :params and a ?query
     ui.js              h() builder, toasts, relative time, avatars, skeletons, vote control
     views/             feed.js · post.js · auth.js · compose.js
+    demo/              backend.js (the API, in the browser) · seed.json · strip.js
     main.js            boot: header, theme toggle, search wiring, routes
   assets/              one subset variable font, one SVG icon sprite
-  tests/               Playwright specs + a stdlib mock backend
+  tests/               Playwright specs, a stdlib mock backend, and the fixtures
+                       that point the suite at either API
 docs/                  screenshots, and the scripts that regenerate them
 ```
 
@@ -177,14 +201,16 @@ One page, hash routes.
 
 ```bash
 cd backend && pytest -q          # 76 tests, coverage gate at 85%
-cd frontend && npm test          # 42 Playwright tests, no Postgres needed
+cd frontend && npm test          # 90 Playwright tests, no Postgres needed
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
 creates and drops the tables itself on every test.
 
-The frontend suite runs against `frontend/tests/mock_api.py` — a standard-library
-stand-in that implements the same contract — so it's hermetic and fast. First time:
+The frontend suite runs twice, against both implementations of the API: the
+standard-library `frontend/tests/mock_api.py`, and the in-browser adapter the
+published site uses. Neither needs Postgres, so it's hermetic and fast. First
+time:
 
 ```bash
 cd frontend && npm install && npx playwright install chromium
@@ -196,6 +222,7 @@ cd frontend && npm install && npx playwright install chromium
 | `drafts.spec.js` | A draft is visible to its author and to nobody else, in the feed and by direct URL, and publishing puts it back in everyone's feed. |
 | `errors.spec.js` | Wrong password, duplicate email, editing someone else's post, empty fields, backend unreachable. |
 | `responsive.spec.js` | No horizontal overflow at 320–1280, the header collapse, ≥44px tap targets, the reading column staying narrow. |
+| `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
 
 CI runs both suites on every push, checks `black`, verifies the migrations apply to an
@@ -387,7 +414,7 @@ of these was a deliberate pass over code that already worked:
 - [x] The mobile pass (see above), driven by real-device bugs
 - [x] Drafts made private, the login timing oracle closed, indexes added, security headers
 - [x] Playwright in CI, coverage gate, `alembic check`, Dependabot
-- [ ] A live demo that runs on a static host
+- [x] A live demo that runs on a static host, with the suite run against it too
 - [ ] Comments, usernames and profiles, refresh tokens, full-text search
 
 The longer version — what I'd change, what I'd skip, and why — is in

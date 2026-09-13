@@ -2,7 +2,7 @@
 // narrow screens, tap targets stay big enough, and the reading column is capped
 // on the desktop.
 
-const { test, expect } = require("./support/fixtures");
+const { test, expect, CARD } = require("./support/fixtures");
 
 const widths = [320, 360, 390, 414, 768, 1280];
 
@@ -11,7 +11,7 @@ for (const width of widths) {
     await api.seed(6, "ada@commons.test");
     await page.setViewportSize({ width, height: 780 });
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -52,7 +52,7 @@ test("the reading column stays narrow on a wide desktop", async ({ page, api }) 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
-  const card = page.locator(".card").first();
+  const card = page.locator(CARD).first();
   await expect(card).toBeVisible();
   const box = await card.boundingBox();
   expect(box.width).toBeLessThanOrEqual(680);

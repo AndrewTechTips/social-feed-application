@@ -1,7 +1,7 @@
 // fetch wrapper: attaches the auth header, sends/parses JSON, normalises errors,
 // and handles the three cross-cutting status codes (401 / 403 / 429) in one place.
 
-import { API_BASE } from "./config.js";
+import { apiFetch } from "./config.js";
 import { get, clearSession } from "./store.js";
 import { toast } from "./ui.js";
 
@@ -42,7 +42,9 @@ async function request(path, { method = "GET", body, form, auth = true, signal }
 
   let res;
   try {
-    res = await fetch(API_BASE + path, { method, headers, body: payload, signal });
+    // apiFetch is the real network on a dev machine and the in-browser demo
+    // backend on the published site — same arguments, same Response either way.
+    res = await apiFetch(path, { method, headers, body: payload, signal });
   } catch (err) {
     if (err.name === "AbortError") throw err;
     // fetch only rejects on network-level failure (server down, DNS, CORS block)

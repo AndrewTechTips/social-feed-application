@@ -1,7 +1,7 @@
 // The unhappy paths from the brief: wrong password, duplicate email, editing
 // someone else's post, empty fields, backend unreachable.
 
-const { test, expect } = require("./support/fixtures");
+const { test, expect, CARD } = require("./support/fixtures");
 
 test("wrong password shows one friendly line and stays on the page", async ({
   page,
@@ -63,7 +63,10 @@ test("a dead backend shows a retry affordance, not a blank page", async ({
   api,
 }) => {
   await api.seed(3, "ada@commons.test");
-  await page.route(/\/posts\//, (route) => route.abort());
+  // "the backend is unreachable", however that's arranged for this target:
+  // an aborted route against the HTTP mock, a queued failure inside the
+  // in-browser adapter. See tests/support/fixtures.js.
+  await api.breakFeed();
 
   await page.goto("/");
 

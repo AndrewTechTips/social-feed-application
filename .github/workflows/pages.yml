@@ -1,0 +1,48 @@
+name: Pages
+
+# Publishes frontend/ to GitHub Pages.
+#
+# There is no build step — the app is hand-written HTML, CSS and ES modules, so
+# what gets uploaded is what's in the repo. On a static host the app answers its
+# own API calls from js/demo/backend.js; see js/config.js for how it decides.
+#
+# Requires Pages to be enabled once, by hand:
+#   Settings → Pages → Build and deployment → Source: GitHub Actions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/pages.yml"
+  # so the site can be republished without a frontend change
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. Unlike the CI workflow this doesn't cancel what's
+# already running: a half-finished deploy is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: frontend
+
+      - id: deploy
+        uses: actions/deploy-pages@v5

@@ -2,6 +2,7 @@
 // start the router.
 
 import { route, startRouter, navigate, currentPath, currentQuery } from "./router.js";
+import { IS_DEMO } from "./config.js";
 import { get, subscribe, clearSession, dropFeedCache } from "./store.js";
 import { h, icon, toast } from "./ui.js";
 import { renderFeed } from "./views/feed.js";
@@ -140,4 +141,12 @@ addEventListener("hashchange", syncChrome);
 renderAccount();
 wireSearch();
 syncChrome();
+
+// On a static host the app answers its own API calls, and the strip is how a
+// visitor finds that out. Loaded only when it applies, so the normal build
+// never fetches it.
+if (IS_DEMO) {
+  import("./demo/strip.js").then((m) => m.mountDemoStrip());
+}
+
 startRouter();

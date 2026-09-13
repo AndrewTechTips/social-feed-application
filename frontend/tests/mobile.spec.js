@@ -11,7 +11,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { test, expect, API_ORIGIN } = require("./support/fixtures");
+const { test, expect, CARD } = require("./support/fixtures");
 
 const PHONE_WIDTHS = [320, 360, 375, 390, 414];
 const STYLE_DIR = path.join(__dirname, "..", "styles");
@@ -23,28 +23,12 @@ const phone = (width, height = 780) => ({
   deviceScaleFactor: 2,
 });
 
-// Registers a user against the mock and plants the resulting session in
-// localStorage, so a test can start on a signed-in screen without walking the
-// whole sign-in flow first.
-async function signIn(page, email = "ada@commons.test", password = "seedpassword") {
-  const res = await page.request.post(`${API_ORIGIN}/login`, {
-    form: { username: email, password },
-  });
-  expect(res.ok(), "mock /login should hand back a token").toBeTruthy();
-  const { access_token: token } = await res.json();
-  await page.addInitScript(
-    ([e, t]) => {
-      try {
-        localStorage.setItem("commons.session", JSON.stringify({ email: e, token: t }));
-      } catch (err) {}
-    },
-    [email, token]
-  );
-  // An init script only runs on a document load, and this app is a hash router:
-  // once a document is up, every goto is a same-document fragment change that
-  // would never pick the session up. Reload so the store actually reads it.
-  if (!page.url().startsWith("about:")) await page.reload();
-}
+// Start a test on a signed-in screen without walking the sign-in flow first.
+// The token has to come from whichever backend this project is running against,
+// so the fixture mints it — see api.signIn in tests/support/fixtures.js. The
+// credentials are the ones api.seed() creates its author with.
+const signIn = (api, page, email = "ada@commons.test", password = "seedpassword") =>
+  api.signIn(page, email, password);
 
 const overflowOf = (page) =>
   page.evaluate(
@@ -61,7 +45,7 @@ test.describe("tap highlight", () => {
   test("nothing tappable flashes the browser's default blue box", async ({ page, api }) => {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     // -webkit-tap-highlight-color inherits, so html is the only place that has
     // to set it — but assert on the things a finger actually lands on.
@@ -133,7 +117,7 @@ test.describe("press feedback on touch", () => {
   test("the vote control visibly presses under a finger", async ({ page, api }) => {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     const { resting, sawActive, bg } = await peakUnderTap(page, ".vote");
     expect(sawActive, ":active never applied while the finger was down").toBe(true);
@@ -143,10 +127,10 @@ test.describe("press feedback on touch", () => {
   test("a post card visibly presses under a finger", async ({ page, api }) => {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     // the card tints, not the link inside it — hence the separate sample target
-    const { resting, sawActive, bg } = await peakUnderTap(page, ".card__link", ".card");
+    const { resting, sawActive, bg } = await peakUnderTap(page, ".card__link", CARD);
     expect(sawActive, ":active never applied while the finger was down").toBe(true);
     expect(bg, "the card gave no sign it had been tapped").not.toBe(resting);
   });
@@ -154,7 +138,7 @@ test.describe("press feedback on touch", () => {
   test("hover-only states stay behind (hover: hover)", async ({ page, api }) => {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     // A touch context must report no hover, otherwise the gated rules would
     // apply on a phone and stick after every tap.
@@ -165,12 +149,12 @@ test.describe("press feedback on touch", () => {
     expect(mq).toEqual({ hoverNone: true, pointerCoarse: true });
 
     // let the card entrance animation finish, or its translateY reads as a lift
-    await page.locator(".card").first().evaluate((el) =>
+    await page.locator(CARD).first().evaluate((el) =>
       Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})))
     );
 
     // the card's lift + blur is hover-only, so it must not be in effect here
-    const card = await page.locator(".card").first().evaluate((el) => {
+    const card = await page.locator(CARD).first().evaluate((el) => {
       const s = getComputedStyle(el);
       return { transform: s.transform, blur: s.backdropFilter || s.webkitBackdropFilter };
     });
@@ -203,14 +187,14 @@ test.describe("form controls never trip iOS zoom-on-focus", () => {
       };
 
       await page.goto("/");
-      await expect(page.locator(".card").first()).toBeVisible();
+      await expect(page.locator(CARD).first()).toBeVisible();
       await sizes("the feed search");
 
       await page.goto("/#/login");
       await expect(page.getByLabel("Email")).toBeVisible();
       await sizes("sign in");
 
-      await signIn(page);
+      await signIn(api, page);
       await page.goto("/#/compose");
       await expect(page.getByLabel("Body")).toBeVisible();
       await sizes("compose");
@@ -261,7 +245,7 @@ test.describe("the header fits while signed in", () => {
       const { created } = await seeded.json();
       const context = await browser.newContext(phone(width));
       const page = await context.newPage();
-      await signIn(page);
+      await signIn(api, page);
 
       for (const route of ["/", `/#/posts/${created[0]}`, "/#/compose"]) {
         await page.goto(route);
@@ -280,9 +264,9 @@ test.describe("the header fits while signed in", () => {
     await api.seed(3, "ada@commons.test");
     const context = await browser.newContext(phone(320));
     const page = await context.newPage();
-    await signIn(page);
+    await signIn(api, page);
     await page.goto("/");
-    await expect(page.locator(".card").first()).toBeVisible();
+    await expect(page.locator(CARD).first()).toBeVisible();
 
     // The regression: at 320px the labelled Write / Sign out buttons pushed the
     // theme toggle clean off the right edge, where it could not be tapped.
@@ -310,7 +294,7 @@ test.describe("the compose form works at 320px", () => {
     await api.seed(1, "ada@commons.test");
     const context = await browser.newContext(phone(320));
     const page = await context.newPage();
-    await signIn(page);
+    await signIn(api, page);
     await page.goto("/#/compose");
 
     const title = page.getByLabel("Title", { exact: true });
@@ -358,7 +342,7 @@ test.describe("the compose form works at 320px", () => {
     const { created } = await seeded.json();
     const context = await browser.newContext(phone(320));
     const page = await context.newPage();
-    await signIn(page);
+    await signIn(api, page);
     await page.goto(`/#/posts/${created[0]}`);
 
     await page.getByRole("button", { name: "Delete" }).click();

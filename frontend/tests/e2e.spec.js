@@ -1,7 +1,7 @@
 // The full journey the brief asks for:
 // register -> sign in -> feed -> create -> vote -> edit -> delete -> sign out.
 
-const { test, expect } = require("./support/fixtures");
+const { test, expect, CARD } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = () => `person-${Date.now()}@commons.test`;
@@ -16,7 +16,7 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   // — feed, signed out ----------------------------------------------------
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-  await expect(page.locator(".card").first()).toBeVisible();
+  await expect(page.locator(CARD).first()).toBeVisible();
 
   // — register (auto-signs in) -----------------------------------------
   await page.getByRole("link", { name: "Sign in" }).click();
@@ -49,6 +49,10 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   await vote.click();
   await expect(vote).toHaveAttribute("aria-pressed", "true");
   await expect(vote).toContainText("1");
+  // The count updates optimistically, so it says 1 long before the request is
+  // done — and a click that lands while one is in flight is deliberately
+  // dropped. Wait for it to settle, otherwise this is testing double-clicking.
+  await expect(vote).toHaveAttribute("aria-busy", "false");
   await vote.click();
   await expect(vote).toHaveAttribute("aria-pressed", "false");
   await expect(vote).toContainText("0");
@@ -84,7 +88,7 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   // — sign out; feed still readable ---------------------------------
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-  await expect(page.locator(".card").first()).toBeVisible();
+  await expect(page.locator(CARD).first()).toBeVisible();
 });
 
 test("the feed paginates as you scroll and shows an end state", async ({
@@ -94,7 +98,7 @@ test("the feed paginates as you scroll and shows an end state", async ({
   await api.seed(25, "ada@commons.test");
   await page.goto("/");
 
-  await expect(page.locator(".card")).toHaveCount(10); // first page
+  await expect(page.locator(CARD)).toHaveCount(10); // first page
 
   // walk to the bottom; the IntersectionObserver pulls the next pages
   await expect(async () => {
@@ -104,7 +108,7 @@ test("the feed paginates as you scroll and shows an end state", async ({
     });
   }).toPass();
 
-  await expect(page.locator(".card")).toHaveCount(25);
+  await expect(page.locator(CARD)).toHaveCount(25);
 });
 
 test("search filters the feed and drives the query string", async ({
@@ -117,7 +121,7 @@ test("search filters the feed and drives the query string", async ({
   const search = page.getByRole("searchbox");
   await search.fill("Seeded post 2");
   await expect(page).toHaveURL(/search=Seeded/);
-  await expect(page.locator(".card")).toHaveCount(1);
+  await expect(page.locator(CARD)).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Seeded post 2" })).toBeVisible();
 
   await search.fill("nothing matches this");

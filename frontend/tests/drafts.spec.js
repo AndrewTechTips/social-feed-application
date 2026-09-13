@@ -5,7 +5,7 @@
 // while the UI cheerfully labelled it "Draft". These tests walk that from the
 // outside: write one, then look for it as someone else.
 
-const { test, expect } = require("./support/fixtures");
+const { test, expect, CARD } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = (tag) => `${tag}-${Date.now()}@commons.test`;
@@ -40,13 +40,13 @@ test("your draft is in your feed but nobody else's", async ({ page, api }) => {
   await page.goto("/#/");
   await expect(page.getByRole("heading", { name: "A quiet draft" })).toBeVisible();
   // .tag, not getByText("Draft") — the title contains the word "draft" too.
-  const draftCard = page.locator(".card", { hasText: "A quiet draft" });
+  const draftCard = page.locator(CARD, { hasText: "A quiet draft" });
   await expect(draftCard.locator(".tag")).toHaveText("Draft");
 
   // sign out, and it's gone
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-  await expect(page.locator(".card").first()).toBeVisible();
+  await expect(page.locator(CARD).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "A quiet draft" })).toHaveCount(0);
 
   // and it isn't reachable by guessing the URL either

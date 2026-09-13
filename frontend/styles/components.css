@@ -790,3 +790,95 @@
     flex: 1;
   }
 }
+
+/* — demo strip ---------------------------------------------------------------
+   Only ever mounted on the published (static-host) build, where the app is
+   answering its own API calls. It sits directly under the sticky header and
+   scrolls away with the page: this is context, not a control, and pinning it
+   would be shouting.
+   -------------------------------------------------------------------------- */
+.demo {
+  border-bottom: 1px solid var(--border);
+  /* A neutral band, not a tinted one. The accent is reserved for live things —
+     your identity, an active upvote, a link — and a standing notice is not one
+     of those. An amber wash here also pulled the light theme toward the warm
+     cream it deliberately isn't. Only the label is accented. */
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-2));
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+}
+.demo__inner {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
+    max(var(--s-4), env(safe-area-inset-left));
+}
+.demo__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
+.demo__label {
+  color: var(--accent);
+  font-weight: 600;
+}
+.demo__text a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+@media (hover: hover) {
+  .demo__text a:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+}
+.demo__actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.demo__action {
+  min-height: 36px;
+  font-size: var(--fs-meta);
+}
+/* the fold chevron points down when open, up when folded */
+.demo__fold {
+  min-height: 36px;
+  min-width: 36px;
+  transform: rotate(-90deg);
+  transition: transform var(--t-mid) var(--ease);
+}
+.demo--folded .demo__fold {
+  transform: rotate(90deg);
+}
+.demo--folded .demo__text {
+  /* keep the label, drop the explanation — the strip stays visible either way */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo--folded .demo__action {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .demo__inner {
+    align-items: flex-start;
+    gap: var(--s-2);
+    padding-block: var(--s-3);
+  }
+  .demo__action {
+    min-height: 44px;
+  }
+  .demo__fold {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .demo--folded .demo__inner {
+    align-items: center;
+  }
+}

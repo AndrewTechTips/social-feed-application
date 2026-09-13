@@ -39,10 +39,24 @@ module.exports = defineConfig({
     screenshot: "only-on-failure",
   },
 
+  // The same specs, twice, against the two implementations of the API:
+  //
+  //   chromium  mock_api.py over HTTP — the stand-in for the real FastAPI
+  //             backend, and what the app talks to during development
+  //   demo      js/demo/backend.js — the in-browser adapter the published
+  //             GitHub Pages site runs on, with no server at all
+  //
+  // Running both is what stops the published site quietly drifting away from
+  // the API this project actually ships. tests/support/fixtures.js picks its
+  // target from the project name.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "demo", use: { ...devices["Desktop Chrome"] } },
   ],
 
+  // Both projects need the static server; only "chromium" needs the mock API.
+  // Starting it either way is simpler than making it conditional, and `npm
+  // test` runs both projects anyway.
   webServer: [
     {
       command: `python3 tests/mock_api.py --port ${API_PORT}`,
