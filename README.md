@@ -32,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step. |
-| **Tested** | 76 pytest tests (94% coverage) · 90 Playwright end-to-end tests, run against two API implementations |
+| **Tested** | 76 pytest tests (94% coverage) · 151 Playwright end-to-end tests, run against two API implementations |
 | **Shipped** | Docker · GitHub Actions → Docker Hub |
 
 ---
@@ -161,6 +161,9 @@ frontend/
     router.js          hash router with :params and a ?query
     ui.js              h() builder, toasts, relative time, avatars, skeletons, vote control
     views/             feed.js · post.js · auth.js · compose.js
+    components/        palette.js — the ⌘K command palette
+    actions.js         the few things both the header and the palette can do
+    transitions.js     the card-title → post-title view transition
     demo/              backend.js (the API, in the browser) · seed.json · strip.js
     main.js            boot: header, theme toggle, search wiring, routes
   assets/              one subset variable font, one SVG icon sprite
@@ -175,7 +178,7 @@ One page, hash routes.
 
 | Route | Screen |
 | --- | --- |
-| `#/` | Feed (public). Debounced title search drives `?search=`; infinite scroll with a visible end state; skeletons while loading. |
+| `#/` | Feed (public). Opens with a masthead for anyone not signed in — a line of type saying what this is, and in demo mode the notice too. Debounced title search drives `?search=`; infinite scroll with a visible end state; skeletons while loading. |
 | `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. |
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Register signs you in, so you land on the feed ready to post. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, character count. `POST` to create; `PATCH` with only the changed fields to edit. |
@@ -201,7 +204,7 @@ One page, hash routes.
 
 ```bash
 cd backend && pytest -q          # 76 tests, coverage gate at 85%
-cd frontend && npm test          # 90 Playwright tests, no Postgres needed
+cd frontend && npm test          # 151 Playwright tests, no Postgres needed
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
@@ -222,6 +225,9 @@ cd frontend && npm install && npx playwright install chromium
 | `drafts.spec.js` | A draft is visible to its author and to nobody else, in the feed and by direct URL, and publishing puts it back in everyone's feed. |
 | `errors.spec.js` | Wrong password, duplicate email, editing someone else's post, empty fields, backend unreachable. |
 | `responsive.spec.js` | No horizontal overflow at 320–1280, the header collapse, ≥44px tap targets, the reading column staying narrow. |
+| `palette.spec.js` | ⌘K: one flat list, a key on every row, filtering the loaded feed without touching the network, each of the five actions, and the shortcuts working outside the palette but staying out of the way while you type. |
+| `transitions.spec.js` | The title morph both ways, the name being released afterwards, reduced motion starting no transition at all, a browser without the API still navigating, and the per-card stagger staying gone. |
+| `masthead.spec.js` | Shown to strangers, gone once signed in, out of the way while searching, and — in demo mode — carrying the notice so it's said once rather than twice. |
 | `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
 
@@ -258,9 +264,26 @@ question.
 carries every piece of *content*. The interface chrome uses the system sans stack. That
 split is the identity: a quiet lamplit reading room, not a dashboard.
 
-**The vote is the only thing that pops.** One spring, one colour shift, and a shape
+**The title travels.** Tap a post and its heading moves from the card to the top of
+the screen, rather than one screen fading into another — the same idea as an iOS push,
+or Things 3, where the thing you touched becomes the thing you're looking at. It's built
+on the View Transitions API, feature-detected, and it replaced a staggered fade-up that
+played on every card: that fired on pagination and on cache restore too, where nothing
+had actually arrived. Motion should answer an action, not perform on arrival.
+
+It's kept short (160ms for the page, 240ms for the title) for a reason that isn't
+taste — while a view transition runs, the browser shows snapshots and the document
+doesn't take input. The duration is also how long the app ignores a tap.
+
+**The vote is the only other thing that pops.** One spring, one colour shift, and a shape
 change (outline caret → filled) so it never depends on colour alone. Everything else
 stays still.
+
+**⌘K opens a command palette.** One flat list — Raycast's discipline, no categories — and
+every row shows the key that runs it, which is Linear's habit and the reason the palette
+makes itself unnecessary. That only works if the keys are real, so `N`, `T`, `G` and `C`
+work on their own outside it. It searches the posts already on screen, so filtering never
+touches the network, and it does five things and stops.
 
 **Optimistic voting, pessimistic writes.** Votes update immediately and roll back on a
 real error; 409 and 404 are treated as "you're already in the state you wanted". Create,
@@ -299,7 +322,7 @@ Everything lives in `frontend/styles/tokens.css` as custom properties.
 | **Space** | 8px rhythm: `--s-1`…`--s-9` = 4, 8, 12, 16, 24, 32, 48, 64, 96. |
 | **Radius** | Varies by role on purpose: cards `--r-lg` 18px, inputs and buttons `--r-sm` 10px, pills 999px. |
 | **Glass** | `--blur` 14px / `--blur-strong` 20px, `--saturate` 1.6, on four surfaces only: the header, the compose panel, the delete confirm, and a card on hover. Hairline gradient top border, soft large-radius shadow. `@supports not (backdrop-filter)` falls back to solid — and below 640px the blur is dropped entirely in favour of those same fallbacks. |
-| **Motion** | `--t-fast/mid/slow` 120/200/320ms, `--ease` `cubic-bezier(.2,.7,.2,1)`. Staggered fade-up for cards (~40ms, capped at 8), hover lift, button press scale, a spring pop on the vote, route cross-fade, skeleton shimmer. `transform` and `opacity` only. `prefers-reduced-motion` cuts all of it. |
+| **Motion** | `--t-fast/mid/slow` 120/200/320ms, `--ease` `cubic-bezier(.2,.7,.2,1)`. Two things move on purpose — the title travelling from card to post, and the spring pop on the vote. Everything else is feedback, not animation: hover lift, button press scale, skeleton shimmer, and a cross-fade for browsers without View Transitions. `transform` and `opacity` only. `prefers-reduced-motion` cuts all of it, the view transition included. |
 | **Background** | Two slow, very faint amber and teal blooms behind everything. They never compete with text, shrink to one static bloom below 640px, and stop entirely under reduced motion. |
 
 **Voice.** Understated and warm. Short sentences, contractions, no hype. *"Nothing here

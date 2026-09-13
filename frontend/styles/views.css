@@ -33,6 +33,28 @@
   flex: none;
 }
 
+/* — masthead ------------------------------------------------------------------
+   The opening block on the feed, for people who aren't signed in. Type and a
+   hairline, nothing else: no panel, no shadow, no accent — the point is that it
+   reads as the top of a page rather than as a thing placed on top of one. It
+   sits in normal flow, so it scrolls away and never comes back until the next
+   visit.
+   -------------------------------------------------------------------------- */
+.masthead {
+  margin-bottom: var(--s-6);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+}
+.masthead__title {
+  font-size: var(--fs-h2);
+  margin-bottom: var(--s-2);
+}
+.masthead__line {
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  max-width: 46ch;
+}
+
 /* — feed ----------------------------------------------------------------------- */
 .feed {
   width: 100%;
@@ -42,21 +64,11 @@
 .feed__list {
   display: flow-root;
 }
-.card--in {
-  animation: card-in var(--t-slow) var(--ease) both;
-  animation-delay: var(--d, 0ms);
-  will-change: transform, opacity;
-}
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
+/* Cards used to fade up one after another on arrival. It looked considered and
+   wasn't: it fired on pagination and on cache restore too, where nothing had
+   conceptually arrived — you were just returning to a list you'd already read.
+   Per-item entrance animation is decoration that plays at you. What replaced it
+   is in transitions.js: motion that answers a tap. */
 
 .feed__status {
   margin-top: var(--s-6);

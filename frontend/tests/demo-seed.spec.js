@@ -49,23 +49,35 @@ test("the seeded feed paginates and ends", async ({ page }) => {
 test("the demo says what it is, on every visit", async ({ page }) => {
   await page.goto("/");
 
-  const strip = page.locator(".demo");
-  await expect(strip).toBeVisible();
-  await expect(strip).toContainText("Demo mode");
-  await expect(strip).toContainText("runs entirely in your browser");
-  await expect(strip).toContainText("Nothing you post is saved anywhere");
-  await expect(strip.getByRole("link", { name: "the API contract" })).toBeVisible();
-  await expect(strip.getByRole("button", { name: "Reset the demo" })).toBeVisible();
+  // On the feed the masthead carries it; masthead.spec.js covers which of the
+  // two placements wins where. What matters here is that the words are there.
+  const notice = page.locator(".demo:visible");
+  await expect(notice).toHaveCount(1);
+  await expect(notice).toContainText("Demo mode");
+  await expect(notice).toContainText("runs entirely in your browser");
+  await expect(notice).toContainText("Nothing you post is saved anywhere");
+  await expect(notice.getByRole("link", { name: "the API contract" })).toBeVisible();
+  await expect(notice.getByRole("button", { name: "Reset the demo" })).toBeVisible();
+});
 
-  // Folding it away is a per-tab convenience, not a permanent dismissal: it
-  // must never be written to localStorage, or the next visitor inherits it.
-  await strip.getByRole("button", { name: /Hide the demo notice/ }).click();
-  await expect(strip).toHaveClass(/demo--folded/);
+test("folding the band is a per-tab convenience, not a dismissal", async ({ page }) => {
+  // The band is what can be folded, and it shows anywhere the masthead doesn't.
+  await page.goto("/#/login");
+  const band = page.locator(".demo--band");
+  await expect(band).toBeVisible();
 
+  await band.getByRole("button", { name: /Hide the demo notice/ }).click();
+  await expect(band).toHaveClass(/demo--folded/);
+
+  // It must never reach localStorage, or the next visitor inherits a notice
+  // they never chose to hide.
   const leaked = await page.evaluate(() =>
     Object.keys(localStorage).filter((k) => k.includes("strip"))
   );
   expect(leaked, "the folded state must not survive the session").toEqual([]);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("commons.demo.strip-folded"))
+  ).toBe("1");
 });
 
 test("a seeded draft belongs to its author", async ({ page }) => {

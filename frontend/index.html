@@ -55,6 +55,14 @@
         <input id="search-input" class="search__input" type="search" name="search"
                placeholder="Search titles" autocomplete="off" enterkeyhint="search"
                maxlength="100" />
+        <!-- A palette nobody knows about is a palette nobody uses. A real
+             button rather than a decorative chip, so it's reachable by keyboard
+             and announced like the control it is. main.js relabels it away from
+             a Mac; it's hidden on touch, where there is no such key. -->
+        <button type="button" class="search__hint" id="palette-hint"
+                aria-label="Open the command palette">
+          <kbd aria-hidden="true">⌘K</kbd>
+        </button>
       </form>
 
       <div class="account" id="account"><!-- rendered by main.js --></div>

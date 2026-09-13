@@ -219,3 +219,51 @@ h3 {
     animation: none;
   }
 }
+
+/* — view transitions --------------------------------------------------------
+   The one orchestrated movement in the app: the title you tapped becomes the
+   heading of the screen you land on. js/transitions.js decides when that's
+   possible and hands the name to the two elements involved.
+
+   Note that prefers-reduced-motion is NOT handled here. The reduced-motion
+   block above can't reach ::view-transition-* — they aren't descendants of any
+   element it matches — and the API runs its own default cross-fade regardless.
+   So the decision is made in JS, before the transition starts, and under
+   reduced motion no transition is started at all.
+   -------------------------------------------------------------------------- */
+
+/* The chrome isn't what changed, so it shouldn't cross-fade with the page.
+   Giving it its own name lifts it out of the root snapshot and leaves it
+   exactly where it is while the content underneath moves. */
+.site-header {
+  view-transition-name: site-header;
+}
+
+/* Kept deliberately short. While a transition runs, the browser replaces the
+   live document with its snapshots and the page does not take input — so the
+   duration here is also how long the app ignores a tap. 320ms was long enough
+   to swallow one. These are the shortest values that still read as movement
+   rather than a cut. */
+::view-transition-group(root) {
+  animation-duration: 160ms;
+  animation-timing-function: var(--ease);
+}
+
+/* The morphing title outlasts the page fade slightly, so it stays legible the
+   whole way across, and paints above the content it travels over. */
+::view-transition-group(post-title) {
+  animation-duration: 240ms;
+  animation-timing-function: var(--ease);
+  z-index: 2;
+}
+/* The two snapshots of the title differ in size and weight rather than
+   content, so cross-fading them just blurs the text. Hold both fully opaque
+   and let the group's own transform do the moving. */
+::view-transition-old(post-title),
+::view-transition-new(post-title) {
+  animation: none;
+  mix-blend-mode: normal;
+  height: 100%;
+  object-fit: none;
+  object-position: top left;
+}

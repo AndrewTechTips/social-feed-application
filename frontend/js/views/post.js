@@ -5,6 +5,7 @@
 import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
 import { isMine, dropFeedCache } from "../store.js";
+import { nameForMorph, morphingBackTo } from "../transitions.js";
 import { navigate } from "../router.js";
 
 const backLink = () =>
@@ -49,8 +50,8 @@ export async function renderPost({ params, isStale }) {
       relativeTime(post.created_at)),
   ];
   if (wasEdited(post)) {
+    // No separator dot: the tag is already a chip, and space does the job.
     timeBits.push(
-      h("span", { class: "dot", "aria-hidden": "true" }),
       h("span", { class: "tag", title: "Last edited " + fullTime(post.updated_at) }, "edited"));
   }
 
@@ -62,9 +63,16 @@ export async function renderPost({ params, isStale }) {
 
   const actions = h("div", { class: "detail__actions" });
 
+  // The other end of the morph: whatever title the reader tapped arrives here.
+  const title = h("h1", { class: "detail__title" }, post.title);
+  nameForMorph(title);
+  // And on the way back out, the card for this post takes the name so the
+  // journey reverses rather than fading.
+  morphingBackTo(post.id);
+
   const root = h("section", { class: "detail" },
     backLink(),
-    h("h1", { class: "detail__title" }, post.title),
+    title,
     byline,
     h("div", { class: "detail__row" }, voteControl(post, { inline: true })),
     h("div", { class: "detail__content" }, post.content),

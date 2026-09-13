@@ -125,5 +125,7 @@ test("search filters the feed and drives the query string", async ({
   await expect(page.getByRole("heading", { name: "Seeded post 2" })).toBeVisible();
 
   await search.fill("nothing matches this");
-  await expect(page.getByText(/Nothing matches/)).toBeVisible();
+  // scoped to the feed: the command palette has an empty state of its own
+  // that opens with the same two words.
+  await expect(page.locator(".feed__status")).toContainText("Nothing matches");
 });

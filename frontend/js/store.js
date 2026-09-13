@@ -31,6 +31,7 @@ function loadVotes() {
 const state = {
   session: loadSession(),
   feedCache: null, // { key, items, page, total, pages, hasNext, scrollY, at }
+  knownPosts: [], // what's on screen now, for the command palette to search
   voted: loadVotes(), // post ids this browser has upvoted (best-effort mirror)
 };
 
@@ -130,4 +131,16 @@ export function readFeedCache(key) {
 
 export function dropFeedCache() {
   state.feedCache = null;
+}
+
+// — what the palette can search -----------------------------------------------
+// The posts currently on screen, so the command palette can filter them without
+// going near the network. Like the feed cache this is read, never rendered
+// from, so it doesn't go through set()/subscribe.
+export function setKnownPosts(posts) {
+  state.knownPosts = posts.slice();
+}
+
+export function knownPosts() {
+  return state.knownPosts || [];
 }

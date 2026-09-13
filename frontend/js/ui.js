@@ -4,6 +4,7 @@
 
 import { api } from "./api.js";
 import { get, hasVoted, setVoted } from "./store.js";
+import { tryTransition } from "./transitions.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SVG_TAGS = new Set(["svg", "path", "circle", "line", "rect", "g", "polyline", "polygon"]);
@@ -61,22 +62,35 @@ const viewEl = () => document.getElementById("view");
 
 export function mountView(node, { restoreScroll } = {}) {
   const view = viewEl();
-  view.replaceChildren(node);
-  node.classList.add("route-enter");
-  node.addEventListener(
-    "animationend",
-    () => node.classList.remove("route-enter"),
-    { once: true }
-  );
+
+  const swap = () => {
+    view.replaceChildren(node);
+    if (typeof restoreScroll === "number") window.scrollTo(0, restoreScroll);
+    else window.scrollTo(0, 0);
+  };
+
+  // Not on the very first paint. There's nothing on screen to travel from, so
+  // the transition would have nothing to say — and while one runs the document
+  // is covered by its snapshot and doesn't take clicks, which is a strange
+  // couple of hundred milliseconds to hand someone who has only just arrived.
+  const replacingAView = view.childElementCount > 0;
+
+  // A transition and the cross-fade at the same time reads as a stutter, so
+  // exactly one of them runs.
+  if (!(replacingAView && tryTransition(swap))) {
+    swap();
+    node.classList.add("route-enter");
+    node.addEventListener(
+      "animationend",
+      () => node.classList.remove("route-enter"),
+      { once: true }
+    );
+  }
+
   // Move focus to the top of the new screen for keyboard + screen-reader users —
   // unless they're typing in the header search, which drives feed re-renders.
   if (document.activeElement !== document.getElementById("search-input")) {
     view.focus({ preventScroll: true });
-  }
-  if (typeof restoreScroll === "number") {
-    requestAnimationFrame(() => window.scrollTo(0, restoreScroll));
-  } else {
-    window.scrollTo(0, 0);
   }
 }
 

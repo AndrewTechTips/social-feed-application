@@ -371,14 +371,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: none;
-  opacity: 0.7;
-}
 
 /* — vote control ------------------------------------------------------------- */
 .vote {
@@ -791,21 +783,27 @@
   }
 }
 
-/* — demo strip ---------------------------------------------------------------
-   Only ever mounted on the published (static-host) build, where the app is
-   answering its own API calls. It sits directly under the sticky header and
-   scrolls away with the page: this is context, not a control, and pinning it
-   would be shouting.
+/* — demo notice ---------------------------------------------------------------
+   Only ever present on the published (static-host) build, where the app is
+   answering its own API calls. Two placements, never both at once: a band
+   under the header, or folded into the masthead when that's on screen. See
+   syncDemoStrip in main.js.
+
+   Either way it scrolls with the page — this is context, not a control, and
+   pinning it would be shouting.
    -------------------------------------------------------------------------- */
+/* shared by both placements */
 .demo {
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+}
+.demo--band {
   border-bottom: 1px solid var(--border);
   /* A neutral band, not a tinted one. The accent is reserved for live things —
      your identity, an active upvote, a link — and a standing notice is not one
      of those. An amber wash here also pulled the light theme toward the warm
      cream it deliberately isn't. Only the label is accented. */
   background: color-mix(in srgb, var(--text) 5%, var(--bg-2));
-  color: var(--text-dim);
-  font-size: var(--fs-meta);
 }
 .demo__inner {
   max-width: var(--page-max);
@@ -815,6 +813,17 @@
   gap: var(--s-4);
   padding: var(--s-2) max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
     max(var(--s-4), env(safe-area-inset-left));
+}
+
+/* Inside the masthead it isn't a band: no full-bleed background, no border, no
+   page padding — it's the third line of a block that already has all three. */
+.demo--inline {
+  margin-top: var(--s-4);
+}
+.demo--inline .demo__inner {
+  padding: 0;
+  gap: var(--s-3);
+  align-items: baseline;
 }
 .demo__text {
   flex: 1;
@@ -866,10 +875,15 @@
 }
 
 @media (max-width: 640px) {
-  .demo__inner {
+  .demo--band .demo__inner {
     align-items: flex-start;
     gap: var(--s-2);
     padding-block: var(--s-3);
+  }
+  .demo--inline .demo__inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
   }
   .demo__action {
     min-height: 44px;
@@ -880,5 +894,179 @@
   }
   .demo--folded .demo__inner {
     align-items: center;
+  }
+}
+
+/* — command palette ----------------------------------------------------------
+   A panel over a dimmed page, near the top rather than centred — the list grows
+   downwards and a centred panel would jump about as it does.
+   -------------------------------------------------------------------------- */
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  /* dvh, not vh: vh is frozen at the largest viewport, so on a phone with
+     the URL bar showing a vh-sized panel is taller than the screen. */
+  padding: max(10dvh, var(--s-7)) var(--s-4) var(--s-4);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: palette-in var(--t-fast) var(--ease) both;
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.palette__panel {
+  width: min(34rem, 100%);
+  max-height: min(60dvh, 28rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  position: relative;
+}
+.palette__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: var(--hairline);
+}
+.palette__field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  flex: none;
+}
+.palette__glyph {
+  flex: none;
+}
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: var(--fs-field);
+}
+.palette__input::placeholder {
+  color: var(--text-faint);
+}
+.palette__list {
+  margin: 0;
+  padding: var(--s-2);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 40px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+/* Selection is driven by aria-selected, so the keyboard and the pointer can't
+   disagree about which row is live. */
+.palette__row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+.palette__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-ui);
+}
+.palette__key {
+  flex: none;
+  min-width: 1.6em;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  text-align: center;
+}
+.palette__row[aria-selected="true"] .palette__key {
+  border-color: var(--border-strong);
+  color: var(--text-dim);
+}
+.palette__empty {
+  padding: var(--s-5) var(--s-4) var(--s-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+
+/* The hint that the palette exists at all. Pointer-fine only: there's no ⌘K on
+   a phone, and advertising one there would be a lie. */
+.search__hint {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.search__hint kbd {
+  font: inherit;
+}
+@media (hover: hover) {
+  .search__hint:hover {
+    border-color: var(--border-strong);
+    color: var(--text-dim);
+  }
+}
+@media (max-width: 900px), (pointer: coarse) {
+  .search__hint {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .palette {
+    padding-top: var(--s-6);
+  }
+  .palette__panel {
+    background: var(--panel-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .palette__row {
+    min-height: 44px;
   }
 }

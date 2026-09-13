@@ -378,7 +378,7 @@ work. Do this immediately after Tier 0.
 > says so with `aria-busy`), and "Reset the demo" left the app holding a dead session.
 > **Still needs Pages enabled by hand** before the README link resolves.
 
-**1.2 — Command palette (⌘K / Ctrl-K) — 6–8 h.**
+**1.2 ✅ — Command palette (⌘K / Ctrl-K) — 6–8 h.**
 *Borrowed from:* Raycast and Linear. Specifically two things, and not a third —
 Raycast's discipline of showing **one flat result list** rather than pre-categorising, and
 Linear's habit of putting the **keyboard shortcut on every row** so the palette teaches the
@@ -392,7 +392,12 @@ genuine "wait, how big is this thing?" moment. The pieces are all present alread
 input, a hash router, `h()`, and a focus-management pattern from the delete confirm.
 *Touches:* new `js/components/palette.js`, `main.js`, `components.css`, new spec.
 
-**1.3 — View Transitions on feed → post — 3–4 h. This is the signature detail.**
+> **Done (2026-09-13).** Plus `js/actions.js`, so the theme toggle and sign-out the
+> palette runs are literally the same code the header runs. The advertised keys (N, T,
+> G, C) work outside the palette, because a hint for a shortcut that doesn't exist is
+> decoration; a ⌘K chip in the search pill makes it discoverable at all.
+
+**1.3 ✅ — View Transitions on feed → post — 3–4 h. This is the signature detail.**
 *Borrowed from:* the push transition in Things 3 and iOS navigation generally — the sense
 that the title you tapped *became* the title on the next screen, so you always know where
 you came from. Arc does the same thing with tab morphs.
@@ -405,7 +410,16 @@ the generic per-card stagger** — replacing a template tell with a considered d
 is the point: this should be the only orchestrated motion in the app besides the vote pop.
 *Touches:* `ui.js` (`mountView`), `views/feed.js`, `views/post.js`, `views.css`, `base.css`.
 
-**1.4 — The masthead: a landing moment that also carries the demo label — 4 h.**
+> **Done (2026-09-13).** New `js/transitions.js`; the stagger and the middle dots are
+> gone. Three things this turned up, all fixed: the API ignores
+> prefers-reduced-motion and CSS can't reach `::view-transition-*`, so the check has to
+> happen in JS before starting one; the document takes no input while a transition runs,
+> which made 320ms long enough to swallow a tap (now 160/240ms, and no transition at all
+> on first paint); and the router rendered every screen twice — once from `startRouter`
+> and again from a queued `hashchange` — which was invisible until a transition hung off
+> the second one.
+
+**1.4 ✅ — The masthead: a landing moment that also carries the demo label — 4 h.**
 *Borrowed from:* Linear's changelog pages and Things 3's empty states — typographic, quiet,
 one accent, no hero image, no gradient headline. Explicitly *not* a marketing hero.
 *What it is:* above the feed, for anonymous visitors only, a serif line naming what Commons
@@ -415,6 +429,10 @@ or scrolled past it.
 looking at, and the demo needs a label anyway. Solving both with one restrained typographic
 moment is better than bolting a banner onto a feed.
 *Touches:* `index.html`, `views/feed.js`, `views.css`.
+
+> **Done (2026-09-13).** Anonymous visitors only, and not while searching. The demo
+> notice moved into it rather than being repeated: `main.js` stands the band down when
+> the masthead has it, so the sentence is on screen exactly once, always.
 
 **1.5 — Comments — 1.5–2 days.**
 The most conspicuous missing feature of a social feed, and the one that adds the most

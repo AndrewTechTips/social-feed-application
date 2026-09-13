@@ -4,12 +4,13 @@
 
 import { api } from "../api.js";
 import { h, mountView, skeletonCards, avatar, relativeTime, voteControl } from "../ui.js";
-import { cacheFeed, readFeedCache, viewerKey } from "../store.js";
+import { get, cacheFeed, readFeedCache, viewerKey, setKnownPosts } from "../store.js";
+import { nameForMorph, claimReturn, forgetReturn } from "../transitions.js";
+import { IS_DEMO } from "../config.js";
+import { demoNote } from "../demo/strip.js";
 
 const PAGE_SIZE = 10;
 const FIRST_SKELETONS = 5;
-const STAGGER = 40; // ms between card entrances
-const STAGGER_CAP = 8;
 
 // Only one feed instance should own the observer + hashchange listener at a time.
 let activeTeardown = null;
@@ -21,6 +22,32 @@ function preview(text) {
   return t.length > 280 ? t.slice(0, 280).trimEnd() + "…" : t;
 }
 
+// A quiet line of type above the feed, for people who haven't signed in — the
+// app otherwise opens on skeletons with nothing saying what it is.
+//
+// Borrowed from Linear's changelog pages and the empty states in Things 3:
+// set the sentence in the reading face, say one true thing, and stop. No hero
+// image, no gradient headline, no call to action shouting at a reader who is
+// already reading. It sits in the flow at the top of the list, so scrolling
+// past it is all it takes to be rid of it, and it's gone entirely once you're
+// signed in — at which point you know what this is.
+//
+// In demo mode it also carries the demo notice, so a visitor gets one block of
+// explanation rather than two stacked banners.
+function masthead() {
+  return h(
+    "header",
+    { class: "masthead" },
+    h("h1", { class: "masthead__title" }, "A small public common."),
+    h(
+      "p",
+      { class: "masthead__line" },
+      "Anyone can read what's here. You need an account to post or to upvote."
+    ),
+    IS_DEMO ? demoNote() : null
+  );
+}
+
 export function renderFeed({ query, isStale }) {
   const search = (query.get("search") || "").trim();
   const key = search.toLowerCase();
@@ -28,9 +55,14 @@ export function renderFeed({ query, isStale }) {
   const list = h("div", { class: "feed__list" });
   const status = h("p", { class: "feed__status", hidden: true });
   const sentinel = h("div", { class: "feed__sentinel", "aria-hidden": "true" });
+  // Not while searching: at that point the reader is looking for something
+  // specific and an introduction is in the way.
+  const showMasthead = !get("session") && !search;
+
   const root = h(
     "section",
     { class: "feed", "aria-label": search ? `Posts matching ${search}` : "Latest posts" },
+    showMasthead ? masthead() : null,
     list,
     status,
     sentinel
@@ -50,32 +82,30 @@ export function renderFeed({ query, isStale }) {
     status.classList.toggle("feed__status--pad", !!pad);
   }
 
-  function cardEl(post, idx) {
+  function cardEl(post) {
+    const title = h("h2", { class: "card__title" }, post.title);
     const link = h("a", { class: "card__link", href: `#/posts/${post.id}` },
-      h("h2", { class: "card__title" }, post.title),
+      title,
       h("p", { class: "card__preview" }, preview(post.content)));
+
+    // Hand this title to the transition on the way out, so it becomes the
+    // heading of the post screen rather than being replaced by it. Set at the
+    // moment of the click: only one element may carry the name at a time.
+    link.addEventListener("click", () => nameForMorph(title));
+
+    // Coming back the other way, the card the reader left from takes the name
+    // so the journey reverses instead of just fading.
+    if (claimReturn(post.id)) nameForMorph(title);
 
     const meta = h("div", { class: "card__meta" },
       avatar(post.user.email, "sm"),
       h("span", { class: "card__author", title: post.user.email }, authorName(post.user.email)),
-      h("span", { class: "dot", "aria-hidden": "true" }),
       h("time", { datetime: post.created_at }, relativeTime(post.created_at)),
       post.published ? null : h("span", { class: "tag" }, "Draft"));
 
-    const card = h("article", { class: "card" },
+    return h("article", { class: "card" },
       voteControl(post),
       h("div", { class: "card__body" }, link, meta));
-
-    if (idx != null) {
-      card.classList.add("card--in");
-      card.style.setProperty("--d", Math.min(idx, STAGGER_CAP) * STAGGER + "ms");
-      card.addEventListener("animationend", () => {
-        card.classList.remove("card--in");
-        card.style.removeProperty("--d");
-        card.style.removeProperty("will-change");
-      }, { once: true });
-    }
-    return card;
   }
 
   function renderTail() {
@@ -131,11 +161,12 @@ export function renderFeed({ query, isStale }) {
       }
 
       const frag = document.createDocumentFragment();
-      data.items.forEach((post, i) => {
+      data.items.forEach((post) => {
         items.push(post);
-        frag.append(cardEl(post, i));
+        frag.append(cardEl(post));
       });
       list.append(frag);
+      setKnownPosts(items);
       renderTail();
     } catch (err) {
       if (err.name === "AbortError" || isStale()) return;
@@ -175,8 +206,9 @@ export function renderFeed({ query, isStale }) {
     ({ page, pages, hasNext, total, viewer } = cached);
     cached.items.forEach((post) => {
       items.push(post);
-      list.append(cardEl(post, null));
+      list.append(cardEl(post));
     });
+    setKnownPosts(items);
     renderTail();
     mountView(root, { restoreScroll: cached.scrollY });
     setupObserver();
@@ -185,4 +217,8 @@ export function renderFeed({ query, isStale }) {
     setupObserver();
     load(true);
   }
+
+  // Any return-morph still pending by now belongs to a post that isn't on this
+  // page — a stale name would animate a title in from nothing.
+  forgetReturn();
 }

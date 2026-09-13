@@ -3,33 +3,28 @@
 
 import { route, startRouter, navigate, currentPath, currentQuery } from "./router.js";
 import { IS_DEMO } from "./config.js";
-import { get, subscribe, clearSession, dropFeedCache } from "./store.js";
-import { h, icon, toast } from "./ui.js";
+import { mountDemoStrip } from "./demo/strip.js";
+import { get, subscribe, dropFeedCache } from "./store.js";
+import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
+import { h, icon } from "./ui.js";
+import { mountPalette, openPalette } from "./components/palette.js";
 import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
 // — theme -----------------------------------------------------------------------
-function currentTheme() {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
+// The behaviour lives in actions.js, because the command palette does this too.
 function paintThemeButton(btn) {
-  const next = currentTheme() === "dark" ? "light" : "dark";
-  btn.setAttribute("aria-label", `Switch to ${next} theme`);
+  btn.setAttribute("aria-label", `Switch to ${otherTheme()} theme`);
   btn.replaceChildren(icon(currentTheme() === "dark" ? "sun" : "moon"));
 }
 function themeButton() {
   const btn = h("button", { class: "btn btn--quiet btn--icon", type: "button" });
   paintThemeButton(btn);
-  btn.addEventListener("click", () => {
-    const to = currentTheme() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = to;
-    try {
-      localStorage.setItem("commons.theme", to);
-    } catch (e) {}
-    paintThemeButton(btn); // swap in place — don't rebuild the cluster
-  });
+  btn.addEventListener("click", toggleTheme);
+  // Repaint whoever changed it — the button, or the palette.
+  addEventListener("commons:theme", () => paintThemeButton(btn));
   return btn;
 }
 
@@ -68,12 +63,7 @@ function renderAccount() {
       icon("sign-out"),
       h("span", { class: "btn__label" }, "Sign out")
     );
-    out.addEventListener("click", () => {
-      clearSession();
-      dropFeedCache();
-      toast("Signed out.");
-      navigate("/");
-    });
+    out.addEventListener("click", signOut);
     kids.push(write, email, out, themeButton());
   } else {
     kids.push(
@@ -88,7 +78,10 @@ function renderAccount() {
 function wireSearch() {
   const form = document.querySelector(".search");
   const input = document.getElementById("search-input");
+  const hint = document.getElementById("palette-hint");
   let timer;
+
+  if (hint) hint.addEventListener("click", openPalette);
 
   const push = () => {
     const v = input.value.trim();
@@ -106,6 +99,34 @@ function wireSearch() {
   });
 }
 
+// — demo notice placement --------------------------------------------------
+// The notice has to be seen on every visit, but it should only be said once.
+// An anonymous visitor on the feed already gets a block of type explaining what
+// Commons is, so the masthead carries it there and the band stands down.
+// Everywhere else — signed in, or on any other screen — the band does the job.
+let demoBand = null;
+
+function syncDemoStrip() {
+  if (!IS_DEMO) return;
+  if (!demoBand) demoBand = mountDemoStrip();
+  const mastheadHasIt = !get("session") && currentPath() === "/" && !currentQuery().get("search");
+  demoBand.hidden = mastheadHasIt;
+}
+
+// ⌘ on a Mac, Ctrl everywhere else.
+function paintPaletteHint() {
+  const hint = document.getElementById("palette-hint");
+  if (!hint) return;
+  // userAgentData.platform where it exists; navigator.platform is deprecated
+  // but still the only answer in Safari and Firefox.
+  const platform =
+    navigator.userAgentData?.platform || navigator.platform || "";
+  const mac = /mac/i.test(platform);
+  hint.replaceChildren(
+    h("kbd", { "aria-hidden": "true" }, mac ? "\u2318K" : "Ctrl K")
+  );
+}
+
 function syncChrome() {
   const onFeed = currentPath() === "/";
   const form = document.querySelector(".search");
@@ -115,6 +136,7 @@ function syncChrome() {
     const q = currentQuery().get("search") || "";
     if (document.activeElement !== input) input.value = q;
   }
+  syncDemoStrip();
   const titles = {
     "/": "Commons",
     "/login": "Sign in · Commons",
@@ -136,17 +158,15 @@ route("/posts/:id", renderPost);
 route("/posts/:id/edit", renderEdit);
 
 subscribe(renderAccount);
+// Signing in or out moves the notice between the masthead and the band, and a
+// same-route navigate() fires no hashchange — so the store drives this too.
+subscribe(syncDemoStrip);
 addEventListener("hashchange", syncChrome);
 
 renderAccount();
 wireSearch();
 syncChrome();
-
-// On a static host the app answers its own API calls, and the strip is how a
-// visitor finds that out. Loaded only when it applies, so the normal build
-// never fetches it.
-if (IS_DEMO) {
-  import("./demo/strip.js").then((m) => m.mountDemoStrip());
-}
+mountPalette();
+paintPaletteHint();
 
 startRouter();
