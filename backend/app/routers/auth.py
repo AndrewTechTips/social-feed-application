@@ -20,6 +20,9 @@ def login(
     user = db.scalar(stmt)
 
     if not user:
+        # Spend the same time here as the branch below does, so how long the
+        # response takes doesn't reveal whether this email has an account.
+        utils.verify_password_dummy()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Credentials",

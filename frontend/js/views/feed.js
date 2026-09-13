@@ -4,7 +4,7 @@
 
 import { api } from "../api.js";
 import { h, mountView, skeletonCards, avatar, relativeTime, voteControl } from "../ui.js";
-import { cacheFeed, readFeedCache } from "../store.js";
+import { cacheFeed, readFeedCache, viewerKey } from "../store.js";
 
 const PAGE_SIZE = 10;
 const FIRST_SKELETONS = 5;
@@ -39,6 +39,10 @@ export function renderFeed({ query, isStale }) {
   const items = [];
   let page = 0, pages = 1, hasNext = true, total = null;
   let loading = false, controller = null, observer = null, errorBox = null;
+  // Who these items were fetched for. Recorded here rather than read back at
+  // teardown, because teardown can run after a sign-out has already changed
+  // the answer — see the note in store.js.
+  let viewer = viewerKey();
 
   function setStatus(text, pad) {
     status.textContent = text || "";
@@ -120,6 +124,7 @@ export function renderFeed({ query, isStale }) {
       if (isStale()) return;
 
       ({ page, pages, has_next: hasNext, total } = data);
+      viewer = viewerKey();
       if (initial) {
         list.replaceChildren();
         items.length = 0;
@@ -157,7 +162,7 @@ export function renderFeed({ query, isStale }) {
     if (observer) observer.disconnect();
     if (controller) controller.abort();
     if (items.length) {
-      cacheFeed({ key, items: items.slice(), page, pages, hasNext, total, scrollY: window.scrollY });
+      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, scrollY: window.scrollY });
     }
   }
 
@@ -167,7 +172,7 @@ export function renderFeed({ query, isStale }) {
 
   const cached = readFeedCache(key);
   if (cached) {
-    ({ page, pages, hasNext, total } = cached);
+    ({ page, pages, hasNext, total, viewer } = cached);
     cached.items.forEach((post) => {
       items.push(post);
       list.append(cardEl(post, null));

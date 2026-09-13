@@ -36,10 +36,12 @@ def client(session):
             session.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    # Rate limiter state is in-memory and would leak across tests; turn it off so
-    # tests are deterministic. It has its own dedicated test above/below.
+    # Rate limiter state is in-memory and would leak from one test into the
+    # next; turn it off so tests are deterministic. The limits themselves are
+    # covered in test_limits.py, which turns it back on and resets it by hand.
     app.state.limiter.enabled = False
     yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -76,6 +78,19 @@ def authorized_client(client, token):
 
 
 @pytest.fixture
+def anonymous_client(client):
+    """A second client over the same app that never carries a token.
+
+    Worth knowing: `authorized_client` signs `client` in by mutating its
+    headers in place and handing the *same object* back, so asking for both in
+    one test gets you two names for one signed-in client. Use this when a test
+    needs to see what a signed-out visitor sees after acting as a signed-in
+    one.
+    """
+    return TestClient(app)
+
+
+@pytest.fixture
 def test_posts(test_user, session, test_user2):
     posts_data = [
         {
@@ -106,3 +121,34 @@ def test_posts(test_user, session, test_user2):
     session.commit()
     posts = session.scalars(select(models.Post)).all()
     return posts
+
+
+@pytest.fixture
+def draft_post(test_user2, session):
+    """An unpublished post belonging to test_user2 — i.e. not the person the
+    `authorized_client` fixture signs in as."""
+    draft = models.Post(
+        title="a quiet draft",
+        content="not ready to be read yet",
+        published=False,
+        user_id=test_user2["id"],
+    )
+    session.add(draft)
+    session.commit()
+    session.refresh(draft)
+    return draft
+
+
+@pytest.fixture
+def own_draft(test_user, session):
+    """An unpublished post belonging to the `authorized_client` user."""
+    draft = models.Post(
+        title="my own quiet draft",
+        content="mine, and not finished",
+        published=False,
+        user_id=test_user["id"],
+    )
+    session.add(draft)
+    session.commit()
+    session.refresh(draft)
+    return draft

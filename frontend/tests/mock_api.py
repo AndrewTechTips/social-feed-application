@@ -166,6 +166,14 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return email
 
+    def _may_see(self, row: dict, viewer: str | None) -> bool:
+        """Published posts are public; a draft belongs to its author.
+
+        Mirrors _visible_to() in backend/app/routers/post.py. If the two ever
+        disagree, this mock stops being worth having.
+        """
+        return row["published"] or row["author_email"] == viewer
+
     def _maybe_forced_failure(self, method: str, path: str) -> bool:
         for i, rule in enumerate(ST.fail_next):
             if rule["method"] == method and re.search(rule["path"], path):
@@ -332,8 +340,19 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         search = query.get("search", [""])[0]
+        if len(search) > 100:  # matches max_length on the real endpoint
+            return self._send(
+                422,
+                {"detail": [{"loc": ["query", "search"], "msg": "too long",
+                             "type": "value_error"}]},
+            )
+        viewer = ST.email_for(self._token())
 
-        rows = [r for r in ST.posts.values() if search in r["title"]]
+        rows = [
+            r
+            for r in ST.posts.values()
+            if search in r["title"] and self._may_see(r, viewer)
+        ]
         rows.sort(
             key=lambda r: (r["created_at"], r["id"]), reverse=True
         )  # newest first
@@ -356,7 +375,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _get_post(self, pid: int) -> None:
         row = ST.posts.get(pid)
-        if not row:
+        if not row or not self._may_see(row, ST.email_for(self._token())):
+            # Someone else's draft is 404, not 403 — a 403 would confirm it exists.
             return self._send(404, {"detail": f"Post with id: {pid} was not found"})
         self._send(200, ST.post_out(row))
 
@@ -446,7 +466,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid = data.get("post_id")
         direction = data.get("dir")
-        if pid not in ST.posts:
+        row = ST.posts.get(pid)
+        if not row or not self._may_see(row, email):
             return self._send(404, {"detail": f"Post with id: {pid} does not exist"})
         key = (email, pid)
         if direction == 1:

@@ -50,8 +50,11 @@
           <circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.7" />
           <line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
         </svg>
+        <!-- maxlength matches the max_length on the API's search parameter; without
+             it a longer query is a 422 the feed renders as "didn't load". -->
         <input id="search-input" class="search__input" type="search" name="search"
-               placeholder="Search titles" autocomplete="off" enterkeyhint="search" />
+               placeholder="Search titles" autocomplete="off" enterkeyhint="search"
+               maxlength="100" />
       </form>
 
       <div class="account" id="account"><!-- rendered by main.js --></div>

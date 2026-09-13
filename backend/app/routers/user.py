@@ -22,7 +22,13 @@ def create_user(
     try:
         db.commit()
     except IntegrityError:
-        # email column is UNIQUE — a second signup with the same address lands here
+        # email column is UNIQUE — a second signup with the same address lands here.
+        #
+        # This does tell a caller which addresses are registered. The usual fix
+        # is to answer 201 either way and send the "you already have an account"
+        # message by email, which needs mail this project doesn't have. The
+        # 10/hour limit above is the compensating control; revisit if email
+        # delivery ever lands.
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

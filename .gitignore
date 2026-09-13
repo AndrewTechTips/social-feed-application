@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Screenshot capture intermediates (docs/capture.mjs); the PNGs and the GIF
+# next to them are committed, the raw frames are not.
+docs/media/.frames/

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, UTC
 
 import jwt
-from fastapi import Depends, status, HTTPException
+from fastapi import Depends, Request, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -60,3 +60,31 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_current_user_optional(
+    request: Request, db: Session = Depends(database.get_db)
+) -> models.User | None:
+    """Like ``get_current_user``, but for routes that are public *and* show a
+    little more to a signed-in caller (the feed shows you your own drafts).
+
+    A missing or unusable token is not an error here — it just means "anonymous".
+    We read the header by hand rather than reusing ``oauth2_scheme`` because
+    OAuth2PasswordBearer raises a 401 when the header is absent, which is exactly
+    what this dependency must not do.
+    """
+    header = request.headers.get("Authorization", "")
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
+
+    user_id = payload.get("user_id")
+    if user_id is None:
+        return None
+
+    return db.scalar(select(models.User).where(models.User.id == user_id))

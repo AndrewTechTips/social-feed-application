@@ -64,12 +64,61 @@ jobs:
       - name: Migrations apply cleanly on an empty database
         run: alembic -c backend/alembic.ini upgrade head
 
+      - name: Migrations match the models
+        # Catches the drift that bites later: a column added to models.py with
+        # no migration behind it. The tests build their schema with
+        # create_all(), so without this nothing would notice until deploy.
+        run: alembic -c backend/alembic.ini check
+
       - name: Run tests
         working-directory: backend
         run: pytest -q
 
+      - name: Coverage badge is up to date
+        # The badge is a committed SVG, not a third-party service. If coverage
+        # moved and nobody re-rendered it, fail here rather than let the README
+        # advertise a stale number.
+        run: python backend/scripts/coverage_badge.py --check
+
+  frontend:
+    name: frontend (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v7
+        with:
+          # mock_api.py is stdlib-only, but the suite still needs an interpreter
+          # to run it and to serve the static files.
+          python-version: "3.14"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        working-directory: frontend
+        run: npm test
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: frontend/tests/.report
+          retention-days: 7
+
   build-and-push:
-    needs: test
+    needs: [test, frontend]
     # Only publish an image from the real thing: a push to main.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

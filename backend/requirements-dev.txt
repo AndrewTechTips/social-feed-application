@@ -5,3 +5,4 @@
 black==26.5.1
 httpx2==2.7.0  # HTTP client used by starlette.testclient in Starlette 1.x
 pytest==9.1.1
+pytest-cov==7.1.0

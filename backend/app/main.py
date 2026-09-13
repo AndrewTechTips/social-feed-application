@@ -37,10 +37,41 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    # No allow_credentials: auth here is a Bearer header, not a cookie, so
+    # nothing needs credentialed CORS. Turning it on would only widen what a
+    # browser is willing to send on our behalf.
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+# Sent on every response. None of these matter much for a JSON API consumed by
+# fetch(), but /docs is HTML served from this same origin, and they cost one
+# dict lookup.
+SECURITY_HEADERS = {
+    # don't let a browser second-guess a Content-Type it was given
+    "X-Content-Type-Options": "nosniff",
+    # nothing here is meant to be framed
+    "X-Frame-Options": "DENY",
+    # don't leak the full URL (ids included) to other origins
+    "Referrer-Policy": "no-referrer",
+    # this API has no use for any of them
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    # HSTS only means something over TLS, and asserting it in development would
+    # pin localhost to https in the browser's cache for a year.
+    if settings.environment == "production":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
 
 
 @app.middleware("http")

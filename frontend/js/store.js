@@ -93,14 +93,30 @@ export function setVoted(id, on) {
 // it shouldn't repaint the header.
 const CACHE_TTL = 60000;
 
+// The feed isn't the same page for everyone — you see your own drafts, nobody
+// else does — so a snapshot taken while signed in must never be replayed to a
+// signed-out visitor.
+//
+// The snapshot carries the viewer it was *fetched* for, which the caller
+// supplies; reading it back compares against whoever is here now. Note that
+// dropFeedCache() alone does not cover this, and neither would stamping the
+// viewer at write time: leaving a feed caches it during teardown, and
+// renderFeed tears the outgoing instance down *after* sign-out has cleared
+// both the session and the cache — so the stale list would be written back
+// already wearing the new viewer's name, one line before it's read.
+export function viewerKey() {
+  return state.session ? state.session.email : null;
+}
+
 export function cacheFeed(snapshot) {
   state.feedCache = { ...snapshot, at: Date.now() };
 }
 
 export function readFeedCache(key) {
   const c = state.feedCache;
-  if (c && c.key === key && Date.now() - c.at < CACHE_TTL) return c;
-  return null;
+  if (!c || c.key !== key || c.viewer !== viewerKey()) return null;
+  if (Date.now() - c.at >= CACHE_TTL) return null;
+  return c;
 }
 
 export function dropFeedCache() {
