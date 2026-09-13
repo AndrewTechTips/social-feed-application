@@ -17,6 +17,7 @@
   --fs-read: 1.125rem; /* post body — 18px */
   --fs-body: 0.9375rem; /* 15px */
   --fs-ui: 0.875rem; /* 14px controls */
+  --fs-field: var(--fs-ui); /* text *inside* a form control — see the 16px rule below */
   --fs-meta: 0.8125rem; /* 13px */
   --fs-micro: 0.75rem;
 
@@ -177,6 +178,19 @@
     --aurora-warm: rgba(226, 149, 47, 0.12);
     --aurora-cool: rgba(47, 138, 118, 0.1);
     color-scheme: light;
+  }
+}
+
+/* iOS Safari zooms the whole page in whenever a focused form control renders
+   below 16px, and never zooms back out — the classic "tap the search box and
+   the layout jumps" bug. 16px is the threshold, so form controls get their own
+   size token that lifts to exactly that on anything touch-shaped.
+   Both conditions matter: the width query catches narrow windows and DevTools
+   device mode, and the pointer query catches a phone held in landscape, which
+   is 900px+ wide on a modern handset and would otherwise slip through. */
+@media (max-width: 640px), (pointer: coarse) {
+  :root:root {
+    --fs-field: 1rem; /* 16px */
   }
 }
 

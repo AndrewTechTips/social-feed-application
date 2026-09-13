@@ -54,6 +54,7 @@ backend/
     routers/           auth.py · user.py · post.py · vote.py
   alembic/             migrations
   tests/               pytest suite + fixtures
+frontend/              web UI — plain HTML/CSS/JS, no build step (see frontend/README.md)
 docker-compose.yml       local dev stack (api + postgres)
 docker-compose.prod.yml  prod-like stack (migrate + api + postgres)
 ```
@@ -68,6 +69,16 @@ docker compose up --build
 ```
 
 API on <http://localhost:8000>, interactive docs on <http://localhost:8000/docs>.
+
+### The web UI
+
+```bash
+cd frontend && python3 -m http.server 5173
+```
+
+Then open <http://localhost:5173> (the origin the API's CORS config allows). It's
+plain HTML/CSS/JS with no build step. Details, design tokens, and how to run its
+tests are in [`frontend/README.md`](frontend/README.md).
 
 ### Option B — local Python + your own Postgres
 
@@ -89,6 +100,10 @@ cd backend && pytest -q
 
 Needs a reachable Postgres and a `<DATABASE_NAME>_test` database (the suite creates
 and drops the tables itself on every test).
+
+The frontend has its own Playwright end-to-end suite (`cd frontend && npm test`)
+that runs against a stdlib mock of this API — no Postgres needed. See
+[`frontend/README.md`](frontend/README.md).
 
 ## Migrations
 
@@ -121,5 +136,5 @@ alembic -c backend/alembic.ini downgrade -1
 - [x] Rate limiting, DB connection pool, `/healthz`
 - [x] Flat post schema, N+1 fix, public feed, pagination metadata, `PATCH` + `updated_at`
 - [x] Split CI (test vs publish), migrations checked in CI, slim non-root image
-- [ ] Frontend (React + Vite + TypeScript)
+- [x] Frontend — plain HTML/CSS/vanilla JS, no build step ([`frontend/`](frontend/))
 - [ ] User profiles, comments, follows, refresh tokens

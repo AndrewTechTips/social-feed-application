@@ -27,6 +27,13 @@
     <path d="M12 4 L6 10 L12 16" />
   </symbol>
 
+  <symbol id="i-sign-out" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.5 3.5 H16 A0.5 0.5 0 0 1 16.5 4 V16 A0.5 0.5 0 0 1 16 16.5 H12.5" />
+    <path d="M9 6.5 L5.5 10 L9 13.5" />
+    <path d="M5.5 10 H13" />
+  </symbol>
+
   <symbol id="i-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor"
           stroke-width="1.5" stroke-linejoin="round">
     <path d="M1 10 C3 5 6.5 3 10 3 C13.5 3 17 5 19 10 C17 15 13.5 17 10 17 C6.5 17 3 15 1 10 Z" />

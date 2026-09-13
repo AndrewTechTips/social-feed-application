@@ -25,10 +25,17 @@
   max-width: var(--page-max);
   margin-inline: auto;
   min-height: var(--header-h);
-  padding: var(--s-2) max(var(--s-4), env(safe-area-inset-left)) var(--s-2)
-    max(var(--s-4), env(safe-area-inset-right));
+  /* The top inset keeps the row clear of the status bar / notch, which
+     viewport-fit=cover deliberately lets us paint under. */
+  padding: calc(var(--s-2) + env(safe-area-inset-top))
+    max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
+    max(var(--s-4), env(safe-area-inset-left));
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  /* minmax(0, …) on the middle track, not a bare 1fr: a bare 1fr refuses to go
+     below the search field's min-content, so once the brand and the account
+     cluster stop fitting the whole row overflows sideways instead. The search
+     is the one thing here that can afford to give ground, so let it. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3) var(--s-4);
 }
@@ -37,6 +44,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
+  min-height: 44px;
+  justify-self: start;
   color: var(--text);
   text-decoration: none;
   font-family: var(--font-serif);
@@ -47,9 +56,14 @@
   color: var(--text-dim);
   transition: color var(--t-mid) var(--ease), transform var(--t-mid) var(--ease);
 }
-.brand:hover .brand__mark {
+@media (hover: hover) {
+  .brand:hover .brand__mark {
+    color: var(--accent);
+    transform: rotate(-8deg);
+  }
+}
+.brand:active .brand__mark {
   color: var(--accent);
-  transform: rotate(-8deg);
 }
 .brand__word {
   font-weight: 500;
@@ -85,7 +99,7 @@
   background: none;
   outline: none;
   color: var(--text);
-  font-size: var(--fs-ui);
+  font-size: var(--fs-field);
 }
 .search__input::placeholder {
   color: var(--text-faint);
@@ -101,6 +115,21 @@
   align-items: center;
   gap: var(--s-2);
   justify-self: end;
+  min-width: 0;
+}
+/* Write / Sign out: icon + word on a roomy screen, icon alone when the row
+   gets tight (see the narrow-screen rules in views.css). The accessible name
+   comes from aria-label either way, so hiding the word costs nothing. */
+.btn--action {
+  min-height: 44px;
+}
+/* Nice to have, first to go: from roughly 640 to 900px the signed-in cluster
+   and the search stop fitting on one row, and the email is the only part of
+   the cluster that isn't an action. */
+@media (max-width: 900px) {
+  .account__email {
+    display: none;
+  }
 }
 .account__email {
   max-width: 15ch;
@@ -151,12 +180,24 @@
   --btn-bd: transparent;
   font-weight: 600;
 }
-.btn--primary:hover:not([disabled]) {
-  --btn-bg: color-mix(in srgb, var(--accent) 88%, white);
+/* Hover is gated so a tap on a touch screen doesn't leave the button stuck in
+   its hover skin until you tap somewhere else. :active is what a finger gets,
+   and it's what replaces the tap-highlight flash we turned off in base.css. */
+@media (hover: hover) {
+  .btn--primary:hover:not([disabled]) {
+    --btn-bg: color-mix(in srgb, var(--accent) 88%, white);
+  }
+  .btn--ghost:hover:not([disabled]) {
+    --btn-bd: var(--text-faint);
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
 }
-.btn--ghost:hover:not([disabled]) {
+.btn--primary:active:not([disabled]) {
+  --btn-bg: color-mix(in srgb, var(--accent) 84%, black);
+}
+.btn--ghost:active:not([disabled]) {
   --btn-bd: var(--text-faint);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 .btn--quiet {
   --btn-bd: transparent;
@@ -164,9 +205,15 @@
   padding-inline: var(--s-3);
   color: var(--text-dim);
 }
-.btn--quiet:hover:not([disabled]) {
+@media (hover: hover) {
+  .btn--quiet:hover:not([disabled]) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+.btn--quiet:active:not([disabled]) {
   color: var(--text);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: color-mix(in srgb, var(--text) 11%, transparent);
 }
 .btn--danger {
   --btn-bd: transparent;
@@ -174,8 +221,13 @@
   --btn-fg: var(--danger-ink);
   font-weight: 600;
 }
-.btn--danger:hover:not([disabled]) {
-  --btn-bg: color-mix(in srgb, var(--danger) 88%, black);
+@media (hover: hover) {
+  .btn--danger:hover:not([disabled]) {
+    --btn-bg: color-mix(in srgb, var(--danger) 88%, black);
+  }
+}
+.btn--danger:active:not([disabled]) {
+  --btn-bg: color-mix(in srgb, var(--danger) 80%, black);
 }
 .btn--icon {
   min-width: 44px;
@@ -187,9 +239,15 @@
 .btn--quiet.danger {
   color: var(--danger);
 }
-.btn--quiet.danger:hover:not([disabled]) {
+@media (hover: hover) {
+  .btn--quiet.danger:hover:not([disabled]) {
+    color: var(--danger);
+    background: var(--danger-soft);
+  }
+}
+.btn--quiet.danger:active:not([disabled]) {
   color: var(--danger);
-  background: var(--danger-soft);
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
 }
 
 .icon {
@@ -269,6 +327,10 @@
     box-shadow: var(--shadow-hover);
   }
 }
+.card:has(.card__link:active) {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text) 5%, var(--card-bg));
+}
 .card__body {
   min-width: 0;
 }
@@ -337,9 +399,15 @@
     background-color var(--t-mid) var(--ease),
     border-color var(--t-mid) var(--ease);
 }
-.vote:hover:not([disabled]) {
+@media (hover: hover) {
+  .vote:hover:not([disabled]) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+.vote:active:not([disabled]) {
   color: var(--text);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
 }
 .vote__caret {
   transition: transform var(--t-mid) var(--ease);
@@ -358,7 +426,8 @@
   line-height: 1;
 }
 .vote--on,
-.vote--on:hover:not([disabled]) {
+.vote--on:hover:not([disabled]),
+.vote--on:active:not([disabled]) {
   color: var(--accent);
 }
 .vote--on .vote__caret path {
@@ -412,7 +481,7 @@
   border-radius: var(--r-sm);
   background: var(--surface-solid);
   color: var(--text);
-  font-size: var(--fs-ui);
+  font-size: var(--fs-field);
   transition: border-color var(--t-mid) var(--ease),
     box-shadow var(--t-mid) var(--ease);
 }
@@ -450,16 +519,22 @@
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: var(--r-sm);
   background: none;
   color: var(--text-faint);
   cursor: pointer;
 }
-.reveal:hover {
-  color: var(--text-dim);
+@media (hover: hover) {
+  .reveal:hover {
+    color: var(--text-dim);
+  }
+}
+.reveal:active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 /* — toggle (publish switch) ---------------------------------------------------- */
@@ -533,7 +608,9 @@
   flex-direction: column;
   align-items: center;
   gap: var(--s-2);
-  width: min(28rem, calc(100vw - 2 * var(--s-4)));
+  /* % on a fixed element is the viewport minus the scrollbar — 100vw isn't,
+     and would push the toast a scrollbar's width off-centre on the desktop. */
+  width: min(28rem, calc(100% - 2 * var(--s-4)));
   pointer-events: none;
 }
 .toast {
@@ -648,5 +725,68 @@
 @media (prefers-reduced-motion: reduce) {
   .sk {
     animation: none;
+  }
+}
+
+/* — narrow screens ---------------------------------------------------------
+   Glass is the first thing to go. A backdrop-filter makes the browser snapshot
+   and blur everything behind the element on every frame it scrolls over; on a
+   phone GPU that's what turns a sticky header into a smear. Below 640px the
+   header, panels and toasts use their opaque fallbacks instead — same reading
+   surface, none of the per-frame cost.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* 40px is a fine mouse target and a poor thumb one */
+  .btn--quiet {
+    min-height: 44px;
+  }
+  .site-header {
+    background: var(--glass-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .toast {
+    background: var(--panel-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Write / Sign out shed their words so the whole cluster — including the
+     theme toggle, which used to be pushed clean off the screen at 320px —
+     fits on one row. aria-label still carries the name. */
+  .btn--action {
+    min-width: 44px;
+    padding-inline: 0;
+  }
+  .btn--action .btn__label {
+    display: none;
+  }
+  .account {
+    gap: var(--s-1);
+  }
+  .site-header__inner {
+    gap: var(--s-2) var(--s-3);
+  }
+
+  /* 24px on the right of every card is a lot of nothing when the screen is
+     320px wide. Even it up and give the words the space back. */
+  .card {
+    gap: var(--s-3);
+    padding: var(--s-4);
+  }
+  .card__title {
+    font-size: 1.2rem;
+  }
+
+  /* The confirm's buttons drop onto their own full-width row rather than
+     squeezing next to twelve characters of question. */
+  .confirm {
+    gap: var(--s-2);
+  }
+  .confirm__text {
+    flex: 1 0 100%;
+  }
+  .confirm .btn {
+    flex: 1;
   }
 }

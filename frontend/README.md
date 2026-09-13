@@ -93,12 +93,12 @@ literary serif; the tool itself (nav, buttons, meta) is an invisible system sans
 
 | Group | Values |
 | --- | --- |
-| **Type** | `--font-serif` Newsreader (variable, opsz 6–72) for brand, titles, post body, headings, empty states. `--font-ui` system sans for everything interactive. Scale: `--fs-brand` 1.15rem · `--fs-h1` clamp(1.7→2.4rem) · `--fs-title` 1.3rem · `--fs-read` 1.125rem (post body) · `--fs-ui` .875rem · `--fs-meta` .8125rem. Reading measure `--measure: 66ch`. |
+| **Type** | `--font-serif` Newsreader (variable, opsz 6–72) for brand, titles, post body, headings, empty states. `--font-ui` system sans for everything interactive. Scale: `--fs-brand` 1.15rem · `--fs-h1` clamp(1.7→2.4rem) · `--fs-title` 1.3rem · `--fs-read` 1.125rem (post body) · `--fs-ui` .875rem · `--fs-meta` .8125rem. Reading measure `--measure: 66ch`. Form controls use `--fs-field`, which is `--fs-ui` on the desktop and exactly 16px on anything touch-shaped. |
 | **Colour (dark)** | `--bg #0c1315` deep teal-ink · `--card-bg` translucent `#131d20` · `--text #e7edec` / `--text-dim #93a3a1` / `--text-faint #7c8b87` · one accent, `--accent #f0a63c` honey amber, used only for live things (your identity, an active upvote, links) · `--danger #e8705d` coral · `--focus #7fd6c4` teal — deliberately not the accent, so focus always reads. |
 | **Colour (light)** | Cool off-white `--bg #eef1f1` (not warm cream), `--accent #e2952f`, `--link #9a5f12`, `--focus #1f8a76`. Toggle persists to `commons.theme`; defaults to `prefers-color-scheme` via a pre-paint inline script. |
 | **Space** | 8px rhythm: `--s-1`…`--s-9` = 4, 8, 12, 16, 24, 32, 48, 64, 96. |
 | **Radius** | Varies by role on purpose: cards `--r-lg` 18px, inputs/buttons `--r-sm` 10px, pills 999px. |
-| **Glass** | `--blur` 14px / `--blur-strong` 20px, `--saturate` 1.6. Applied to four surfaces only: the header, the compose panel, the delete confirm, and a card on hover. Hairline gradient top border + soft large-radius shadow. `@supports not (backdrop-filter)` → solid translucent fallback. |
+| **Glass** | `--blur` 14px / `--blur-strong` 20px, `--saturate` 1.6. Applied to four surfaces only: the header, the compose panel, the delete confirm, and a card on hover. Hairline gradient top border + soft large-radius shadow. `@supports not (backdrop-filter)` → solid translucent fallback, and **below 640px the blur is dropped entirely** in favour of those same opaque fallbacks (see *Mobile*). |
 | **Motion** | `--t-fast/mid/slow` 120/200/320ms, `--ease` `cubic-bezier(.2,.7,.2,1)`. Staggered fade-up for cards (~40ms, capped at 8), hover lift, button press scale, a spring pop on the vote toggle, route cross-fade, skeleton shimmer. `transform`/`opacity` only. `prefers-reduced-motion` cuts all of it. |
 | **Background** | Two slow, very faint amber/teal aurora blooms behind everything; they never compete with text and stop entirely under reduced motion. |
 
@@ -125,7 +125,7 @@ literary serif; the tool itself (nav, buttons, meta) is an invisible system sans
   field while you're typing), Escape closes the delete confirm and returns focus
   to the trigger, visible restyled focus rings, AA contrast, Lighthouse a11y 100.
 - **Size.** ~41 KB of hand-written JS across 10 ES modules (~12 KB gzipped),
-  ~31 KB CSS. Slightly above the 30 KB JS target — the comments stay and there's
+  ~35 KB CSS. Slightly above the 30 KB JS target — the comments stay and there's
   no minify step, so gzipped/delivered size is the number that matters.
 
 ### Voice
@@ -133,6 +133,71 @@ literary serif; the tool itself (nav, buttons, meta) is an invisible system sans
 Understated and warm. Short sentences, contractions, no hype. "Nothing here yet.
 Be the first to say something." / "That's everything for now." / "Delete this
 post? There's no undo."
+
+## Mobile
+
+The layout was responsive from the start, but a handful of things only show up
+on an actual phone. This is what was wrong and what changed.
+
+**The blue tap flash.** Nothing overrode `-webkit-tap-highlight-color`, so every
+tap on a link, a button or a card flashed the browser default —
+`rgba(51, 181, 229, .4)` — over it. It's now `transparent` on `html` (the
+property inherits, so that covers everything), alongside
+`touch-action: manipulation` to drop the 300ms click delay.
+
+Turning it off means the press feedback has to come from somewhere, and most of
+the `:hover` rules were ungated: on a touch screen a tapped element keeps its
+hover skin until you tap somewhere else. So every hover-only state now sits
+inside `@media (hover: hover)` — the card's lift already did — and each tappable
+thing grew a matching `:active` rule. Worth knowing if you ever test this by
+hand: `:active` is driven by the browser's *tap gesture*, not by raw touch
+events, which is why `mobile.spec.js` drives it with `Input.synthesizeTapGesture`
+rather than a synthetic `touchstart`.
+
+**iOS zoom-on-focus.** `.input`, `.textarea` and `.search__input` were 14px.
+Below 16px, mobile Safari zooms the whole page in when a field takes focus and
+never zooms back out — tap the search box, lose the layout. Form controls now
+use `--fs-field`, which lifts to exactly 16px under
+`@media (max-width: 640px), (pointer: coarse)`. Both halves earn their keep: the
+width query covers narrow windows and device mode, and the pointer query covers
+a phone in landscape, which is 900px+ wide on a modern handset and would sail
+straight past a width-only rule. The desktop keeps its 14px controls.
+
+**The signed-in header overflowed.** At 320px the labelled *Write* and
+*Sign out* buttons pushed the theme toggle clean off the right edge, where it
+could not be tapped at all, and took 49px of horizontal scroll with it. Below
+640px both actions shed their words and become 44px icon buttons — the
+accessible name comes from `aria-label`, so nothing is lost — and there's a new
+`i-sign-out` glyph in the sprite. The same row broke again between about 640 and
+900px, where the search and the cluster stop fitting: the header grid's middle
+track is now `minmax(0, 1fr)` so the search yields instead of the row
+overflowing, and the account email (the only part of the cluster that isn't an
+action) hides below 900px rather than 640px.
+
+**Compose read as a squeezed desktop dialog.** On a phone it now drops the
+backdrop blur and the 64px modal shadow, tightens its padding, and gives the
+body box `max(9rem, 28dvh)` so there's somewhere to actually write. Its buttons
+split the row at full width, and still stack at 380px as before.
+
+**Glass was costing more than it was worth.** A `backdrop-filter` makes the
+browser snapshot and blur everything behind the element on every frame it
+scrolls over; on a weaker GPU that's what turns a sticky header into a smear.
+Below 640px the header, the compose panel and the toasts use the opaque
+fallbacks that already existed for `@supports not (backdrop-filter)`. The aurora
+got the same treatment — it was two 70vmax layers under a 60px blur, drifting;
+on a phone it's one smaller static bloom.
+
+**Viewport and insets.** `viewport-fit=cover` was already set, which means the
+page paints under the status bar and the home indicator, but nothing inset for
+them: the sticky header now pads by `env(safe-area-inset-top)` and `#view` by
+`env(safe-area-inset-bottom)`. The header's left/right insets were also
+transposed (`inset-left` sat in the right slot) and are now the right way round.
+Heights that mean "the visible viewport" use `dvh`, so nothing jumps as the URL
+bar slides in and out — `mobile.spec.js` fails the build if a bare `vh` comes
+back.
+
+**Tap targets.** The brand, the *Back to the feed* link, the password reveal and
+the quiet buttons were all between 26 and 40px tall. They're 44px on a phone.
 
 ## Performance
 
@@ -170,6 +235,7 @@ runs the specs, and shuts them down. The HTML report lands in `tests/.report`
 | `e2e.spec.js` | The full journey: register → sign in → feed → create → upvote + un-upvote → edit own → delete (with the inline confirm + Escape-to-cancel) → sign out. Plus pagination-on-scroll with the end state, and search. |
 | `errors.spec.js` | Wrong password, duplicate email, editing someone else's post, empty fields, backend unreachable. |
 | `responsive.spec.js` | No horizontal overflow at 320 / 360 / 390 / 414 / 768 / 1280, the header collapsing to two rows, ≥44px tap targets, the reading column staying narrow on a wide desktop. |
+| `mobile.spec.js` | The phone-only regressions (see *Mobile*): transparent tap highlight, ≥16px form controls at every phone width **and** in landscape, `:active` press feedback under a real tap gesture, hover states staying behind `(hover: hover)`, no overflow at 320–414 **while signed in**, every header action reachable at 320px, compose and the delete confirm usable at 320px, and source guards against bare `100vh` returning. |
 
 **If port 8000 is busy** (e.g. the real backend is running): point the app at a
 free port by editing `js/config.js`, then `API_PORT=8010 npm test` to match.
@@ -181,4 +247,7 @@ The mock is for the automated suite. Before shipping, run the real backend
 loads → scroll paginates → open a post → create → upvote and remove it → edit
 your own → delete → sign out → feed still readable. Then each error path (wrong
 password, duplicate email, editing someone else's post, empty fields, backend
-down), the five widths above, reduced-motion, and the theme toggle.
+down), the five widths above, reduced-motion, and the theme toggle. On a real
+phone, also check the four things the emulator can't fully prove: that no tap
+flashes blue, that focusing the search box doesn't zoom the page, that the
+header clears the notch, and that nothing jumps as the URL bar hides.

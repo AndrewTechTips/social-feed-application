@@ -20,6 +20,13 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-underline-offset: 0.18em;
+  /* Kill the translucent blue box Chrome/Safari paint over anything tappable.
+     The property inherits, so setting it here covers every descendant. Every
+     tappable thing earns its feedback back through an :active rule instead —
+     see the press states in components.css. */
+  -webkit-tap-highlight-color: transparent;
+  /* No 300ms click delay, and no double-tap-to-zoom swallowing taps. */
+  touch-action: manipulation;
 }
 
 body {
@@ -56,7 +63,12 @@ a {
   color: var(--link);
   text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
 }
-a:hover {
+@media (hover: hover) {
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+}
+a:active {
   text-decoration-color: currentColor;
 }
 
@@ -108,6 +120,7 @@ h3 {
   padding: var(--s-6) var(--s-4) var(--s-9);
   padding-inline: max(var(--s-4), env(safe-area-inset-left))
     max(var(--s-4), env(safe-area-inset-right));
+  padding-bottom: calc(var(--s-9) + env(safe-area-inset-bottom));
 }
 #view:focus {
   outline: none;
@@ -171,6 +184,23 @@ h3 {
 @keyframes drift-b {
   to {
     transform: translate3d(-7vmax, -5vmax, 0) scale(1.08);
+  }
+}
+
+/* On a phone the aurora is two 70vmax layers under a 60px blur, re-rastering
+   as they drift — the single most expensive thing on the page and the least
+   load-bearing. Below 640px keep one small, static bloom: the warmth survives,
+   the compositing cost doesn't. */
+@media (max-width: 640px) {
+  .aurora-bloom {
+    width: 40vmax;
+    height: 40vmax;
+    filter: blur(40px);
+    animation: none;
+    will-change: auto;
+  }
+  .aurora-bloom--cool {
+    display: none;
   }
 }
 

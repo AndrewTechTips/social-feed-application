@@ -41,17 +41,31 @@ function renderAccount() {
   const kids = [];
 
   if (session) {
+    // Both carry their name in aria-label, so the narrow-screen rule can hide
+    // the word and leave a 44px icon button without costing the accessible name
+    // (at 320px the full-width labels used to shove the theme toggle off-screen).
     const write = h(
       "a",
-      { class: "btn btn--quiet", href: "#/compose", "aria-label": "Write a post" },
+      {
+        class: "btn btn--quiet btn--action",
+        href: "#/compose",
+        "aria-label": "Write a post",
+        title: "Write a post",
+      },
       icon("pencil"),
-      h("span", {}, "Write")
+      h("span", { class: "btn__label" }, "Write")
     );
     const email = h("span", { class: "account__email", title: session.email }, session.email);
     const out = h(
       "button",
-      { class: "btn btn--quiet", type: "button" },
-      "Sign out"
+      {
+        class: "btn btn--quiet btn--action",
+        type: "button",
+        "aria-label": "Sign out",
+        title: "Sign out",
+      },
+      icon("sign-out"),
+      h("span", { class: "btn__label" }, "Sign out")
     );
     out.addEventListener("click", () => {
       clearSession();
