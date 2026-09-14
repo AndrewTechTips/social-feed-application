@@ -56,6 +56,19 @@ jobs:
       - name: Check formatting (black)
         run: black --check backend
 
+      - name: Type check (mypy --strict)
+        # --strict on the application package only. The tests deliberately poke
+        # at private state and monkeypatch bcrypt; annotating that to the same
+        # standard would buy nothing.
+        run: mypy --config-file backend/mypy.ini --strict backend/app
+
+      - name: Audit dependencies (pip-audit)
+        # Runtime and dev both: a vulnerable test client is still something CI
+        # installs and runs.
+        run: |
+          pip-audit -r backend/requirements.txt
+          pip-audit -r backend/requirements-dev.txt
+
       - name: Create the test database
         env:
           PGPASSWORD: postgres
@@ -102,6 +115,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Type check (tsc --noEmit)
+        # JSDoc types with checkJs — no build step, nothing emitted. See
+        # docs/adr/0001-vanilla-js-with-jsdoc-types.md.
+        working-directory: frontend
+        run: npm run typecheck
+
       - name: Install Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
@@ -109,6 +128,21 @@ jobs:
       - name: Run end-to-end tests
         working-directory: frontend
         run: npm test
+
+      - name: Lighthouse
+        # Against the demo build, which is what the published site serves. The
+        # assertions in lighthouserc.json are floors meant to catch a
+        # regression — a render-blocking script that crept in, a label that
+        # went missing — not a score to chase.
+        working-directory: frontend
+        run: npm run lighthouse
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: lighthouse-report
+          path: frontend/tests/.lighthouse
+          retention-days: 7
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
