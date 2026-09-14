@@ -86,6 +86,10 @@
   --accent: #f0a63c;
   --accent-soft: rgba(240, 166, 60, 0.14);
   --accent-ink: #2a1c05; /* text on an amber fill */
+  /* The accent, as small text on a page background. In the dark theme that's
+     the accent itself — amber on near-black is 7.9:1. The light theme needs
+     its own value; see the note there. */
+  --accent-text: #f0a63c;
   --link: #f0a63c;
 
   --danger: #e8705d;
@@ -118,7 +122,10 @@
 
   --text: #17211f;
   --text-dim: #4f5d59;
-  --text-faint: #67746e;
+  /* #63706a, not #67746e: the paler value measured 4.29:1 against --bg, which
+     is under AA, and .feed__status draws --text-faint straight onto it. Caught
+     by the axe pass in tests/a11y.spec.js. */
+  --text-faint: #63706a;
 
   --border: rgba(18, 40, 37, 0.16);
   --border-strong: rgba(18, 40, 37, 0.28);
@@ -132,6 +139,12 @@
   --accent: #e2952f;
   --accent-soft: rgba(176, 112, 26, 0.13);
   --accent-ink: #2a1c05;
+  /* Amber is a fill colour here, not a text colour: #e2952f as 13px type on
+     the demo band measures 1.84:1, and even --link only reaches 3.92. This is
+     the same hue walked down to where small text clears AA on every light
+     surface (4.6:1 on the band, 5.4:1 on --bg). Used for accented words, never
+     for the vote caret or a border — those stay --accent. */
+  --accent-text: #895613;
   --link: #9a5f12;
 
   --danger: #c0492f;
@@ -164,11 +177,12 @@
     --panel-bg-fallback: rgba(250, 251, 250, 0.98);
     --text: #17211f;
     --text-dim: #53625e;
-    --text-faint: #67746e;
+    --text-faint: #63706a; /* same AA floor as the block above */
     --border: rgba(18, 40, 37, 0.12);
     --border-strong: rgba(18, 40, 37, 0.24);
     --accent: #e2952f;
     --accent-soft: rgba(176, 112, 26, 0.13);
+    --accent-text: #895613;
     --link: #9a5f12;
     --danger: #c0492f;
     --danger-ink: #fff;

@@ -849,7 +849,9 @@
   line-height: 1.5;
 }
 .demo__label {
-  color: var(--accent);
+  /* --accent-text, not --accent: this is 13px type, and the raw amber is a
+     fill colour that can't carry small text on the light theme's band. */
+  color: var(--accent-text);
   font-weight: 600;
 }
 .demo__text a {
