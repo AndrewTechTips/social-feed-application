@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- The brand mark from index.html, on the app's own ink. Kept as a file
+       rather than a data: URI so the PNG fallbacks below it in index.html
+       have something to fall back *from*, and so one edit changes every icon
+       (docs/make_icons.mjs renders the PNGs from this same geometry). -->
+  <rect width="24" height="24" rx="5" fill="#0c1315"/>
+  <g transform="translate(2.2 2.2) scale(0.815)">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="#e7edec" stroke-width="1.6"/>
+    <circle cx="12" cy="10" r="2.6" fill="#f0a63c"/>
+    <path d="M10.7 11.6 L9.6 16.2 A0.6 0.6 0 0 0 10.2 17 h3.6 a0.6 0.6 0 0 0 0.6-.8 L13.3 11.6 Z" fill="#f0a63c"/>
+  </g>
+</svg>
