@@ -11,6 +11,10 @@
     "test:report": "playwright show-report tests/.report"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0"
+    "@axe-core/playwright": "^4.13.0",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.55.0",
+    "lighthouse": "^13.4.1",
+    "typescript": "^5.9.2"
   }
 }
