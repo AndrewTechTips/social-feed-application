@@ -3,6 +3,12 @@
 -r requirements.txt
 
 black==26.5.1
-httpx2==2.7.0  # HTTP client used by starlette.testclient in Starlette 1.x
+mypy==2.3.1
+# HTTP client used by starlette.testclient in Starlette 1.x. Pinned at 2.12+
+# rather than 2.7: pip-audit flags six advisories against the older line
+# (PYSEC-2026-3844..3849), and a dev-only dependency is still a dependency
+# CI has to install.
+httpx2==2.12.0
 pytest==9.1.1
+pip-audit==2.10.1
 pytest-cov==7.1.0
