@@ -46,6 +46,92 @@ def now_iso(offset_seconds: int = 0) -> str:
     return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).isoformat()
 
 
+# — search -------------------------------------------------------------------
+# The real backend hands this to Postgres: a generated tsvector over title
+# (weight A) and body (weight B), a GIN index, websearch_to_tsquery, and
+# ts_rank for the ordering. None of that exists in the standard library, so
+# what follows is a deliberate approximation with the same observable
+# behaviour: words not substrings, AND across terms, stop words ignored, a
+# title hit worth more than a body hit, and punctuation treated as text.
+#
+# The one thing it is *not* is a Porter stemmer. STEM_SUFFIXES is a crude
+# suffix strip that agrees with Postgres on the cases a search box actually
+# sees — repair/repairing/repaired/repairs collapsing together — and is
+# internally consistent everywhere else, which is what keeps the same
+# Playwright specs passing against both.
+#
+# Verbatim from Postgres 18's share/tsearch_data/english.stop, so a query of
+# only stop words parses to nothing here exactly as it does there.
+STOP_WORDS = frozenset(
+    """
+    i me my myself we our ours ourselves you your yours yourself yourselves he
+    him his himself she her hers herself it its itself they them their theirs
+    themselves what which who whom this that these those am is are was were be
+    been being have has had having do does did doing a an the and but if or
+    because as until while of at by for with about against between into through
+    during before after above below to from up down in out on off over under
+    again further then once here there when where why how all any both each few
+    more most other some such no nor not only own same so than too very s t can
+    will just don should now
+    """.split()
+)
+
+# Order matters: the longest suffix that applies wins, and the bare "e" comes
+# last so "kettle" and "kettles" both land on "kettl" — which is exactly what
+# Postgres does, and the case that showed this list was one entry short.
+STEM_SUFFIXES = ("ies", "ing", "ed", "es", "s", "e")
+WORD_RE = re.compile(r"[a-z0-9]+")
+
+# ts_rank's default weights: a word in the title counts for 1.0, the same word
+# in the body for 0.4.
+TITLE_WEIGHT = 1.0
+BODY_WEIGHT = 0.4
+
+
+def stem(word: str) -> str:
+    for suffix in STEM_SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            base = word[: -len(suffix)]
+            return base + "i" if suffix == "ies" else base
+    return word
+
+
+def lexemes(value: str) -> set[str]:
+    """The words of a piece of text, as the index would keep them."""
+    return {
+        stem(w) for w in WORD_RE.findall((value or "").lower()) if w not in STOP_WORDS
+    }
+
+
+def search_terms(search: str) -> list[str]:
+    """What the caller actually asked for. Empty when they asked nothing —
+    an empty box, punctuation only, or nothing but stop words."""
+    return [
+        stem(w)
+        for w in WORD_RE.findall((search or "").lower())
+        if w not in STOP_WORDS
+    ]
+
+
+def search_rank(row: dict, terms: list[str]) -> float | None:
+    """How well one post answers a search, or None if it doesn't.
+
+    Every term has to appear somewhere — bare words are ANDed, the way
+    websearch_to_tsquery joins them.
+    """
+    title = lexemes(row["title"])
+    body = lexemes(row["content"])
+    score = 0.0
+    for term in terms:
+        if term in title:
+            score += TITLE_WEIGHT
+        elif term in body:
+            score += BODY_WEIGHT
+        else:
+            return None
+    return score
+
+
 class State:
     def __init__(self) -> None:
         self.reset()
@@ -489,16 +575,26 @@ class Handler(BaseHTTPRequestHandler):
             )
         viewer = ST.email_for(self._token())
 
-        rows = [
+        terms = search_terms(search)
+        visible = [
             r
             for r in ST.posts.values()
-            if search in r["title"]
-            and self._may_see(r, viewer)
+            if self._may_see(r, viewer)
             and (only_author is None or r["author_email"] == only_author)
         ]
-        rows.sort(
-            key=lambda r: (r["created_at"], r["id"]), reverse=True
-        )  # newest first
+
+        if terms:
+            # Relevance leads, recency breaks the tie — matching the ORDER BY
+            # in page_of_posts().
+            scored = [(search_rank(r, terms), r) for r in visible]
+            ranked = [(rank, r) for rank, r in scored if rank is not None]
+            ranked.sort(key=lambda pair: (pair[0], pair[1]["created_at"], pair[1]["id"]),
+                        reverse=True)
+            rows = [r for _rank, r in ranked]
+        else:
+            rows = sorted(
+                visible, key=lambda r: (r["created_at"], r["id"]), reverse=True
+            )
         total = len(rows)
         pages = (total + page_size - 1) // page_size if total else 0
         start = (page - 1) * page_size
