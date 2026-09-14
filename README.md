@@ -211,7 +211,7 @@ One page, hash routes.
 
 ```bash
 cd backend && pytest -q          # 135 tests, coverage gate at 85%
-cd frontend && npm test          # 207 Playwright tests, no Postgres needed
+cd frontend && npm test          # 208 Playwright tests, no Postgres needed
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
