@@ -79,10 +79,37 @@ async function newDemoBackend() {
 // has no fragment and so reloads the document; page.goto("/#/") doesn't. A test
 // that signs in through the UI and then navigates with the first form will find
 // itself signed out again.
-function installDemoState(state) {
+function installDemoState({ state, stamp }) {
   try {
+    // Seed once per fixture action, not once per document load.
+    //
+    // This runs on every load, and it used to write unconditionally — which
+    // was invisible until the demo's refresh session moved into the same blob.
+    // Then a reload would put back the cookie the page had just signed out of,
+    // and a draft written through the UI would vanish, because the snapshot
+    // the fixture holds was taken before any of that happened.
+    //
+    // The stamp draws the line: the fixture owns the state up to the moment it
+    // last seeded, and from there the page owns it. sessionStorage is exactly
+    // the right place to keep it — it survives a reload in the same tab and
+    // starts empty in a new context, which is the distinction being made.
+    //
+    // The comparison is `>=`, not `!==`, because registrations *stack*: a test
+    // that seeds three times leaves three copies of this script, and all three
+    // run on every load. Equality would let the older two fire again on a
+    // reload and walk the page back through the state it had two actions ago.
+    if (Number(sessionStorage.getItem("commons.test.seed") || 0) >= Number(stamp)) {
+      return;
+    }
+    sessionStorage.setItem("commons.test.seed", stamp);
+
     if (state) localStorage.setItem("commons.demo.v1", JSON.stringify(state));
     // every test starts signed out, with no leftover upvote mirror
+    localStorage.removeItem("commons.identity");
+    localStorage.removeItem("commons.csrf");
+    // The key the app used to keep a bearer token under. Gone from the app,
+    // but a fixture that stopped clearing it would let one leak between tests
+    // on a machine that ran the suite before this landed.
     localStorage.removeItem("commons.session");
     localStorage.removeItem("commons.votes");
     sessionStorage.removeItem("commons.demo.strip-folded");
@@ -91,24 +118,38 @@ function installDemoState(state) {
   }
 }
 
-// Plant a session in localStorage so a test can start on a signed-in screen
-// without walking the whole sign-in flow first.
+// Plant an *identity* so a test can start on a signed-in screen without walking
+// the whole sign-in flow first.
 //
-// The session is { token, id, username } — a token alone no longer tells the
-// app whose posts are whose, which is exactly what /users/me exists to answer.
-// So the fixture asks the same question the app asks.
-async function installSession(page, session) {
+// Note what is no longer planted: a token. Since refresh tokens landed, the
+// only thing in storage is { id, username } — public information — and the
+// credential is a refresh cookie the browser holds and the app never reads.
+// So the fixture has to open a real session too, which is what the two callers
+// below do before calling this: against the mock they POST /login through the
+// browser context, so the cookie lands in the jar exactly as it would for a
+// person; against the demo adapter they open a session in its state.
+//
+// The upshot is that the shortcut is no longer a shortcut past the auth flow —
+// it only skips the typing. The first request the app makes trades the cookie
+// for an access token, and if any of that is broken these fixtures break with
+// it, which is the right blast radius for a test helper.
+async function installIdentity(page, identity, csrf) {
   await page.addInitScript(
-    (s) => {
+    ([who, token]) => {
       try {
-        localStorage.setItem("commons.session", JSON.stringify(s));
+        localStorage.setItem("commons.identity", JSON.stringify(who));
+        // The CSRF token the session was opened with. A real sign-in puts this
+        // here itself; a fixture that skipped it would leave the page holding
+        // a live cookie it could never refresh, which is a very confusing way
+        // to be signed out.
+        localStorage.setItem("commons.csrf", token);
       } catch (err) {}
     },
-    session
+    [identity, csrf]
   );
   // An init script only runs on a document load, and this app is a hash router:
   // once a document is up, every goto is a same-document fragment change that
-  // would never pick the session up. Reload so the store actually reads it.
+  // would never pick the identity up. Reload so the store actually reads it.
   if (!page.url().startsWith("about:")) await page.reload();
 }
 
@@ -130,6 +171,21 @@ function withDemoQuery(page) {
 // Lets the `browser` wrapper reach the live state without threading it through
 // Playwright's fixture graph. Set by the `api` fixture, per test.
 let currentDemoState = () => null;
+// Bumped by every fixture action that seeds; see installDemoState.
+let seedStamp = 0;
+const seedPayload = () => ({ state: currentDemoState(), stamp: String(seedStamp) });
+
+/**
+ * Run one of the demo adapter's control functions in the page.
+ *
+ * Deliberately does *not* re-seed afterwards. These change the page's own copy
+ * of the state, and the page is what a reload should see — which is exactly
+ * the rule the stamp in installDemoState exists to enforce.
+ */
+async function demoControl(target, name) {
+  await target.waitForFunction(() => !!window.__commonsDemo);
+  await target.evaluate((fn) => window.__commonsDemo[fn](), name);
+}
 
 const test = base.test.extend({
   // Several mobile specs build their own context with browser.newContext()
@@ -142,7 +198,7 @@ const test = base.test.extend({
     const realNewContext = browser.newContext.bind(browser);
     browser.newContext = async (...args) => {
       const context = await realNewContext(...args);
-      await context.addInitScript(installDemoState, currentDemoState());
+      await context.addInitScript(installDemoState, seedPayload());
       const realNewPage = context.newPage.bind(context);
       context.newPage = async () => withDemoQuery(await realNewPage());
       return context;
@@ -164,7 +220,10 @@ const test = base.test.extend({
       // addInitScript registrations stack and run in order, so re-registering
       // after each change means the last writer wins — which is what we want,
       // and cheaper than making one script read a moving value.
-      const install = () => context.addInitScript(installDemoState, currentDemoState());
+      const install = () => {
+        seedStamp += 1;
+        return context.addInitScript(installDemoState, seedPayload());
+      };
       await install();
 
       await use({
@@ -224,18 +283,56 @@ const test = base.test.extend({
             }
           }),
         signIn: async (target, email, password) => {
-          const token = backend.control.tokenFor(email, password);
-          if (!token) throw new Error(`demo backend refused a login for ${email}`);
+          const opened = backend.control.signIn(email, password);
+          if (!opened) throw new Error(`demo backend refused a login for ${email}`);
           const who = backend.control.whoIs(email);
           // onto the page's *own* context, which for several mobile specs is
           // one they built themselves rather than the `context` fixture — the
-          // new token has to reach the page that's about to use it.
-          await target.context().addInitScript(installDemoState, currentDemoState());
-          await installSession(target, {
-            token,
-            id: who.id,
-            username: who.username,
-          });
+          // session that was just opened has to reach the page about to use it.
+          seedStamp += 1;
+          await target.context().addInitScript(installDemoState, seedPayload());
+          await installIdentity(
+            target,
+            { id: who.id, username: who.username },
+            opened.csrf
+          );
+        },
+        // The three things a spec can do to a real browser and has to be
+        // handed for the in-browser adapter: age the access token, throw the
+        // refresh cookie away, and replace it with one that was never issued.
+        //
+        // Each waits for the control surface, which config.js only puts on
+        // window once the adapter has actually been loaded — it is resolved on
+        // first use, not at import, so that every module importing config.js
+        // doesn't have to wait on a fetch.
+        //
+        // And each syncs afterwards. These change the *page's* copy of the
+        // demo state, while the init script that runs on every document load
+        // carries the Node-side snapshot — so without this, a reload would put
+        // the cookie straight back and quietly undo the thing the test just
+        // did. Re-registering with what the page now holds makes the page the
+        // source of truth, which for anything done through the UI it already
+        // is.
+        expireAccess: (target) => demoControl(target, "expireAccess"),
+        dropRefreshCookie: (target) => demoControl(target, "dropRefreshCookie"),
+        forgeRefreshCookie: (target) => demoControl(target, "forgeRefreshCookie"),
+        // There is no network to break, so break the adapter instead — the
+        // same one-shot failure the rest of the suite uses for the feed.
+        breakRefresh: async (target) => {
+          await target.waitForFunction(() => !!window.__commonsDemo);
+          await target.evaluate(() =>
+            window.__commonsDemo.failNext({
+              method: "POST",
+              path: "^/auth/refresh",
+              network: true,
+            })
+          );
+        },
+        // Whether the browser still holds a refresh token. Here that's a value
+        // in the adapter's own state; against the mock it's a real cookie.
+        sessionCookie: async (target) => {
+          await target.waitForFunction(() => !!window.__commonsDemo);
+          return target.evaluate(() => window.__commonsDemo.refreshCookie());
         },
         origin: "demo://in-browser",
       });
@@ -271,11 +368,16 @@ const test = base.test.extend({
       // The mock's equivalent of reading the demo's localStorage blob.
       dump: async () => (await ctx.get(`${API_ORIGIN}/__state`)).json(),
       signIn: async (target, email, password) => {
+        // Through the *page's own* request context, which shares a cookie jar
+        // with the browser. That's the whole trick: the refresh cookie the
+        // mock sets lands where a person's would, so everything after this
+        // point — the boot refresh, the silent recovery, signing out — runs
+        // against a real cookie with real flags rather than a planted string.
         const res = await target.request.post(`${API_ORIGIN}/login`, {
           form: { username: email, password },
         });
         if (!res.ok()) throw new Error(`mock /login refused a login for ${email}`);
-        const { access_token: token } = await res.json();
+        const { access_token: token, csrf_token: csrf } = await res.json();
 
         // The same second call the app makes: a token says nothing about who
         // it signed in.
@@ -284,7 +386,35 @@ const test = base.test.extend({
         });
         if (!me.ok()) throw new Error(`mock /users/me refused a token for ${email}`);
         const { id, username } = await me.json();
-        await installSession(target, { token, id, username });
+        await installIdentity(target, { id, username }, csrf);
+      },
+      expireAccess: async () => {
+        await ctx.post(`${API_ORIGIN}/__expire_access`);
+      },
+      // There *is* a network here, so the bluntest possible outage — the same
+      // treatment breakFeed gives the feed.
+      breakRefresh: (target) =>
+        target.route(/\/auth\/refresh/, (route) => route.abort()),
+      sessionCookie: async (target) => {
+        const jar = await target.context().cookies();
+        const found = jar.find((c) => c.name === "commons_refresh");
+        return found ? found.value : null;
+      },
+      dropRefreshCookie: async (target) => {
+        await target.context().clearCookies();
+      },
+      forgeRefreshCookie: async (target) => {
+        await target.context().clearCookies();
+        await target.context().addCookies([
+          {
+            name: "commons_refresh",
+            value: "deadbeefdeadbeefdeadbeefdeadbeef.not-a-real-secret",
+            domain: "localhost",
+            path: "/auth",
+            httpOnly: true,
+            sameSite: "Lax",
+          },
+        ]);
       },
       origin: API_ORIGIN,
     });

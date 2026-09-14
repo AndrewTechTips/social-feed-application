@@ -166,12 +166,18 @@ test.describe("signing in somewhere new", () => {
     await p2.getByRole("button", { name: "Sign in" }).click();
     await expect(p2).toHaveURL(/#\/$/);
 
-    // The session has to carry an identity, not just a key.
-    const session = await p2.evaluate(() =>
-      JSON.parse(localStorage.getItem("commons.session"))
-    );
-    expect(session.id, "a token alone can't answer 'which posts are mine'").toBeTruthy();
-    expect(session.username).toBe("returninghere");
+    // What's in storage has to be an identity — and, since refresh tokens
+    // landed, *only* an identity. A token alone can't answer "which posts are
+    // mine"; a token in storage is the thing an XSS bug walks away with.
+    const stored = await p2.evaluate(() => ({
+      identity: JSON.parse(localStorage.getItem("commons.identity")),
+      legacy: localStorage.getItem("commons.session"),
+      all: Object.keys(localStorage),
+    }));
+    expect(stored.identity.id, "no identity to answer with").toBeTruthy();
+    expect(stored.identity.username).toBe("returninghere");
+    expect(stored.identity.token, "the credential does not belong here").toBeUndefined();
+    expect(stored.legacy, "the old token key should be gone").toBeNull();
 
     await p2.goto(`/#/posts/${postId}`);
     await expect(p2.getByRole("link", { name: "Edit" })).toBeVisible();

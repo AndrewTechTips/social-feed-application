@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Computed, ForeignKey, Index, func
+from sqlalchemy import Computed, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import query_expression, relationship, Mapped, mapped_column
 from sqlalchemy.sql.expression import text
@@ -91,6 +91,76 @@ class User(Base):
     password: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+
+
+class RefreshSession(Base):
+    """One browser's long-lived sign-in, so that the access token doesn't have
+    to be one.
+
+    Why there is a table here at all, when a self-contained refresh JWT would
+    have needed none: a stateless refresh token cannot be taken back. Signing
+    out would clear the cookie on the machine doing the signing out and leave
+    the token itself valid everywhere else for a fortnight. Revocation is most
+    of the point of splitting the two tokens in the first place, and revocation
+    needs somewhere to write "not any more".
+
+    What's stored is a SHA-256 of the secret, never the secret. The rows are
+    read by exact hash lookup rather than compared one by one, so there is no
+    timing signal to defend against and no reason for the cost of bcrypt; and
+    a dump of this table still gets nobody in.
+
+    ``id`` is the *family* id and survives rotation — every refresh mints a new
+    secret into the same row. That's what makes reuse detectable: a second
+    presentation of an already-rotated secret arrives with a family id that
+    exists and a hash that doesn't match, which can only mean the cookie was
+    copied. See ``oauth2.rotate_refresh_session``.
+    """
+
+    __tablename__ = "refresh_sessions"
+
+    # Signing out everywhere, and cleaning up after an account, both walk this
+    # the same way: give me every session belonging to this person.
+    __table_args__ = (Index("ix_refresh_sessions_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # SHA-256 hex of the current secret, replaced on every rotation.
+    token_hash: Mapped[str] = mapped_column(String(64))
+    # The one it replaced, and when. Two tabs reloading together both send the
+    # cookie the jar held a moment ago, and without a short grace window the
+    # second one looks exactly like a replay — so a perfectly ordinary Tuesday
+    # would revoke the session. See oauth2.ROTATION_GRACE.
+    previous_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rotated_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    # The CSRF token, in the clear, and issued once for the life of the session.
+    #
+    # Both of those are deliberate. It is stored readable because it is not a
+    # credential: on its own it opens nothing, and its whole job is to prove
+    # that whoever sent a request to /auth could read one of our responses —
+    # which a cross-site page cannot. So it has to be handed back on every
+    # refresh, and a hash can't be handed back.
+    #
+    # And it doesn't rotate, because rotating it would race. Two tabs sharing
+    # one browser share the cookie jar but each carry their own copy of this;
+    # rotate it and the tab whose response lands second overwrites the stored
+    # value with one the server has already replaced, and the next refresh
+    # signs everybody out. The cookie rotates — that's where replay detection
+    # lives. This doesn't need to.
+    csrf_token: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    # Set rather than deleted: a revoked row is what lets a later presentation
+    # of the same cookie be answered with "that session is over" instead of
+    # "no such session", and it's what stops a reuse-revoked family coming back
+    # to life. Expired and revoked rows are swept on the next sign-in by the
+    # same person — see oauth2.open_refresh_session.
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
     )
 
 

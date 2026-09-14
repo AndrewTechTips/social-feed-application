@@ -7,7 +7,7 @@ from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
 from sqlalchemy import ColumnElement, UnaryExpression, select, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from .. import models, schemas, oauth2
+from .. import models, schemas, oauth2, docs
 from ..database import get_db
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
@@ -152,7 +152,15 @@ def page_of_posts(
     }
 
 
-@router.get("/", response_model=schemas.PostPage)
+@router.get(
+    "/",
+    response_model=schemas.PostPage,
+    summary="The feed",
+    responses={
+        200: docs.ok(docs.page(docs.POST_EXAMPLE)),
+        **docs.errors(422),
+    },
+)
 def get_posts(
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
@@ -176,12 +184,26 @@ def get_posts(
     )
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.PostOut)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=schemas.PostOut,
+    summary="Write a post",
+    responses={
+        201: docs.ok({**docs.POST_EXAMPLE, "votes": 0}),
+        **docs.errors(401, 422),
+    },
+)
 def create_posts(
     post: schemas.PostCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ) -> models.Post:
+    """Create a post, attributed to the token's owner.
+
+    `published: false` saves it as a draft — which is an access rule, not a
+    display hint: it is returned to you and to nobody else.
+    """
     new_post = models.Post(user_id=current_user.id, **post.model_dump())
     db.add(new_post)
     db.commit()
@@ -190,12 +212,22 @@ def create_posts(
     return new_post
 
 
-@router.get("/{id}", response_model=schemas.PostOut)
+@router.get(
+    "/{id}",
+    response_model=schemas.PostOut,
+    summary="One post",
+    responses={200: docs.ok(docs.POST_EXAMPLE), **docs.errors(404)},
+)
 def get_post(
     id: int,
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
 ) -> models.Post:
+    """One post, with its vote count.
+
+    Public, like the feed — a token is optional and only changes whether your
+    own drafts are reachable.
+    """
     post = db.scalar(
         select(models.Post)
         .options(selectinload(models.Post.user))
@@ -212,22 +244,45 @@ def get_post(
     return _attach_votes(db, post)
 
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a post",
+    responses={
+        204: {"description": "Gone, along with its comments and its votes."},
+        **docs.errors(401, 403, 404),
+    },
+)
 def delete_post(
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
 ) -> Response:
+    """Delete a post of yours.
+
+    The comments and votes on it go too, by `ON DELETE CASCADE` at the
+    database, so it holds whoever issues the DELETE.
+    """
     db.delete(post)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.put("/{id}", response_model=schemas.PostOut)
+@router.put(
+    "/{id}",
+    response_model=schemas.PostOut,
+    summary="Replace a post",
+    responses={200: docs.ok(docs.POST_EXAMPLE), **docs.errors(401, 403, 404, 422)},
+)
 def update_post(
     updated_post: schemas.PostCreate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
 ) -> models.Post:
+    """Replace a post of yours, in full.
+
+    Every field of the body is applied, so anything you leave out goes back to
+    its default. `PATCH` is the one that changes only what you send.
+    """
     # PUT = full replacement: every field of PostCreate is applied.
     for key, value in updated_post.model_dump().items():
         setattr(post, key, value)
@@ -236,12 +291,26 @@ def update_post(
     return _attach_votes(db, post)
 
 
-@router.patch("/{id}", response_model=schemas.PostOut)
+@router.patch(
+    "/{id}",
+    response_model=schemas.PostOut,
+    summary="Change part of a post",
+    responses={
+        200: docs.ok(docs.POST_EXAMPLE),
+        **docs.errors(400, 401, 403, 404, 422),
+    },
+)
 def patch_post(
     payload: schemas.PostUpdate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
 ) -> models.Post:
+    """Change part of a post of yours.
+
+    Only the fields actually present in the body move. An empty body is a 400
+    rather than a no-op 200: it almost always means the caller built the
+    request wrong.
+    """
     # PATCH = partial update: only the fields the client actually sent.
     data = payload.model_dump(exclude_unset=True)
     if not data:

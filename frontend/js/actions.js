@@ -6,6 +6,7 @@
 // away from the button next to it is worse than no palette. So the behaviour
 // lives here and both call it.
 
+import { api, forgetPendingRefresh } from "./api.js";
 import { clearSession, dropFeedCache } from "./store.js";
 import { toast } from "./ui.js";
 import { navigate } from "./router.js";
@@ -36,8 +37,23 @@ export function toggleTheme() {
 }
 
 export function signOut() {
+  // Locally first, and without waiting. Signing out is the one action that has
+  // to look like it worked immediately — a spinner between "Sign out" and
+  // being signed out is the app asking permission from a server to let you
+  // leave — and the screen is redrawn from the store, not from the response.
+  //
+  // The call still matters: clearing our own state ends the session in this
+  // tab, and revoking it server-side ends the session. Without the request, a
+  // copy of the refresh cookie taken from this machine would stay good for a
+  // fortnight.
+  forgetPendingRefresh();
+  const goodbye = api.logout();
   clearSession();
   dropFeedCache();
   toast("Signed out.");
   navigate("/");
+  // Nothing to say if it fails. The person is signed out here either way, and
+  // an error about a request they never made would be noise — but an unhandled
+  // rejection is still an unhandled rejection.
+  goodbye.catch(() => {});
 }

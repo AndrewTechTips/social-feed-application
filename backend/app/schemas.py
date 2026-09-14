@@ -152,14 +152,63 @@ class UserCreate(BaseModel):
 
 
 class Token(BaseModel):
-    access_token: str
-    token_type: str
+    """What `/login` and `/auth/refresh` hand back.
+
+    Note what *isn't* here: the refresh token. It goes out in an httpOnly
+    cookie, where no script on the page can read it, which is the whole reason
+    there are two tokens rather than one long-lived one.
+    """
+
+    access_token: str = Field(
+        description="Send as `Authorization: Bearer …`. Hold it in memory, not "
+        "in storage — it expires in minutes and `/auth/refresh` replaces it."
+    )
+    token_type: str = "bearer"
+    expires_in: int = Field(
+        description="Seconds until the access token expires. Refresh a little "
+        "before this rather than waiting for a 401."
+    )
+    csrf_token: str = Field(
+        description="Echo this back as an `X-CSRF-Token` header on "
+        "`/auth/refresh` and `/auth/logout`. It changes on every rotation."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3fQ.sig",
+                "token_type": "bearer",
+                "expires_in": 900,
+                "csrf_token": "0lNrK8s2Qm6Xv3dYpHtW1cJfB9aZuE4g",
+            }
+        }
+    )
 
 
 class TokenData(BaseModel):
     id: Optional[int] = None
 
 
+class Detail(BaseModel):
+    """FastAPI's error body, written down so it can be named in `responses=`.
+
+    Every non-validation error this API returns is one of these. Declaring it
+    is what turns "401" in the docs from a bare number into a shape a client
+    can code against.
+    """
+
+    detail: str
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"detail": "Could not validate credentials"}}
+    )
+
+
 class Vote(BaseModel):
     post_id: int
-    dir: Literal[0, 1]
+    dir: Literal[0, 1] = Field(
+        description="1 to add your upvote, 0 to take it back. There is no "
+        "downvote and there is not going to be one."
+    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"post_id": 12, "dir": 1}})

@@ -22,7 +22,7 @@ jobs:
       DATABASE_NAME: social_feed
       SECRET_KEY: ci-secret-not-used-anywhere-real
       ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "15"
 
     services:
       postgres:
@@ -86,6 +86,13 @@ jobs:
       - name: Run tests
         working-directory: backend
         run: pytest -q
+
+      - name: The committed OpenAPI spec is up to date
+        # docs/openapi.json is what the demo links to as "the contract it
+        # implements", and this API has no deployment to serve a live one from.
+        # A route added without re-exporting would leave that link describing
+        # last week's API, which is worse than not linking anything.
+        run: python backend/scripts/export_openapi.py --check
 
       - name: Coverage badge is up to date
         # The badge is a committed SVG, not a third-party service. If coverage

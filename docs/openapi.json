@@ -1,0 +1,1809 @@
+{
+  "components": {
+    "schemas": {
+      "Body_login_login_post": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          },
+          "grant_type": {
+            "anyOf": [
+              {
+                "pattern": "^password$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "password": {
+            "format": "password",
+            "title": "Password",
+            "type": "string"
+          },
+          "scope": {
+            "default": "",
+            "title": "Scope",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_login_post",
+        "type": "object"
+      },
+      "CommentCreate": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "CommentCreate",
+        "type": "object"
+      },
+      "CommentOut": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "created_at",
+          "post_id",
+          "user_id",
+          "user"
+        ],
+        "title": "CommentOut",
+        "type": "object"
+      },
+      "CommentPage": {
+        "description": "A page of comments. Deliberately the same shape as ``PostPage`` — a\nclient that can page through one can page through the other without\nlearning a second set of field names.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CommentOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "CommentPage",
+        "type": "object"
+      },
+      "Detail": {
+        "description": "FastAPI's error body, written down so it can be named in `responses=`.\n\nEvery non-validation error this API returns is one of these. Declaring it\nis what turns \"401\" in the docs from a bare number into a shape a client\ncan code against.",
+        "example": {
+          "detail": "Could not validate credentials"
+        },
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "Detail",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MeOut": {
+        "description": "A person, as they see themselves. Same shape plus the email, because on\nthis one endpoint the caller is the only person it belongs to.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "created_at",
+          "email"
+        ],
+        "title": "MeOut",
+        "type": "object"
+      },
+      "PostCreate": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "published": {
+            "default": true,
+            "title": "Published",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "PostCreate",
+        "type": "object"
+      },
+      "PostOut": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "published": {
+            "default": true,
+            "title": "Published",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "votes": {
+            "default": 0,
+            "title": "Votes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "id",
+          "created_at",
+          "updated_at",
+          "user_id",
+          "user"
+        ],
+        "title": "PostOut",
+        "type": "object"
+      },
+      "PostPage": {
+        "description": "A page of posts plus the metadata a UI needs to render pagination.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PostOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "PostPage",
+        "type": "object"
+      },
+      "PostUpdate": {
+        "description": "Body for PATCH /posts/{id} — every field optional, only sent ones change.",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "published": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "PostUpdate",
+        "type": "object"
+      },
+      "Token": {
+        "description": "What `/login` and `/auth/refresh` hand back.\n\nNote what *isn't* here: the refresh token. It goes out in an httpOnly\ncookie, where no script on the page can read it, which is the whole reason\nthere are two tokens rather than one long-lived one.",
+        "example": {
+          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3fQ.sig",
+          "csrf_token": "0lNrK8s2Qm6Xv3dYpHtW1cJfB9aZuE4g",
+          "expires_in": 900,
+          "token_type": "bearer"
+        },
+        "properties": {
+          "access_token": {
+            "description": "Send as `Authorization: Bearer …`. Hold it in memory, not in storage — it expires in minutes and `/auth/refresh` replaces it.",
+            "title": "Access Token",
+            "type": "string"
+          },
+          "csrf_token": {
+            "description": "Echo this back as an `X-CSRF-Token` header on `/auth/refresh` and `/auth/logout`. It changes on every rotation.",
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "description": "Seconds until the access token expires. Refresh a little before this rather than waiting for a 401.",
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "csrf_token"
+        ],
+        "title": "Token",
+        "type": "object"
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
+      "UserOut": {
+        "description": "A person, as everybody else sees them. No email: that's a credential,\nand handing it to anyone who can walk a list of ids is how address books\nget scraped.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "created_at"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Vote": {
+        "example": {
+          "dir": 1,
+          "post_id": 12
+        },
+        "properties": {
+          "dir": {
+            "description": "1 to add your upvote, 0 to take it back. There is no downvote and there is not going to be one.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Dir",
+            "type": "integer"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "post_id",
+          "dir"
+        ],
+        "title": "Vote",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "login"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "Source on GitHub",
+      "url": "https://github.com/AndrewTechTips/social-feed-application"
+    },
+    "description": "The backend behind **Commons** — a small public feed.\n\nPosts, comments, upvotes and accounts, with a two-token auth flow. Reading is public; writing needs an account.\n\nThe published demo at [andrewtechtips.github.io/social-feed-application](https://andrewtechtips.github.io/social-feed-application/) reimplements this same contract in the browser, because a static host has nowhere to run FastAPI. This document is the contract both of them answer to.",
+    "license": {
+      "name": "MIT",
+      "url": "https://github.com/AndrewTechTips/social-feed-application/blob/main/LICENSE"
+    },
+    "title": "Social Feed API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/auth/logout": {
+      "post": {
+        "description": "End the session this cookie belongs to, and clear the cookie.\n\nRevokes server-side rather than only clearing the cookie, which is most of\nwhy the sessions are in a table at all: clearing a cookie ends a session on\none machine, revoking it ends the session.",
+        "operationId": "logout_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Signed out. Answered whether or not there was a session to end — a caller asking to leave should never be told no."
+          }
+        },
+        "summary": "Sign out",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "description": "Rotate the session.\n\nEvery call invalidates the token that was presented and issues the next\none, so a copied cookie is detectable: the copy eventually presents a\nsecret that has already been rotated away, and the whole session is ended\nrather than guessing which of the two holders is the thief.\n\nSend the `csrf_token` from the last `/login` or `/auth/refresh` response in\nan `X-CSRF-Token` header. Without it this answers 401 even with a perfectly\ngood cookie.",
+        "operationId": "refresh_auth_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No usable refresh cookie, or no matching `X-CSRF-Token`. One answer for every way of being wrong — saying which would tell a caller whether they hold half of a real session. The cookie is cleared, because whatever is in the browser is no longer worth sending."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Too many attempts (30/minute)."
+          }
+        },
+        "summary": "Trade the refresh cookie for a new access token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/comments/{id}": {
+      "delete": {
+        "description": "Yours to remove, and nobody else's.\n\nNote what this deliberately isn't: the author of the *post* can't delete\ncomments on it. Moderation is a feature with a scope of its own — who may\nremove what, whether the person who wrote it is told, whether it leaves a\ntombstone — and quietly granting it to post authors here would be a policy\ndecision smuggled in as an ownership check.",
+        "operationId": "delete_comment_comments__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The post exists, is visible to you, and isn't yours. Used only where ownership is the question — never to hide a draft, which answers 404."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Remove your comment",
+        "tags": [
+          "Comments"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Answers as long as the process is serving.\n\nDeliberately does *not* touch the database: a health check that fails when\nPostgres is slow turns one degraded dependency into a restart loop.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok"
+                },
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/login": {
+      "post": {
+        "description": "Exchange an email and a password for an access token and a refresh cookie.\n\nThe form field is called `username` because that is what the OAuth2\npassword flow calls it, and `/docs` builds its form from the same spec.\nThis API signs people in by **email** — the username is the public identity\nand is not a credential.",
+        "operationId": "login_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_login_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The email and password don't match. Deliberately the same answer whether or not the address has an account."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Too many attempts (5/minute)."
+          }
+        },
+        "summary": "Sign in",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/posts/": {
+      "get": {
+        "description": "The feed, and the search over it.\n\nSearching covers the title *and* the body: the old title-only ``LIKE``\nmeant a post about repairing a kettle couldn't be found by the word\n\"kettle\" unless it happened to be in the heading, which is not what anyone\ntyping into a search box expects.",
+        "operationId": "get_posts_posts__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Search",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "has_next": true,
+                  "has_prev": false,
+                  "items": [
+                    {
+                      "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                      "created_at": "2026-09-08T22:41:07.220Z",
+                      "id": 12,
+                      "published": true,
+                      "title": "The library that stays open all night",
+                      "updated_at": "2026-09-08T22:41:07.220Z",
+                      "user": {
+                        "created_at": "2026-08-21T09:14:02.511Z",
+                        "id": 7,
+                        "username": "marenholt"
+                      },
+                      "user_id": 7,
+                      "votes": 4
+                    }
+                  ],
+                  "page": 1,
+                  "page_size": 10,
+                  "pages": 2,
+                  "total": 14
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "summary": "The feed",
+        "tags": [
+          "Posts"
+        ]
+      },
+      "post": {
+        "description": "Create a post, attributed to the token's owner.\n\n`published: false` saves it as a draft — which is an access rule, not a\ndisplay hint: it is returned to you and to nobody else.",
+        "operationId": "create_posts_posts__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                  "created_at": "2026-09-08T22:41:07.220Z",
+                  "id": 12,
+                  "published": true,
+                  "title": "The library that stays open all night",
+                  "updated_at": "2026-09-08T22:41:07.220Z",
+                  "user": {
+                    "created_at": "2026-08-21T09:14:02.511Z",
+                    "id": 7,
+                    "username": "marenholt"
+                  },
+                  "user_id": 7,
+                  "votes": 0
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Write a post",
+        "tags": [
+          "Posts"
+        ]
+      }
+    },
+    "/posts/{id}": {
+      "delete": {
+        "description": "Delete a post of yours.\n\nThe comments and votes on it go too, by `ON DELETE CASCADE` at the\ndatabase, so it holds whoever issues the DELETE.",
+        "operationId": "delete_post_posts__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Gone, along with its comments and its votes."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The post exists, is visible to you, and isn't yours. Used only where ownership is the question — never to hide a draft, which answers 404."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete a post",
+        "tags": [
+          "Posts"
+        ]
+      },
+      "get": {
+        "description": "One post, with its vote count.\n\nPublic, like the feed — a token is optional and only changes whether your\nown drafts are reachable.",
+        "operationId": "get_post_posts__id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                  "created_at": "2026-09-08T22:41:07.220Z",
+                  "id": 12,
+                  "published": true,
+                  "title": "The library that stays open all night",
+                  "updated_at": "2026-09-08T22:41:07.220Z",
+                  "user": {
+                    "created_at": "2026-08-21T09:14:02.511Z",
+                    "id": 7,
+                    "username": "marenholt"
+                  },
+                  "user_id": 7,
+                  "votes": 4
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One post",
+        "tags": [
+          "Posts"
+        ]
+      },
+      "patch": {
+        "description": "Change part of a post of yours.\n\nOnly the fields actually present in the body move. An empty body is a 400\nrather than a no-op 200: it almost always means the caller built the\nrequest wrong.",
+        "operationId": "patch_post_posts__id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                  "created_at": "2026-09-08T22:41:07.220Z",
+                  "id": 12,
+                  "published": true,
+                  "title": "The library that stays open all night",
+                  "updated_at": "2026-09-08T22:41:07.220Z",
+                  "user": {
+                    "created_at": "2026-08-21T09:14:02.511Z",
+                    "id": 7,
+                    "username": "marenholt"
+                  },
+                  "user_id": 7,
+                  "votes": 4
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The request was understood and asks for nothing."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The post exists, is visible to you, and isn't yours. Used only where ownership is the question — never to hide a draft, which answers 404."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Change part of a post",
+        "tags": [
+          "Posts"
+        ]
+      },
+      "put": {
+        "description": "Replace a post of yours, in full.\n\nEvery field of the body is applied, so anything you leave out goes back to\nits default. `PATCH` is the one that changes only what you send.",
+        "operationId": "update_post_posts__id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                  "created_at": "2026-09-08T22:41:07.220Z",
+                  "id": 12,
+                  "published": true,
+                  "title": "The library that stays open all night",
+                  "updated_at": "2026-09-08T22:41:07.220Z",
+                  "user": {
+                    "created_at": "2026-08-21T09:14:02.511Z",
+                    "id": 7,
+                    "username": "marenholt"
+                  },
+                  "user_id": 7,
+                  "votes": 4
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The post exists, is visible to you, and isn't yours. Used only where ownership is the question — never to hide a draft, which answers 404."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Replace a post",
+        "tags": [
+          "Posts"
+        ]
+      }
+    },
+    "/posts/{post_id}/comments": {
+      "get": {
+        "description": "One page of a post's comments, **oldest first**.\n\nThe feed runs newest-first because you arrive at it to see what's new. A\ncomment thread is read top to bottom like a conversation, so it runs the\nother way — and the page size is larger, because twenty short lines is\nabout one screen where ten posts is several.",
+        "operationId": "get_comments_posts__post_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "has_next": false,
+                  "has_prev": false,
+                  "items": [
+                    {
+                      "content": "I've walked past that wall a hundred times and never once thought about it.",
+                      "created_at": "2026-09-09T07:02:55.104Z",
+                      "id": 31,
+                      "post_id": 12,
+                      "user": {
+                        "created_at": "2026-08-30T17:45:11.002Z",
+                        "id": 9,
+                        "username": "tessaward"
+                      },
+                      "user_id": 9
+                    }
+                  ],
+                  "page": 1,
+                  "page_size": 10,
+                  "pages": 1,
+                  "total": 5
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "summary": "The conversation on a post",
+        "tags": [
+          "Comments"
+        ]
+      },
+      "post": {
+        "description": "Add a comment to a post you can see.\n\nWhitespace is trimmed and an empty comment is a 422 — the cap is enforced\nhere and not only in the form, because this is the field a script would\npoint at first.",
+        "operationId": "create_comment_posts__post_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "content": "I've walked past that wall a hundred times and never once thought about it.",
+                  "created_at": "2026-09-09T07:02:55.104Z",
+                  "id": 31,
+                  "post_id": 12,
+                  "user": {
+                    "created_at": "2026-08-30T17:45:11.002Z",
+                    "id": 9,
+                    "username": "tessaward"
+                  },
+                  "user_id": 9
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Say something about a post",
+        "tags": [
+          "Comments"
+        ]
+      }
+    },
+    "/users/": {
+      "post": {
+        "description": "Register.\n\nThe username is folded to lower case and must match\n`^[a-z][a-z0-9_-]{2,19}$` — starting with a letter, so a username can never\nbe mistaken for an id in a URL. A handful of names the API needs for itself\n(`me`, `admin`, `api`, `root`, `commons`) are refused.\n\nThe response is a `UserOut` and carries no email. Registering does not sign\nyou in: `POST /login` does that.",
+        "operationId": "create_user_users__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-08-21T09:14:02.511Z",
+                  "id": 7,
+                  "username": "marenholt"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The username or the email is already registered. The message names which — for a username that's unavoidable, since you can't pick one without knowing it's free."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Rate limited. The message names the limit you hit."
+          }
+        },
+        "summary": "Create an account",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/me": {
+      "get": {
+        "description": "Who the caller is.\n\nLogging in takes an email and a password and hands back a token, which\ntells the client nothing about the person it just signed in. That was\nsurvivable while posts carried their author's email and the client could\nmatch on it; now that the public identity is a username and the email never\nleaves this endpoint, something has to close the gap. Without it a browser\nwith no local history can sign in successfully and still not know which\nposts are its own.",
+        "operationId": "get_me_users_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-08-21T09:14:02.511Z",
+                  "email": "maren.holt@example.com",
+                  "id": 7,
+                  "username": "marenholt"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Who the caller is",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{username}": {
+      "get": {
+        "description": "One person, by username. Case-insensitive, because names are stored\nfolded and nobody types their own capitals the same way twice.",
+        "operationId": "get_user_users__username__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-08-21T09:14:02.511Z",
+                  "id": 7,
+                  "username": "marenholt"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A public profile",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{username}/posts": {
+      "get": {
+        "description": "Everything by one person — same page shape as the feed, same rules.\n\nIncluding the draft rule: their unpublished posts are theirs, so this shows\nthem to the author and to nobody else.",
+        "operationId": "get_user_posts_users__username__posts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "has_next": false,
+                  "has_prev": false,
+                  "items": [
+                    {
+                      "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                      "created_at": "2026-09-08T22:41:07.220Z",
+                      "id": 12,
+                      "published": true,
+                      "title": "The library that stays open all night",
+                      "updated_at": "2026-09-08T22:41:07.220Z",
+                      "user": {
+                        "created_at": "2026-08-21T09:14:02.511Z",
+                        "id": 7,
+                        "username": "marenholt"
+                      },
+                      "user_id": 7,
+                      "votes": 4
+                    }
+                  ],
+                  "page": 1,
+                  "page_size": 10,
+                  "pages": 1,
+                  "total": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "summary": "Everything by one person",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/vote/": {
+      "post": {
+        "description": "Add or remove your upvote.\n\nOne vote per person per post, enforced by the composite primary key on\n`votes` rather than by the check below — which is what makes two requests\nracing each other a 409 instead of a 500.\n\nYou can't vote on a draft you aren't allowed to see, and that is reported\nas missing rather than forbidden, exactly as reading it would be.",
+        "operationId": "vote_vote__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Vote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Successfully added vote"
+                },
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Vote Vote  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Recorded. `dir: 0` answers 201 too, with `successfully deleted vote`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such post — or, with `dir: 0`, no vote of yours to remove. A client rolling back an optimistic upvote can treat this as success: it means you are already in the state you asked for."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "You have already voted on this post. Same advice as the 404: the state you asked for is the state you're in."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Upvote a post, or take it back",
+        "tags": [
+          "Vote"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "A local development server",
+      "url": "http://localhost:8000"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Two tokens, on purpose. A short-lived **access token** comes back in the response body and goes out as `Authorization: Bearer …`; a long-lived **refresh token** goes out in an httpOnly cookie scoped to `/auth`, where no script on the page can read it and no content route ever sees it. `POST /auth/refresh` trades one for the other and rotates both.\n\n`/login` takes an **email**, not a username — the form field is called `username` because the OAuth2 password flow names it that.",
+      "name": "Authentication"
+    },
+    {
+      "description": "The feed and everything on it. Reading is public; writing needs a token. One rule runs through all of it: an unpublished post is visible to its author and to nobody else, and to anyone else it answers **404** rather than 403 — a 403 would confirm it exists.",
+      "name": "Posts"
+    },
+    {
+      "description": "Remarks on a post, oldest first, in the same page envelope the feed uses. A comment is yours to remove and nobody else's — not even the author of the post it sits on.",
+      "name": "Comments"
+    },
+    {
+      "description": "Accounts and public identities. The **username** is what everyone sees; the **email** is a credential and leaves the server on exactly one endpoint, `GET /users/me`, where the caller is the only person it belongs to.",
+      "name": "Users"
+    },
+    {
+      "description": "One upvote per person per post. There is no downvote — the only live quantity in this product is agreement.",
+      "name": "Vote"
+    },
+    {
+      "description": "Is the process up and serving.",
+      "name": "Health"
+    }
+  ]
+}

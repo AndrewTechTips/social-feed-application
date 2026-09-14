@@ -19,7 +19,7 @@ from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
-from .. import models, schemas, oauth2
+from .. import models, schemas, oauth2, docs
 from ..database import get_db
 from .post import visible_to
 
@@ -69,7 +69,15 @@ def get_visible_post(
     return post
 
 
-@router.get("/posts/{post_id}/comments", response_model=schemas.CommentPage)
+@router.get(
+    "/posts/{post_id}/comments",
+    response_model=schemas.CommentPage,
+    summary="The conversation on a post",
+    responses={
+        200: docs.ok(docs.page(docs.COMMENT_EXAMPLE, total=5)),
+        **docs.errors(404, 422),
+    },
+)
 def get_comments(
     post_id: int,
     db: Session = Depends(get_db),
@@ -117,6 +125,11 @@ def get_comments(
     "/posts/{post_id}/comments",
     status_code=status.HTTP_201_CREATED,
     response_model=schemas.CommentOut,
+    summary="Say something about a post",
+    responses={
+        201: docs.ok(docs.COMMENT_EXAMPLE),
+        **docs.errors(401, 404, 422),
+    },
 )
 def create_comment(
     post_id: int,
@@ -124,6 +137,12 @@ def create_comment(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ) -> models.Comment:
+    """Add a comment to a post you can see.
+
+    Whitespace is trimmed and an empty comment is a 422 — the cap is enforced
+    here and not only in the form, because this is the field a script would
+    point at first.
+    """
     get_visible_post(db, post_id, current_user)
 
     comment = models.Comment(
@@ -135,7 +154,15 @@ def create_comment(
     return comment
 
 
-@router.delete("/comments/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/comments/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove your comment",
+    responses={
+        204: {"description": "Removed."},
+        **docs.errors(401, 403, 404),
+    },
+)
 def delete_comment(
     comment: models.Comment = Depends(get_owned_comment),
     db: Session = Depends(get_db),

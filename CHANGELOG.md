@@ -41,6 +41,17 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 - **A masthead** for anonymous visitors, which also carries the demo notice.
 - **Type checking without a build step.** `// @ts-check` on every module,
   `js/types.js`, `tsc --noEmit` in CI. Same files ship.
+- **Refresh tokens.** A 15-minute access token in memory and a 14-day refresh
+  token in an `httpOnly`, `SameSite=Lax` cookie scoped to `/auth`, with
+  rotation, reuse detection and server-side revocation in a new
+  `refresh_sessions` table. `POST /auth/refresh` and `POST /auth/logout`.
+  The frontend refreshes transparently — single-flight, because every refresh
+  rotates the cookie — so an expired token is invisible and a reload keeps you
+  signed in. CSRF is a session-bound `X-CSRF-Token` header; CORS is now
+  credentialed against an explicit origin list.
+- **The committed OpenAPI spec**, [`docs/openapi.json`](docs/openapi.json),
+  with worked examples, documented error responses, tag descriptions and a
+  `servers` block. `backend/scripts/export_openapi.py --check` gates it in CI.
 - **Decision records** in [`docs/adr/`](docs/adr/), and this changelog.
 - **PWA and link-preview assets**: `manifest.webmanifest`, maskable icons, an
   `apple-touch-icon`, a real favicon set and a committed `og.png` — all
@@ -65,6 +76,15 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
   text on the light theme (1.84:1). Accented words use the new token.
 - `--text-faint` darkened in the light theme; it measured 4.29:1 against the
   page background, under AA.
+- **The access token is no longer in `localStorage`.** Storage holds `{id,
+  username}` and a CSRF nonce — public, and neither a credential. The old
+  `commons.session` key is removed on boot rather than merely unused. ADR 0003
+  is rewritten as
+  [*The refresh token lives in an `httpOnly` cookie*](docs/adr/0003-token-in-an-httponly-cookie.md),
+  superseding the record that said to revisit exactly when this landed.
+- Demo mode implements the same auth contract but keeps its refresh token in
+  `localStorage`, because a static host has no server to set a cookie from.
+  Said plainly in the README and the ADR rather than papered over.
 
 ### Fixed
 

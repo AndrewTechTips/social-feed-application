@@ -22,9 +22,20 @@
 // and bumping it is how a returning visitor's saved demo gets thrown away
 // rather than deserialised into code that no longer expects it. It went to 2
 // when comments arrived: a v1 blob has no `comments` array, and every read of
-// one would have been a TypeError on somebody's second visit.
+// one would have been a TypeError on somebody's second visit. It went to 3 when
+// refresh tokens did, for the same reason — a v2 blob has no `sessions`.
 const STORAGE_KEY = "commons.demo.v1";
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
+
+// Access-token life, mirroring settings.access_token_expire_minutes and the
+// copy in tests/mock_api.py. The demo runs it at full length rather than
+// shortening it for effect: a demo that signed you out every two minutes to
+// show off its refresh flow would be demonstrating the wrong thing.
+const ACCESS_TTL_MS = 15 * 60 * 1000;
+
+// Mirrors oauth2.ROTATION_GRACE: how long the secret a rotation just replaced
+// stays acceptable, so two tabs reloading together don't look like a replay.
+const ROTATION_GRACE_MS = 15 * 1000;
 
 // Enough delay that the skeletons, the disabled-while-pending buttons and the
 // optimistic vote rollback are all visible rather than theoretical. Real
@@ -217,7 +228,15 @@ function searchRank(row, terms) {
  * @typedef {object} DemoState
  * @property {number} version
  * @property {DemoUser[]} users
- * @property {Record<string, string>} tokens  token -> email
+ * @property {Record<string, { email: string, expiresAt: number }>} tokens
+ *   access tokens, with an expiry — the demo lets one run out exactly as the
+ *   real API does, because the client's recovery from that is the interesting
+ *   part and it can't be tested against a token that never expires
+ * @property {Record<string, { email: string, secret: string,
+ *   previous: string | null, rotatedAt: number, csrf: string,
+ *   revoked: boolean }>} sessions  refresh families, keyed by family id
+ * @property {string | null} cookie  the refresh cookie this "browser" holds —
+ *   see the note on `openSession` for why it lives in here
  * @property {DemoPost[]} posts
  * @property {string[]} votes                 "email\0postId"
  * @property {DemoComment[]} comments
@@ -234,6 +253,8 @@ function emptyState() {
     version: STATE_VERSION,
     users: [],
     tokens: {},
+    sessions: {},
+    cookie: null,
     posts: [],
     votes: [], // ["email postId", ...]
     comments: [],
@@ -356,7 +377,11 @@ export function createDemoBackend({
   // — lookups ------------------------------------------------------------------
   const userByEmail = (email) => state.users.find((u) => u.email === email);
   const postById = (id) => state.posts.find((p) => p.id === id);
-  const emailForToken = (token) => (token ? state.tokens[token] : undefined) ?? null;
+  const emailForToken = (token) => {
+    const row = token ? state.tokens[token] : null;
+    if (!row) return null;
+    return row.expiresAt > Date.now() ? row.email : null;
+  };
 
   const userByUsername = (name) =>
     state.users.find((u) => u.username === String(name || "").toLowerCase());
@@ -469,9 +494,60 @@ export function createDemoBackend({
 
   function mintToken(email) {
     const token = randomToken();
-    state.tokens[token] = email;
+    state.tokens[token] = { email, expiresAt: Date.now() + ACCESS_TTL_MS };
     save();
     return token;
+  }
+
+  // — the refresh flow, minus the one thing a browser can't give it -----------
+  //
+  // The real backend puts the refresh token in an httpOnly cookie, which works
+  // because there is a server on the other side of an origin boundary. Here
+  // there is neither: this "backend" is a function running in the same page as
+  // the app, so there is no Set-Cookie to send and nothing an httpOnly flag
+  // could hide the value from. Simulating one would be theatre — and the kind
+  // that implies something untrue about the published site.
+  //
+  // So the contract is real and the storage is honest about itself: the same
+  // endpoints, the same rotation, the same reuse detection, the same flat 401
+  // for every way of being wrong — and the token sits in `state.cookie`, which
+  // is part of the blob in localStorage, alongside everything else the demo
+  // pretends is a database. The frontend cannot tell the difference, because
+  // in neither case does it ever see the value. The README says this plainly;
+  // see docs/adr/0003-token-in-an-httponly-cookie.md.
+  function openSession(email) {
+    const family = randomToken();
+    state.sessions[family] = {
+      email,
+      secret: "",
+      previous: null,
+      rotatedAt: Date.now(),
+      // Issued once and handed back unchanged on every refresh, exactly as the
+      // real backend does — see the note on the column in models.py.
+      csrf: randomToken(),
+      revoked: false,
+    };
+    rotateInPlace(family);
+    return state.sessions[family].csrf;
+  }
+
+  function rotateInPlace(family) {
+    const row = state.sessions[family];
+    row.previous = row.secret || null;
+    row.rotatedAt = Date.now();
+    row.secret = randomToken();
+    state.cookie = `${family}.${row.secret}`;
+    save();
+    return row.csrf;
+  }
+
+  function tokenBody(email, csrf) {
+    return {
+      access_token: mintToken(email),
+      token_type: "bearer",
+      expires_in: Math.round(ACCESS_TTL_MS / 1000),
+      csrf_token: csrf,
+    };
   }
 
   function login(form) {
@@ -481,7 +557,68 @@ export function createDemoBackend({
     if (!user || user.password !== password) {
       return detail(401, "Invalid Credentials");
     }
-    return json(200, { access_token: mintToken(email), token_type: "bearer" });
+    return json(200, tokenBody(email, openSession(email)));
+  }
+
+  // Mirrors oauth2.rotate_refresh_session. One answer for every way of being
+  // wrong: which way a refresh token is wrong is exactly what someone holding
+  // half of a real one wants to be told.
+  function refresh(csrf) {
+    const raw = state.cookie || "";
+    const cut = raw.indexOf(".");
+    const family = cut > 0 ? raw.slice(0, cut) : "";
+    const secret = cut > 0 ? raw.slice(cut + 1) : "";
+    const row = family && secret ? state.sessions[family] : null;
+
+    // Two kinds of no. A cookie that is missing, forged, expired, revoked or
+    // replayed can only ever fail again, so it goes — the equivalent of the
+    // real backend's clearing Set-Cookie, and what lets the client tell
+    // "signed out" from "temporarily broken". A *good* cookie without a
+    // matching CSRF token is a different statement, and the answer to it is to
+    // refuse the request and change nothing: clearing there would turn a
+    // forged request into a forced sign-out.
+    const dead = () => {
+      state.cookie = null;
+      save();
+      return detail(401, "Invalid Credentials");
+    };
+    const forged = () => detail(401, "Invalid Credentials");
+
+    if (!row || row.revoked) return dead();
+    if (row.secret !== secret) {
+      const graced =
+        row.previous === secret && Date.now() - row.rotatedAt <= ROTATION_GRACE_MS;
+      if (!graced) {
+        // A live family, an old secret, and no window left to explain it: the
+        // cookie was copied. End the session rather than guess which holder is
+        // the thief.
+        row.revoked = true;
+        return dead();
+      }
+    }
+    if (!csrf || row.csrf !== csrf) return forged();
+
+    return json(200, tokenBody(row.email, rotateInPlace(family)));
+  }
+
+  function logout(csrf) {
+    const raw = state.cookie || "";
+    const cut = raw.indexOf(".");
+    const family = cut > 0 ? raw.slice(0, cut) : "";
+    const row = family ? state.sessions[family] : null;
+    const secret = raw.slice(cut + 1);
+    const known = row && (row.secret === secret || row.previous === secret);
+    if (row && !row.revoked && known && csrf === row.csrf) {
+      row.revoked = true;
+    }
+    // Only clear what was presented. Somebody asking to leave is never told
+    // no, but a request that carried nothing has nothing to expire — which is
+    // what stops a cross-site POST from signing a reader out.
+    if (raw) {
+      state.cookie = null;
+      save();
+    }
+    return new Response(null, { status: 204 });
   }
 
   function listPosts(query, viewer, onlyAuthor) {
@@ -801,6 +938,7 @@ export function createDemoBackend({
     const form = () => new URLSearchParams(init.body || "");
     const token = (init.headers?.Authorization || "").replace(/^Bearer /, "");
     const viewer = emailForToken(token);
+    const csrfHeader = init.headers?.["X-CSRF-Token"] || null;
 
     // Endpoints that need a signed-in caller all answer the same way without one.
     const requireAuth = () => (viewer ? null : detail(401, "Could not validate credentials"));
@@ -811,6 +949,8 @@ export function createDemoBackend({
     if (route === "/users/" && method === "POST") return register(body());
     if (route === "/users/me" && method === "GET") return me(viewer);
     if (route === "/login" && method === "POST") return login(form());
+    if (route === "/auth/refresh" && method === "POST") return refresh(csrfHeader);
+    if (route === "/auth/logout" && method === "POST") return logout(csrfHeader);
 
     const profilePosts = route.match(/^\/users\/([^/]+)\/posts$/);
     if (profilePosts && method === "GET") {
@@ -882,16 +1022,38 @@ export function createDemoBackend({
           password,
           username: username || usernameFromEmail(email, new Set(state.users.map((u) => u.username))),
         }).status,
-      // Mint a session without walking the sign-in screen, for tests that need
-      // to start on a signed-in page. Returns the token it just issued rather
-      // than searching state.tokens for one matching the email — an account
-      // that has signed in twice has two, and picking whichever came first is
-      // the kind of ambiguity that turns into an intermittent failure.
-      tokenFor: (email, password) => {
+      // Open a session without walking the sign-in screen, for tests that need
+      // to start on a signed-in page. It goes through the same login() the app
+      // does rather than minting a token directly: a fixture that skipped the
+      // refresh session would put the page in a state a real sign-in can never
+      // produce, and the first /auth/refresh would sign it straight back out.
+      signIn: (email, password) => {
         const user = userByEmail(email);
         if (!user || user.password !== password) return null;
-        return mintToken(email);
+        return { email, csrf: openSession(email) };
       },
+      // Age every outstanding access token, leaving the refresh session alone
+      // — the exact state a client is supposed to recover from without anybody
+      // seeing a sign-in form. The mock API's /__expire_access does the same.
+      expireAccess: () => {
+        const past = Date.now() - 1000;
+        for (const token of Object.keys(state.tokens)) {
+          state.tokens[token] = { ...state.tokens[token], expiresAt: past };
+        }
+        save();
+      },
+      // The two ways a refresh cookie stops being any good, which a spec can
+      // do to a real browser with cookies.clear() and a forged Set-Cookie and
+      // has to be handed here.
+      dropRefreshCookie: () => {
+        state.cookie = null;
+        save();
+      },
+      forgeRefreshCookie: () => {
+        state.cookie = `${randomToken()}.${randomToken()}`;
+        save();
+      },
+      refreshCookie: () => state.cookie,
       failNext: (rule) => {
         (state.failures || (state.failures = [])).push({
           method: (rule.method || "GET").toUpperCase(),

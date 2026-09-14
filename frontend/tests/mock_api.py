@@ -18,6 +18,19 @@ Test-only helpers (prefixed __ so they can't be mistaken for the real API):
   GET  /__state                         the whole store, for assertions about
                                         rows with no public read path — a
                                         cascade being the obvious one
+  POST /__expire_access                 age every outstanding access token out
+                                        of validity, which is how a spec gets
+                                        to watch the refresh flow recover from
+                                        an expiry without waiting fifteen
+                                        minutes for one
+
+Auth is the two-token flow the real backend runs: a short access token in the
+response body, and a refresh token in an httpOnly, SameSite=Lax cookie scoped
+to /auth. The cookie is a real one — this is an HTTP server, so the browser
+stores it, withholds it from every content route, and keeps it away from
+JavaScript exactly as it would in production. That is most of the reason this
+mock is worth having alongside the in-browser demo adapter, which has no
+origin to hang a cookie on.
 """
 
 from __future__ import annotations
@@ -40,6 +53,21 @@ RESERVED_USERNAMES = {"me", "admin", "api", "root", "commons"}
 # Mirrors schemas.COMMENT_MAX.
 COMMENT_MAX = 2000
 LOCK = threading.Lock()
+
+# Mirrors settings.access_token_expire_minutes. Short on purpose in both
+# places: the whole design assumes a token that runs out is unremarkable.
+ACCESS_TTL_SECONDS = 15 * 60
+# Mirrors oauth2.ROTATION_GRACE: how long the secret a rotation just replaced
+# stays acceptable, so that two tabs reloading together don't look like a
+# replay and revoke the session.
+ROTATION_GRACE = timedelta(seconds=15)
+REFRESH_COOKIE = "commons_refresh"
+REFRESH_COOKIE_PATH = "/auth"
+CSRF_HEADER = "X-CSRF-Token"
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def now_iso(offset_seconds: int = 0) -> str:
@@ -138,7 +166,16 @@ class State:
 
     def reset(self) -> None:
         self.users: dict[str, dict] = {}  # email -> {id, email, password, created_at}
-        self.tokens: dict[str, str] = {}  # token -> email
+        # Access tokens, with an expiry, because "it expired mid-session and
+        # the app quietly recovered" is a thing the suite has to be able to
+        # provoke. token -> (email, expires_at)
+        self.tokens: dict[str, tuple[str, datetime]] = {}
+        # Refresh sessions, keyed by family id — the same shape as the real
+        # backend's refresh_sessions table, so rotation, the grace window and
+        # reuse detection all behave the same way here.
+        # family -> {"email", "secret", "previous", "rotated_at", "csrf",
+        #            "revoked"}
+        self.sessions: dict[str, dict] = {}
         self.posts: dict[int, dict] = {}  # id -> post row
         self.votes: set[tuple[str, int]] = set()  # (email, post_id)
         self.comments: dict[int, dict] = {}  # id -> comment row
@@ -169,11 +206,94 @@ class State:
 
     def issue_token(self, email: str) -> str:
         tok = secrets.token_urlsafe(24)
-        self.tokens[tok] = email
+        self.tokens[tok] = (email, now() + timedelta(seconds=ACCESS_TTL_SECONDS))
         return tok
 
     def email_for(self, token: str | None) -> str | None:
-        return self.tokens.get(token or "")
+        found = self.tokens.get(token or "")
+        if not found:
+            return None
+        email, expires_at = found
+        return email if expires_at > now() else None
+
+    def expire_access_tokens(self) -> None:
+        """Age every outstanding access token. The refresh cookies are left
+        alone, which is precisely the state a client should recover from
+        without anybody seeing a sign-in form."""
+        past = now() - timedelta(seconds=1)
+        self.tokens = {tok: (email, past) for tok, (email, _) in self.tokens.items()}
+
+    # — refresh sessions ----------------------------------------------------------
+    def open_session(self, email: str) -> tuple[str, str]:
+        family = secrets.token_hex(16)
+        self.sessions[family] = {
+            "email": email,
+            "secret": "",
+            "previous": None,
+            "rotated_at": now(),
+            # Issued once and handed back unchanged on every refresh, exactly
+            # as the real backend does: two tabs each hold their own copy, and
+            # rotating it would let the one whose response lands second store a
+            # value the server had already replaced.
+            "csrf": secrets.token_urlsafe(32),
+            "revoked": False,
+        }
+        return f"{family}.{self.rotate_in_place(family)}", self.sessions[family]["csrf"]
+
+    def rotate_in_place(self, family: str) -> str:
+        row = self.sessions[family]
+        row["previous"] = row["secret"] or None
+        row["rotated_at"] = now()
+        row["secret"] = secrets.token_urlsafe(32)
+        return row["secret"]
+
+    def rotate(
+        self, raw: str | None, csrf: str | None
+    ) -> tuple[str, str, str] | str:
+        """Mirrors oauth2.rotate_refresh_session.
+
+        Returns (email, cookie, csrf) on success, or one of two strings on
+        failure — "dead" when the cookie itself is no good and should be
+        expired, "forged" when the cookie is fine and the CSRF token isn't, in
+        which case nothing is touched. The caller answers both with the same
+        401 and the same body; the difference is a header a cross-site page
+        can't see. See the note on oauth2.RefreshRejected.
+        """
+        family, _, secret = (raw or "").partition(".")
+        if not family or not secret:
+            return "dead"
+        row = self.sessions.get(family)
+        if row is None or row["revoked"]:
+            return "dead"
+        if not secrets.compare_digest(row["secret"], secret):
+            # The grace window: two tabs reloading together both send what the
+            # cookie jar held a moment ago, and that is not a replay.
+            graced = (
+                row["previous"]
+                and secrets.compare_digest(row["previous"], secret)
+                and now() - row["rotated_at"] <= ROTATION_GRACE
+            )
+            if not graced:
+                # A live family, an old secret, no window left to explain it:
+                # the cookie was copied. End the session rather than guess
+                # which holder is the thief.
+                row["revoked"] = True
+                return "dead"
+        if not csrf or not secrets.compare_digest(row["csrf"], csrf):
+            return "forged"
+        return row["email"], f"{family}.{self.rotate_in_place(family)}", row["csrf"]
+
+    def close_session(self, raw: str | None, csrf: str | None) -> None:
+        family, _, secret = (raw or "").partition(".")
+        row = self.sessions.get(family)
+        if not row or row["revoked"]:
+            return
+        known = [row["secret"]] + ([row["previous"]] if row["previous"] else [])
+        if not any(secrets.compare_digest(k, secret) for k in known):
+            return
+        if not csrf or not secrets.compare_digest(row["csrf"], csrf):
+            return
+        row["revoked"] = True
 
     # — posts ---------------------------------------------------------------------
     def public_user(self, email: str) -> dict:
@@ -270,25 +390,73 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def _cors(self) -> None:
-        origin = self.headers.get("Origin", "*")
-        self.send_header("Access-Control-Allow-Origin", origin)
+        origin = self.headers.get("Origin")
+        # Echoed, never a wildcard, and credentials only where there is an
+        # origin to grant them to. `Access-Control-Allow-Origin: *` alongside
+        # `Allow-Credentials: true` is a combination the fetch spec refuses
+        # outright, so a wildcard here would break the browser rather than
+        # merely being lax — and the real backend's CORS config has the same
+        # property for the same reason. curl and friends send no Origin and
+        # need none of this.
+        self.send_header("Access-Control-Allow-Origin", origin or "*")
         self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Credentials", "true")
+        if origin:
+            self.send_header("Access-Control-Allow-Credentials", "true")
         self.send_header(
             "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         )
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            f"Authorization, Content-Type, {CSRF_HEADER}",
+        )
 
-    def _send(self, status: int, payload) -> None:
+    def _send(self, status: int, payload, cookie: str | None = None) -> None:
         body = b"" if payload is None else json.dumps(payload).encode()
         self.send_response(status)
         self._cors()
+        if cookie is not None:
+            self.send_header("Set-Cookie", cookie)
         if body:
             self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if body:
             self.wfile.write(body)
+
+    # — the refresh cookie ---------------------------------------------------
+    # Written by hand rather than with http.cookies, because the flags are the
+    # part that matters and SimpleCookie's spelling of SameSite has changed
+    # between Python versions. Same flags as the real backend sets, in the same
+    # order, so the two are diffable by eye.
+    #
+    # No Secure: the suite runs over http, and a Secure cookie would be dropped
+    # by the browser without a word — which is a very long afternoon.
+    @staticmethod
+    def _refresh_cookie(token: str) -> str:
+        return (
+            f"{REFRESH_COOKIE}={token}; Path={REFRESH_COOKIE_PATH}; "
+            f"Max-Age={14 * 24 * 60 * 60}; HttpOnly; SameSite=Lax"
+        )
+
+    @staticmethod
+    def _cleared_cookie() -> str:
+        return f"{REFRESH_COOKIE}=; Path={REFRESH_COOKIE_PATH}; Max-Age=0; HttpOnly; SameSite=Lax"
+
+    def _cookie(self, name: str) -> str | None:
+        raw = self.headers.get("Cookie", "")
+        for part in raw.split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == name:
+                return value
+        return None
+
+    def _token_body(self, access_token: str, csrf_token: str) -> dict:
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": ACCESS_TTL_SECONDS,
+            "csrf_token": csrf_token,
+        }
 
     def _body(self) -> bytes:
         n = int(self.headers.get("Content-Length", 0) or 0)
@@ -394,6 +562,9 @@ class Handler(BaseHTTPRequestHandler):
                     "votes": [list(v) for v in ST.votes],
                 },
             )
+        if path == "/__expire_access" and method == "POST":
+            ST.expire_access_tokens()
+            return self._send(200, {"ok": True})
         if path == "/__fail_next" and method == "POST":
             rule = self._json()
             ST.fail_next.append(
@@ -419,6 +590,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._profile(m.group(1))
         if path == "/login" and method == "POST":
             return self._login(self._form())
+        if path == "/auth/refresh" and method == "POST":
+            return self._refresh()
+        if path == "/auth/logout" and method == "POST":
+            return self._logout()
         if path == "/posts/" and method == "GET":
             return self._list_posts(query)
         if path == "/posts/" and method == "POST":
@@ -545,7 +720,42 @@ class Handler(BaseHTTPRequestHandler):
         user = ST.users.get(email)
         if not user or user["password"] != password:
             return self._send(401, {"detail": "Invalid Credentials"})
-        self._send(200, {"access_token": ST.issue_token(email), "token_type": "bearer"})
+        cookie, csrf = ST.open_session(email)
+        self._send(
+            200,
+            self._token_body(ST.issue_token(email), csrf),
+            cookie=self._refresh_cookie(cookie),
+        )
+
+    def _refresh(self) -> None:
+        rotated = ST.rotate(
+            self._cookie(REFRESH_COOKIE), self.headers.get(CSRF_HEADER)
+        )
+        if isinstance(rotated, str):
+            # Cleared only when the cookie itself is no good, for the same
+            # reason the real backend draws that line: what's held can only
+            # fail again, and once it's gone the client can tell "signed out"
+            # from "temporarily broken". A CSRF failure leaves it alone.
+            return self._send(
+                401,
+                {"detail": "Invalid Credentials"},
+                cookie=self._cleared_cookie() if rotated == "dead" else None,
+            )
+        email, cookie, csrf = rotated
+        self._send(
+            200,
+            self._token_body(ST.issue_token(email), csrf),
+            cookie=self._refresh_cookie(cookie),
+        )
+
+    def _logout(self) -> None:
+        # Only clear what was actually sent: a cross-site form POST carries no
+        # cookie, and clearing regardless would let any page sign a reader out.
+        presented = self._cookie(REFRESH_COOKIE)
+        ST.close_session(presented, self.headers.get(CSRF_HEADER))
+        self._send(
+            204, None, cookie=self._cleared_cookie() if presented else None
+        )
 
     def _list_posts(self, query: dict, only_author: str | None = None) -> None:
         try:

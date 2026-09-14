@@ -7,17 +7,44 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..limiter import limiter
-from .. import models, schemas, utils, oauth2
+from .. import models, schemas, utils, oauth2, docs
 from .post import page_of_posts, visible_to
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.UserOut)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=schemas.UserOut,
+    summary="Create an account",
+    responses={
+        201: docs.ok(docs.USER_EXAMPLE),
+        409: {
+            "model": schemas.Detail,
+            "description": (
+                "The username or the email is already registered. The message "
+                "names which — for a username that's unavoidable, since you "
+                "can't pick one without knowing it's free."
+            ),
+        },
+        **docs.errors(422, 429),
+    },
+)
 @limiter.limit("10/hour")
 def create_user(
     request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)
 ) -> models.User:
+    """Register.
+
+    The username is folded to lower case and must match
+    `^[a-z][a-z0-9_-]{2,19}$` — starting with a letter, so a username can never
+    be mistaken for an id in a URL. A handful of names the API needs for itself
+    (`me`, `admin`, `api`, `root`, `commons`) are refused.
+
+    The response is a `UserOut` and carries no email. Registering does not sign
+    you in: `POST /login` does that.
+    """
     # Two columns can collide independently, and being told "that didn't work"
     # when only one of them is the problem is a miserable way to fill in a form.
     # So look first and name the one that clashed.
@@ -70,7 +97,12 @@ def create_user(
 # the other way round "me" would be looked up as somebody's name. (Registering
 # it is blocked too — see schemas.RESERVED_USERNAMES — because relying on route
 # ordering alone is one careless reshuffle away from a bug.)
-@router.get("/me", response_model=schemas.MeOut)
+@router.get(
+    "/me",
+    response_model=schemas.MeOut,
+    summary="Who the caller is",
+    responses={200: docs.ok(docs.ME_EXAMPLE), **docs.errors(401)},
+)
 def get_me(current_user: models.User = Depends(oauth2.get_current_user)) -> models.User:
     """Who the caller is.
 
@@ -85,8 +117,15 @@ def get_me(current_user: models.User = Depends(oauth2.get_current_user)) -> mode
     return current_user
 
 
-@router.get("/{username}", response_model=schemas.UserOut)
+@router.get(
+    "/{username}",
+    response_model=schemas.UserOut,
+    summary="A public profile",
+    responses={200: docs.ok(docs.USER_EXAMPLE), **docs.errors(404)},
+)
 def get_user(username: str, db: Session = Depends(get_db)) -> models.User:
+    """One person, by username. Case-insensitive, because names are stored
+    folded and nobody types their own capitals the same way twice."""
     user = db.scalar(
         select(models.User).where(models.User.username == username.lower())
     )
@@ -98,7 +137,15 @@ def get_user(username: str, db: Session = Depends(get_db)) -> models.User:
     return user
 
 
-@router.get("/{username}/posts", response_model=schemas.PostPage)
+@router.get(
+    "/{username}/posts",
+    response_model=schemas.PostPage,
+    summary="Everything by one person",
+    responses={
+        200: docs.ok(docs.page(docs.POST_EXAMPLE, total=3)),
+        **docs.errors(404, 422),
+    },
+)
 def get_user_posts(
     username: str,
     db: Session = Depends(get_db),

@@ -24,11 +24,104 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Shutting down Social Feed API")
 
 
-app = FastAPI(title="Social Feed API", lifespan=lifespan)
+# Tag descriptions. /docs renders these above each group, and they are the only
+# prose a reader gets before a list of paths — so each one says what the group
+# is *for*, not what its name already says.
+TAGS_METADATA = [
+    {
+        "name": "Authentication",
+        "description": (
+            "Two tokens, on purpose. A short-lived **access token** comes back "
+            "in the response body and goes out as `Authorization: Bearer …`; a "
+            "long-lived **refresh token** goes out in an httpOnly cookie scoped "
+            "to `/auth`, where no script on the page can read it and no content "
+            "route ever sees it. `POST /auth/refresh` trades one for the other "
+            "and rotates both.\n\n"
+            "`/login` takes an **email**, not a username — the form field is "
+            "called `username` because the OAuth2 password flow names it that."
+        ),
+    },
+    {
+        "name": "Posts",
+        "description": (
+            "The feed and everything on it. Reading is public; writing needs a "
+            "token. One rule runs through all of it: an unpublished post is "
+            "visible to its author and to nobody else, and to anyone else it "
+            "answers **404** rather than 403 — a 403 would confirm it exists."
+        ),
+    },
+    {
+        "name": "Comments",
+        "description": (
+            "Remarks on a post, oldest first, in the same page envelope the "
+            "feed uses. A comment is yours to remove and nobody else's — not "
+            "even the author of the post it sits on."
+        ),
+    },
+    {
+        "name": "Users",
+        "description": (
+            "Accounts and public identities. The **username** is what everyone "
+            "sees; the **email** is a credential and leaves the server on "
+            "exactly one endpoint, `GET /users/me`, where the caller is the "
+            "only person it belongs to."
+        ),
+    },
+    {
+        "name": "Vote",
+        "description": (
+            "One upvote per person per post. There is no downvote — the only "
+            "live quantity in this product is agreement."
+        ),
+    },
+    {"name": "Health", "description": "Is the process up and serving."},
+]
+
+app = FastAPI(
+    title="Social Feed API",
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_tags=TAGS_METADATA,
+    description=(
+        "The backend behind **Commons** — a small public feed.\n\n"
+        "Posts, comments, upvotes and accounts, with a two-token auth flow. "
+        "Reading is public; writing needs an account.\n\n"
+        "The published demo at "
+        "[andrewtechtips.github.io/social-feed-application]"
+        "(https://andrewtechtips.github.io/social-feed-application/) "
+        "reimplements this same contract in the browser, because a static host "
+        "has nowhere to run FastAPI. This document is the contract both of them "
+        "answer to."
+    ),
+    # Not a deployment: this API has no public home, and saying otherwise in the
+    # spec would be the one dishonest line in the repo. What a `servers` block
+    # buys here is a working "Try it out" in /docs against a local process, and
+    # a generated client that points somewhere real the moment you run one.
+    servers=[
+        {"url": "http://localhost:8000", "description": "A local development server"}
+    ],
+    contact={
+        "name": "Source on GitHub",
+        "url": "https://github.com/AndrewTechTips/social-feed-application",
+    },
+    license_info={
+        "name": "MIT",
+        "url": (
+            "https://github.com/AndrewTechTips/social-feed-application"
+            "/blob/main/LICENSE"
+        ),
+    },
+)
 
 # slowapi needs the limiter on app.state plus a handler for its exception
 app.state.limiter = limiter
 
+# Credentialed CORS, which means this list is now load-bearing in a way it
+# wasn't: the refresh cookie is only ever sent by a browser to an origin the
+# list below names, and `allow_credentials=True` makes `allow_origins=["*"]`
+# illegal rather than merely unwise — Starlette echoes the caller's origin
+# instead of a wildcard, so a wildcard would echo *anything*. Keep it explicit
+# and keep it short.
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -38,11 +131,13 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    # No allow_credentials: auth here is a Bearer header, not a cookie, so
-    # nothing needs credentialed CORS. Turning it on would only widen what a
-    # browser is willing to send on our behalf.
+    # On, now that there is a cookie. It is what lets the frontend on :5173
+    # receive the Set-Cookie from :8000 at all — and note what it does *not*
+    # widen: the cookie is scoped to /auth, so no content route gains an
+    # ambient credential from this.
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
 
 
@@ -116,15 +211,26 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 app.include_router(post.router)
 app.include_router(user.router)
 app.include_router(auth.router)
+app.include_router(auth.auth_router)
 app.include_router(vote.router)
 app.include_router(comment.router)
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
     return {"message": "Welcome to my api"}
 
 
-@app.get("/healthz", tags=["Health"])
+@app.get(
+    "/healthz",
+    tags=["Health"],
+    summary="Liveness probe",
+    responses={200: {"content": {"application/json": {"example": {"status": "ok"}}}}},
+)
 def healthz() -> dict[str, str]:
+    """Answers as long as the process is serving.
+
+    Deliberately does *not* touch the database: a health check that fails when
+    Postgres is slow turns one degraded dependency into a restart loop.
+    """
     return {"status": "ok"}

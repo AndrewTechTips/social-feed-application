@@ -34,12 +34,27 @@
  */
 
 /**
- * What the app keeps about who you are. The id is the durable half (a username
- * could in principle be changed); the username is what gets drawn.
+ * What the app keeps about who you are — and note what isn't in it. The
+ * credential moved out when refresh tokens landed: an access token lives in
+ * `State.access` for as long as the tab is open, and the thing that survives a
+ * reload is an httpOnly cookie this code cannot read. What's left here is
+ * public information, kept so the header can paint the right thing before the
+ * first request comes back.
+ *
+ * The id is the durable half (a username could in principle be changed); the
+ * username is what gets drawn.
  * @typedef {object} Session
- * @property {string} token
  * @property {number} id
  * @property {string} username
+ */
+
+/**
+ * The credential half, held in memory only.
+ * @typedef {object} Access
+ * @property {string} token      the access token, sent as a Bearer header
+ * @property {string} csrf       echoed to /auth as X-CSRF-Token
+ * @property {number} expiresAt  ms epoch, already backed off from the server's
+ *   own expiry so a token can't run out mid-flight
  */
 
 /**
@@ -103,6 +118,7 @@
  * Everything the store holds.
  * @typedef {object} State
  * @property {Session | null} session
+ * @property {Access | null} access   never persisted; see the note in store.js
  * @property {FeedCache | null} feedCache
  * @property {Post[]} knownPosts   what's on screen now, for the palette
  * @property {Set<number>} voted   post ids this browser has upvoted

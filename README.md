@@ -32,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step — type-checked anyway, with JSDoc and `tsc --noEmit`. |
-| **Tested** | 189 pytest tests (97% coverage) · 250 Playwright end-to-end tests, run against two API implementations · axe on every screen |
+| **Tested** | 227 pytest tests (97% coverage) · 332 Playwright end-to-end tests, run against two API implementations · axe on every screen |
 | **Checked** | `black` · `mypy --strict` · `pip-audit` · `alembic check` · Lighthouse CI |
 | **Shipped** | Docker · GitHub Actions → Docker Hub · GitHub Pages |
 
@@ -71,10 +71,19 @@ reimplements the API in the browser, against
 page, and it says so on every visit.
 
 Everything works — post, upvote, edit, delete, search, paginate, drafts staying
-private. Changes are kept in `localStorage`, so they survive a refresh and reach
-nobody else; **Reset the demo** puts it back.
+private, sessions that survive a reload and sign out properly. Changes are kept in
+`localStorage`, so they survive a refresh and reach nobody else; **Reset the demo** puts
+it back.
 
-What makes it more than a mock: the end-to-end suite runs **the same 42 specs
+One thing it can't have, and doesn't pretend to: the real API keeps its refresh token in
+an `httpOnly` cookie, and there is no server here to set one — the "backend" is
+JavaScript in the same window as the app, so there is nothing an `httpOnly` flag could
+hide a value *from*. The demo implements the same contract (rotation, reuse detection,
+the lot) and keeps the token in the same `localStorage` blob as everything else. The
+cookie and its flags are exercised against `mock_api.py`, which is a real HTTP server on
+a real origin.
+
+What makes it more than a mock: the end-to-end suite runs **the same specs
 against both** the demo adapter and `mock_api.py`, so the site people click and
 the API this project ships can't quietly drift apart. `?demo=1` turns it on
 locally against the real files:
@@ -187,10 +196,16 @@ One page, hash routes.
 
 ### The API
 
+The generated spec is committed at [`docs/openapi.json`](docs/openapi.json) — worked
+examples, documented error responses and all — so the contract can be read, diffed or fed
+to a client generator without running anything. CI fails if it drifts from the code.
+
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/users/` | – | register — username, email, password (8–72 bytes), 10/hour |
-| `POST` | `/login` | – | form login → `{access_token}`, 5/min |
+| `POST` | `/login` | – | form login (by **email**) → `{access_token, expires_in, csrf_token}` plus an `httpOnly` refresh cookie, 5/min |
+| `POST` | `/auth/refresh` | cookie | trade the refresh cookie for a new access token, rotating both. Needs `X-CSRF-Token`. 30/min |
+| `POST` | `/auth/logout` | cookie | revoke the session and clear the cookie. Needs `X-CSRF-Token` |
 | `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — full-text search over title and body, drafts only if they're yours |
 | `GET` | `/posts/{id}` | optional | one post + vote count |
 | `POST` | `/posts/` | bearer | create |
@@ -211,8 +226,8 @@ One page, hash routes.
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 189 tests, coverage gate at 85%
-cd frontend && npm test          # 250 Playwright tests, no Postgres needed
+cd backend && pytest -q          # 227 tests, coverage gate at 85%
+cd frontend && npm test          # 332 Playwright tests, no Postgres needed
 cd frontend && npm run typecheck # tsc --noEmit over the JSDoc types
 cd frontend && npm run lighthouse
 ```
@@ -264,7 +279,7 @@ mind, which is the part that makes it a decision rather than a preference:
 | --- | --- | --- |
 | [0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md) | Vanilla JS with JSDoc types, not TypeScript | Type checking is worth having; a build step isn't worth what it costs here. Revisit at ~3,000 lines or a second contributor. |
 | [0002](docs/adr/0002-hash-routing.md) | Hash routing, not the History API | There is no server to answer `/posts/12`. Ugly URLs, zero Pages configuration. |
-| [0003](docs/adr/0003-token-in-localstorage.md) | The token lives in `localStorage` | An `httpOnly` cookie is safer and needs CSRF, refresh tokens and credentialed CORS. Stated plainly: an XSS bug would leak the session. |
+| [0003](docs/adr/0003-token-in-an-httponly-cookie.md) | The refresh token lives in an `httpOnly` cookie | Short access token in memory, long refresh token the page can't read. Supersedes the `localStorage` decision, which said to revisit exactly when this landed. |
 | [0004](docs/adr/0004-demo-mode-for-a-static-host.md) | Demo mode is the answer to a static host | Three implementations of one contract, held together by running the same suite against all of them. |
 | [0005](docs/adr/0005-offset-pagination.md) | Offset pagination | It matches the UI and the index. Switch to keyset at ~50k posts, and here's the exact change. |
 
@@ -338,10 +353,25 @@ own drafts and nobody else does, that snapshot records the viewer it was fetched
 otherwise signing out re-renders the same route, and the outgoing screen's teardown
 writes the signed-in list back into the cache one line before it's read.
 
-**The token is in `localStorage`, and that has a cost.** An XSS bug would leak it. The
-alternative — an httpOnly cookie — needs a refresh-token flow and CSRF protection that
-aren't built yet. It's a real tradeoff, not an oversight, and it's the next thing on the
-list.
+**Two tokens, and the one that matters can't be read by JavaScript.** A 15-minute
+access token lives in a variable and goes out as a Bearer header; a 14-day refresh token
+lives in an `httpOnly`, `SameSite=Lax` cookie scoped to `/auth`, so no content route ever
+sees it and no script can copy it. An XSS bug can act as you while the tab is open and
+can't walk away with the session — which was the stated cost of the decision this
+replaced, closed rather than restated. Refreshing rotates the cookie (with a 15-second
+grace window, or opening a second tab would look like a stolen cookie and sign you out of
+both), and signing out revokes it server-side rather than only forgetting it here.
+`localStorage` still holds `{id, username}` and a CSRF nonce: both public, neither a
+credential. The full argument, including the trap where serving the frontend from
+`127.0.0.1` instead of `localhost` makes the cookie silently vanish, is in
+[ADR 0003](docs/adr/0003-token-in-an-httponly-cookie.md).
+
+**The demo doesn't get the cookie, and says so.** There is no server on the published
+site, so there is nothing an `httpOnly` flag could hide a value from — the "backend" is
+JavaScript in the same window. Demo mode implements the same contract, rotation and reuse
+detection included, and keeps the refresh token in its own `localStorage` blob. The
+end-to-end suite's mock is a real HTTP server on a real origin, which is where the cookie
+and its flags are actually exercised.
 
 **Signup tells you an email is taken.** That does let someone enumerate addresses. The
 usual fix is to answer 201 either way and send the "you already have an account" note by

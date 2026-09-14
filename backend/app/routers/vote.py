@@ -3,17 +3,52 @@ from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import schemas, database, models, oauth2
+from .. import schemas, database, models, oauth2, docs
 
 router = APIRouter(prefix="/vote", tags=["Vote"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    summary="Upvote a post, or take it back",
+    responses={
+        201: docs.ok(
+            {"message": "Successfully added vote"},
+            "Recorded. `dir: 0` answers 201 too, with " "`successfully deleted vote`.",
+        ),
+        404: {
+            "model": schemas.Detail,
+            "description": (
+                "No such post — or, with `dir: 0`, no vote of yours to remove. "
+                "A client rolling back an optimistic upvote can treat this as "
+                "success: it means you are already in the state you asked for."
+            ),
+        },
+        409: {
+            "model": schemas.Detail,
+            "description": (
+                "You have already voted on this post. Same advice as the 404: "
+                "the state you asked for is the state you're in."
+            ),
+        },
+        **docs.errors(401, 422),
+    },
+)
 def vote(
     payload: schemas.Vote,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ) -> dict[str, str]:
+    """Add or remove your upvote.
+
+    One vote per person per post, enforced by the composite primary key on
+    `votes` rather than by the check below — which is what makes two requests
+    racing each other a 409 instead of a 500.
+
+    You can't vote on a draft you aren't allowed to see, and that is reported
+    as missing rather than forbidden, exactly as reading it would be.
+    """
 
     # Same visibility rule as the feed: you can't vote on a draft you aren't
     # allowed to see, and it's reported as missing rather than forbidden.

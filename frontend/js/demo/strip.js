@@ -52,7 +52,18 @@ export function demoSentence() {
     " — this runs entirely in your browser. The real backend is in ",
     h("a", { href: `${REPO}/tree/main/backend`, target: "_blank", rel: "noopener" }, "backend/"),
     "; here's ",
-    h("a", { href: `${REPO}#the-api`, target: "_blank", rel: "noopener" }, "the API contract"),
+    // The committed spec rather than the README's table: "the contract" should
+    // go to the contract. It exists as a file precisely because this API has no
+    // deployment to serve a live /docs from, and CI keeps it from drifting.
+    h(
+      "a",
+      {
+        href: `${REPO}/blob/main/docs/openapi.json`,
+        target: "_blank",
+        rel: "noopener",
+      },
+      "the API contract"
+    ),
     " it implements. Nothing you post is saved anywhere."
   );
 }

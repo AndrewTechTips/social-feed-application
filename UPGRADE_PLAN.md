@@ -747,17 +747,99 @@ set of results refetched an unfiltered feed and threw the query away.
 *One sentence:* a link that said "the feed" regardless was the one thing that could make the
 journey the reader just watched feel like it lied.
 
-**2.4 — Refresh tokens — 1 day.**
+**2.4 ✅ — Refresh tokens — 1 day.**
 Short-lived access token in memory + a refresh token in an `httpOnly` cookie. This directly
 closes the tradeoff you've already documented twice (`store.js:8`, `frontend/README.md`).
 *Closing a limitation you wrote down yourself is a strong signal* — it shows the comments are
 a working engineering log, not decoration. Caveat: cookies mean CSRF protection and a more
 careful CORS story, so it's a genuine day, not an afternoon.
 
-**2.5 — OpenAPI polish — 3 h.**
+> **Done (2026-09-14).** A 15-minute access token in the response body and a 14-day
+> refresh token in an `httpOnly`, `SameSite=Lax`, `Path=/auth` cookie. `POST /auth/refresh`
+> rotates both; `POST /auth/logout` revokes server-side. New `refresh_sessions` table
+> (`a7d2e4f60b11`), `app/oauth2.py` for the session machinery, `app/routers/auth.py` for
+> the three endpoints.
+>
+> **The refresh token is opaque, not a JWT** — `"<family>.<secret>"`, stored as a SHA-256
+> so a dump of the table gets nobody in. The table exists because a stateless refresh JWT
+> cannot be *taken back*, and revocation is most of the point of splitting the tokens.
+>
+> **Three things that only showed up once it was running**, and each is now a test:
+>
+> 1. **Rotation breaks two tabs.** They share a cookie jar, so reloading both at once has
+>    the second request presenting what the jar held a moment ago — indistinguishable from
+>    a replay, and the answer to a replay is to revoke. A 15-second grace window on the
+>    previous secret fixes it. Without this the feature is worse than what it replaced.
+> 2. **The CSRF token can't live in memory.** The cookie survives a reload and memory
+>    doesn't, so a client with nowhere to keep it holds a live session it can never
+>    refresh. It goes in `localStorage` — not a credential, opens nothing on its own — and
+>    it does *not* rotate, because two tabs each hold their own copy and the one whose
+>    response landed second would store a value the server had already replaced.
+> 3. **A CSRF failure must not clear the cookie.** Found by the live pass: refusing a
+>    request because it didn't come from our page, and then deleting the session anyway,
+>    turns a forged request into a forced sign-out. Same for a cross-site POST to
+>    `/auth/logout`, which arrives with no cookie at all and so has nothing to expire.
+>
+> On the frontend, `js/api.js` refreshes transparently: before a request when there's no
+> token, and once after a 401. **Single-flight**, because every refresh rotates the cookie
+> — a dozen honest parallel requests each starting their own would have the later ones
+> presenting a spent secret, and the server would correctly read that as theft and end the
+> session. It also distinguishes *signed out* (401 → forget the identity, carry on
+> anonymously, the app is readable that way) from *unavailable* (a dropped connection →
+> change nothing), because treating a train tunnel as a sign-out is the app punishing a
+> reader for their own network.
+>
+> `localStorage` now holds `{id, username}` and a CSRF nonce, and the old
+> `commons.session` key is actively **removed** on boot rather than merely unused — the
+> change in name only would be leaving the credential there for everyone who used the app
+> before this landed.
+>
+> **Demo mode gets the contract, not the cookie**, and says so out loud. There is no
+> server and no origin boundary on the published site, so there is nothing an `httpOnly`
+> flag could hide a value from — the adapter is JavaScript in the same window as the app.
+> Faking a cookie would be theatre of the kind §7's WebSocket note warns about. So
+> `js/demo/backend.js` implements the same endpoints, rotation, grace window, reuse
+> detection and flat 401, and keeps the token in the `localStorage` blob everything else in
+> the demo lives in — which is *exactly* what this work moved away from, and is written
+> down as such in the README and the ADR. `tests/mock_api.py` is a real HTTP server on a
+> real origin, so the cookie and its flags are genuinely exercised; the whole e2e suite
+> runs against both.
+>
+> 38 new backend tests (`test_refresh.py`, `test_cors.py`) and 24 new end-to-end ones
+> (`refresh.spec.js`, ×2 projects). **ADR 0003 is rewritten** —
+> `0003-token-in-an-httponly-cookie.md`, superseding the `localStorage` record, keeping
+> the original argument verbatim and naming the one line of it that turned out to be wrong.
+>
+> One trap worth knowing: in development the frontend on `localhost:5173` and the API on
+> `localhost:8000` are different origins but the *same site* — cookies ignore the port —
+> which is why `SameSite=Lax` works. Serving the frontend from `127.0.0.1` makes it
+> cross-site and the cookie silently vanishes.
+
+**2.5 ✅ — OpenAPI polish — 3 h.**
 Response examples on every endpoint, documented error responses, tags with descriptions, a
 `servers` block, and the generated `openapi.json` committed so it can be linked from the
 demo's "here's the contract it implements" line. Directly reinforces §3's framing.
+
+> **Done (2026-09-14).** `app/docs.py` holds the prose half — one entry per status code
+> this API actually returns, spread into the routes that return it (`**docs.errors(401,
+> 404)`), plus a worked example body per shape. Kept out of the routers because four
+> paragraphs of `responses=` in a decorator buries the one line that says what the route
+> does.
+>
+> The descriptions say what a code means *here*, not what it means in RFC 9110: "404" is
+> not interesting, "someone else's draft answers 404 so a 403 can't confirm it exists" is.
+> Same for the tags — each one carries the rule that runs through its group. Every route
+> gained a `summary` and, where it had none, a docstring.
+>
+> `servers` points at `http://localhost:8000` and nothing else, with a comment saying why:
+> this API has no public home, and a spec that claimed one would be the single dishonest
+> line in the repo. What it buys is a working "Try it out" and a client generator that
+> points somewhere real.
+>
+> `docs/openapi.json` is committed and `backend/scripts/export_openapi.py --check` gates it
+> in CI, the same arrangement the coverage badge has — a route added without re-exporting
+> turns the build red instead of leaving the demo's "here's the contract" link describing
+> last week's API.
 
 **2.6 — WebSocket live feed — 1.5 days. Recommended *last*, with eyes open.**
 Technically interesting, and "real-time updates over WebSocket" is a good line. But be

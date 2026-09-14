@@ -5,7 +5,7 @@
 
 import { api } from "../api.js";
 import { h, icon, mountView, toast } from "../ui.js";
-import { get, setSession } from "../store.js";
+import { get, setSession, setAccess } from "../store.js";
 import { navigate } from "../router.js";
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
@@ -140,17 +140,17 @@ function screen(mode) {
         await api.post("/users/", creds, { auth: false });
       }
 
-      // "username" here is the OAuth2 password-flow field name, and this API
-      // signs people in by email — it is not the username they just picked.
-      const tok = await api.form("/login",
-        { username: creds.email, password: creds.password }, { auth: false });
+      // Signing in by email — the username is the public identity, not a
+      // credential. Two things come back: an access token for this tab, and a
+      // refresh cookie the browser keeps and this code never sees.
+      setAccess(await api.login(creds.email, creds.password));
 
       // The token says nothing about the person it just signed in, and the feed
       // no longer carries anyone's address to match against. So ask: /users/me
       // is what makes "which of these posts are mine" answerable on a browser
       // that has never been here before.
-      const me = await api.get("/users/me", { token: tok.access_token });
-      setSession({ token: tok.access_token, id: me.id, username: me.username });
+      const me = await api.get("/users/me");
+      setSession({ id: me.id, username: me.username });
 
       toast(isRegister ? "Welcome to Commons." : "Signed in.");
       navigate("/");
