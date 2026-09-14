@@ -9,7 +9,8 @@
     "test:headed": "playwright test -c tests/playwright.config.js --headed",
     "test:ui": "playwright test -c tests/playwright.config.js --ui",
     "test:report": "playwright show-report tests/.report",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lighthouse": "lhci autorun --config=lighthouserc.json"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
