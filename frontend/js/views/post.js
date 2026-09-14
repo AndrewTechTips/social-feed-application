@@ -101,12 +101,18 @@ export async function renderPost({ params, isStale }) {
   conversation.load();
 
   // — owner actions -----------------------------------------------------------
+  // Returns the Delete button it just built. cancel() needs that: it calls
+  // mountActions() to put the row back, which replaces the button, and
+  // focusing the one from the previous call would be focusing a detached
+  // element — silently dropping the cursor to the body, which is precisely
+  // what Escape is supposed to avoid.
   function mountActions() {
     const deleteBtn = h("button",
       { class: "btn btn--quiet danger", type: "button", onclick: askDelete }, "Delete");
     actions.replaceChildren(
       h("a", { class: "btn btn--ghost", href: `#/posts/${post.id}/edit` }, "Edit"),
       deleteBtn);
+    return deleteBtn;
 
     function askDelete() {
       const yes = h("button", { class: "btn btn--danger", type: "button" }, "Delete");
@@ -118,8 +124,7 @@ export async function renderPost({ params, isStale }) {
 
       const onKey = (e) => e.key === "Escape" && cancel();
       function cancel() {
-        mountActions();
-        deleteBtn.focus();
+        mountActions().focus();
       }
       yes.addEventListener("click", async () => {
         yes.disabled = no.disabled = true;

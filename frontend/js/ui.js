@@ -65,15 +65,30 @@ const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view")
 
 /**
  * @param {Element | DocumentFragment} node
- * @param {{ restoreScroll?: number }} [options]
+ * @param {{ restoreScroll?: number, focus?: HTMLElement }} [options]
+ *   `focus` is where the cursor should land — a form's first field, say.
+ *   Defaults to #view, which is what a reading screen wants.
  */
-export function mountView(node, { restoreScroll } = {}) {
+export function mountView(node, { restoreScroll, focus } = {}) {
   const view = viewEl();
 
   const swap = () => {
     view.replaceChildren(node);
     if (typeof restoreScroll === "number") window.scrollTo(0, restoreScroll);
     else window.scrollTo(0, 0);
+
+    // Focus belongs *inside* the swap, not after the call to it. With a view
+    // transition, startViewTransition() runs this callback asynchronously —
+    // so a caller doing `mountView(form); field.focus();` was focusing an
+    // element that wasn't in the document yet, which is a silent no-op. The
+    // compose and sign-in screens both looked like they autofocused and
+    // hadn't since view transitions landed.
+    //
+    // Not while someone is typing in the header search, which drives feed
+    // re-renders on every keystroke.
+    if (document.activeElement !== document.getElementById("search-input")) {
+      (focus || view).focus({ preventScroll: true });
+    }
   };
 
   // Not on the very first paint. There's nothing on screen to travel from, so
@@ -93,11 +108,6 @@ export function mountView(node, { restoreScroll } = {}) {
     });
   }
 
-  // Move focus to the top of the new screen for keyboard + screen-reader users —
-  // unless they're typing in the header search, which drives feed re-renders.
-  if (document.activeElement !== document.getElementById("search-input")) {
-    view.focus({ preventScroll: true });
-  }
 }
 
 // — toasts (aria-live region lives in index.html) --------------------------

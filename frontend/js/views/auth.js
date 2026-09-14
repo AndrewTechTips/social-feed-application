@@ -192,8 +192,7 @@ function screen(mode) {
       h("a", { href: isRegister ? "#/login" : "#/register" },
         isRegister ? "Sign in" : "Create an account")));
 
-  mountView(h("div", { class: "auth" }, card));
-  email.input.focus();
+  mountView(h("div", { class: "auth" }, card), { focus: email.input });
 }
 
 export function renderLogin() {

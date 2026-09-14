@@ -140,8 +140,7 @@ function buildForm({ mode, post }) {
     }
   });
 
-  mountView(form);
-  title.focus();
+  mountView(form, { focus: title });
 }
 
 export function renderCompose() {
