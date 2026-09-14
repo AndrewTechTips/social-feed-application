@@ -48,7 +48,9 @@ def wipe() -> None:
         f"@{settings.database_hostname}:{settings.database_port}/{DB}"
     )
     with create_engine(url).begin() as conn:
-        conn.execute(text("TRUNCATE votes, posts, users RESTART IDENTITY CASCADE"))
+        conn.execute(
+            text("TRUNCATE comments, votes, posts, users RESTART IDENTITY CASCADE")
+        )
     print(f"emptied {DB}")
 
 def call(path, data=None, form=None, token=None):
@@ -90,6 +92,27 @@ def stagger(ids: list[int]) -> None:
                 {"age": age, "pid": pid},
             )
     print("timestamps staggered")
+
+
+def age_comments(pairs: list[tuple[int, str]]) -> None:
+    """Same idea as stagger(), for the conversation: a thread where every reply
+    says "just now" reads as a fixture, not as people talking."""
+    from sqlalchemy import create_engine, text
+
+    from backend.app.config import settings
+
+    url = (
+        f"postgresql://{settings.database_username}:{settings.database_password}"
+        f"@{settings.database_hostname}:{settings.database_port}/{DB}"
+    )
+    with create_engine(url).begin() as conn:
+        for cid, age in pairs:
+            conn.execute(
+                text("UPDATE comments SET created_at = now() - CAST(:age AS interval) "
+                     "WHERE id = :cid"),
+                {"age": age, "cid": cid},
+            )
+    print("comments aged")
 
 
 def main() -> int:
@@ -194,6 +217,24 @@ def main() -> int:
                 pass
     print("votes applied")
     stagger(ids)
+
+    # A couple of threads, so the post screenshot shows the feature rather than
+    # an empty state. Mirrors what frontend/js/demo/seed.json gives the live
+    # demo — different posts, because this list is a subset of that one.
+    COMMENTS = [
+        (ids[0], 1, "Which tram depot? I've been meaning to find somewhere like this.", "11 days"),
+        (ids[0], 0, "The one past the bridge. Thursdays are quietest.", "10 days"),
+        (ids[0], 1, "Thursday it is.", "9 days"),
+        (ids[1], 2, "A newspaper ends. That's the whole argument, and it took you two sentences.", "6 days"),
+        (ids[1], 4, "Counterpoint: the bottom of a feed is where I discover it's half past one.", "5 days"),
+    ]
+    aged = []
+    for pid, who, content, age in COMMENTS:
+        c = call(f"/posts/{pid}/comments", {"content": content},
+                 token=tokens[EMAILS[who]])
+        aged.append((c["id"], age))
+    print("created comments", [cid for cid, _ in aged])
+    age_comments(aged)
     return 0
 
 

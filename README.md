@@ -125,8 +125,8 @@ else, add that exact origin to `origins` in `backend/app/main.py`.
 ```mermaid
 flowchart LR
     ui([Commons UI<br/>hash router · fetch]) -->|HTTP + JWT| mw[Middleware<br/>CORS · security headers<br/>request log · rate limit]
-    mw --> routers[Routers<br/>auth · users · posts · votes]
-    routers --> deps[Dependencies<br/>get_db · get_current_user<br/>get_current_user_optional · get_owned_post]
+    mw --> routers[Routers<br/>auth · users · posts · votes · comments]
+    routers --> deps[Dependencies<br/>get_db · get_current_user · get_current_user_optional<br/>get_owned_post · get_owned_comment]
     deps --> orm[SQLAlchemy models]
     orm --> db[(PostgreSQL)]
     routers --> schemas[Pydantic schemas<br/>validate in · serialise out]
@@ -142,12 +142,12 @@ backend/
     main.py            app setup, middleware, exception handlers, /healthz
     config.py          env-driven settings (pydantic-settings)
     database.py        engine + pooled session, get_db dependency
-    models.py          ORM tables: Post, User, Vote
+    models.py          ORM tables: Post, User, Vote, Comment
     schemas.py         request/response models
     oauth2.py          JWT create/verify, get_current_user(_optional)
     limiter.py         shared slowapi limiter
     logging_config.py  dictConfig setup
-    routers/           auth.py · user.py · post.py · vote.py
+    routers/           auth.py · user.py · post.py · vote.py · comment.py
   alembic/             migrations
   tests/               pytest suite + fixtures
   scripts/             coverage_badge.py
@@ -179,7 +179,7 @@ One page, hash routes.
 | Route | Screen |
 | --- | --- |
 | `#/` | Feed (public). Opens with a masthead for anyone not signed in — a line of type saying what this is, and in demo mode the notice too. Debounced title search drives `?search=`; infinite scroll with a visible end state; skeletons while loading. |
-| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. The byline links to the author. |
+| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. |
 | `#/u/:username` | Everything one person has written — the feed's cards and rules with a single author, including their drafts staying theirs. |
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, character count. `POST` to create; `PATCH` with only the changed fields to edit. |
@@ -195,7 +195,10 @@ One page, hash routes.
 | `POST` | `/posts/` | bearer | create |
 | `PUT` | `/posts/{id}` | bearer | full replace (author only) |
 | `PATCH` | `/posts/{id}` | bearer | partial update (author only) |
-| `DELETE` | `/posts/{id}` | bearer | author only |
+| `DELETE` | `/posts/{id}` | bearer | author only — cascades to its votes and comments |
+| `GET` | `/posts/{id}/comments` | optional | a post's comments, oldest first, paginated — 404 if the post isn't yours to see |
+| `POST` | `/posts/{id}/comments` | bearer | say something (1–2000 characters, trimmed) |
+| `DELETE` | `/comments/{id}` | bearer | whoever wrote it, and nobody else |
 | `POST` | `/vote/` | bearer | `{post_id, dir}` — `dir` 1 = up, 0 = remove |
 | `GET` | `/users/me` | bearer | who the caller is — `{id, username, email}` |
 | `GET` | `/users/{username}` | – | a public profile: no email, ever |
@@ -207,8 +210,8 @@ One page, hash routes.
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 107 tests, coverage gate at 85%
-cd frontend && npm test          # 180 Playwright tests, no Postgres needed
+cd backend && pytest -q          # 135 tests, coverage gate at 85%
+cd frontend && npm test          # 207 Playwright tests, no Postgres needed
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
@@ -233,7 +236,8 @@ cd frontend && npm install && npx playwright install chromium
 | `transitions.spec.js` | The title morph both ways, the name being released afterwards, reduced motion starting no transition at all, a browser without the API still navigating, and the per-card stagger staying gone. |
 | `identity.spec.js` | Registering with a username, a taken name named as the problem, no address anywhere on screen, profiles listing only that person's posts (and keeping their drafts), and — the one that matters — signing in on a browser with no local history and still seeing Edit only on your own posts. |
 | `masthead.spec.js` | Shown to strangers, gone once signed in, out of the way while searching, and — in demo mode — carrying the notice so it's said once rather than twice. |
-| `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, and survives a refresh — then forgets everything on **Reset the demo**. |
+| `comments.spec.js` | Saying something and seeing it before the server answers, getting your words back when the write fails, removing your own and only your own (not even as the author of the post), a draft having no conversation to read or join, and a deleted post taking its comments with it. |
+| `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, opens the long post on a real thread, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
 
 CI runs both suites on every push, checks `black`, verifies the migrations apply to an
@@ -459,7 +463,8 @@ of these was a deliberate pass over code that already worked:
 - [x] Playwright in CI, coverage gate, `alembic check`, Dependabot
 - [x] A live demo that runs on a static host, with the suite run against it too
 - [x] Usernames and profiles — the email stops being anyone's public name
-- [ ] Comments, refresh tokens, full-text search
+- [x] Comments — a nested resource with its own ownership rule and real cascades
+- [ ] Refresh tokens, follows, full-text search
 
 The longer version — what I'd change, what I'd skip, and why — is in
 [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).

@@ -16,7 +16,8 @@
     "'16m ago / 3h ago / 5d ago' whenever someone opens it, instead of drifting",
     "further into the past the longer this file sits in git.",
     "",
-    "votes[].post is a 1-based index into posts[], not a post id."
+    "votes[].post and comments[].post are both 1-based indexes into posts[],",
+    "not post ids."
   ],
 
   "users": [
@@ -112,6 +113,63 @@
       "minutes_ago": 4,
       "title": "The good mug",
       "content": "There are nine mugs in the cupboard and one of them is the good mug. Everyone in the house knows which one. Nobody has ever explained the criteria, and I am not confident any of us could."
+    }
+  ],
+
+  "comments": [
+    {
+      "post": 2,
+      "author": "tessa.ward@example.com",
+      "minutes_ago": 19800,
+      "content": "Throughstones. I've walked past that wall a hundred times and never once thought about what's holding the two faces together."
+    },
+    {
+      "post": 2,
+      "author": "j.okafor@example.com",
+      "minutes_ago": 18720,
+      "content": "The bit that got me is rebuilding it with the lean. Most people would have taken the chance to \"fix\" it and told themselves that was respect."
+    },
+    {
+      "post": 2,
+      "author": "del.arriaga@example.com",
+      "minutes_ago": 18600,
+      "content": "It was tempting, believe me. I had the string line out and everything."
+    },
+    {
+      "post": 2,
+      "author": "rafa.linden@example.com",
+      "minutes_ago": 12240,
+      "content": "Six weekends for a wall that was already standing. I mean this as a compliment."
+    },
+    {
+      "post": 2,
+      "author": "maren.holt@example.com",
+      "minutes_ago": 8640,
+      "content": "\"The stones are the same stones.\" Going to be thinking about that one for a while."
+    },
+    {
+      "post": 3,
+      "author": "maren.holt@example.com",
+      "minutes_ago": 14400,
+      "content": "A newspaper ends. That's the whole argument, and it took you two sentences."
+    },
+    {
+      "post": 3,
+      "author": "del.arriaga@example.com",
+      "minutes_ago": 13000,
+      "content": "Counterpoint: the bottom of a feed is where I discover it's half past one."
+    },
+    {
+      "post": 13,
+      "author": "tessa.ward@example.com",
+      "minutes_ago": 10,
+      "content": "Throwing out the list is the part that counts. Keeping one turns a gift into a loan."
+    },
+    {
+      "post": 14,
+      "author": "rafa.linden@example.com",
+      "minutes_ago": 2,
+      "content": "It's never the nicest one, either. Ours has a chip in it."
     }
   ],
 

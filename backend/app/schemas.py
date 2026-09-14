@@ -80,6 +80,51 @@ class PostPage(BaseModel):
     has_prev: bool
 
 
+# A comment is one short thing said in response to a post. Long enough for a
+# paragraph or two, short enough that nobody writes an essay in the margin of
+# somebody else's — and, unlike a post, capped at the API rather than only in
+# the form, because this is the field a script would point at first.
+COMMENT_MAX = 2000
+
+
+class CommentCreate(BaseModel):
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def content_has_something_in_it(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("a comment needs something in it")
+        if len(trimmed) > COMMENT_MAX:
+            raise ValueError(f"a comment can be at most {COMMENT_MAX} characters")
+        return trimmed
+
+
+class CommentOut(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+    post_id: int
+    user_id: int
+    user: UserOut
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentPage(BaseModel):
+    """A page of comments. Deliberately the same shape as ``PostPage`` — a
+    client that can page through one can page through the other without
+    learning a second set of field names."""
+
+    items: list[CommentOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    has_next: bool
+    has_prev: bool
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr

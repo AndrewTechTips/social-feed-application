@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .limiter import limiter
 from .logging_config import configure_logging
-from .routers import post, user, auth, vote
+from .routers import post, user, auth, vote, comment
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,7 @@ app.include_router(post.router)
 app.include_router(user.router)
 app.include_router(auth.router)
 app.include_router(vote.router)
+app.include_router(comment.router)
 
 
 @app.get("/")

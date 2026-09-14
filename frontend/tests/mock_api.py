@@ -15,6 +15,9 @@ Test-only helpers (prefixed __ so they can't be mistaken for the real API):
   POST /__seed   {count, author?}       create N published posts
   POST /__fail_next {method, path, status, detail?}
                                         force the next matching request to fail
+  GET  /__state                         the whole store, for assertions about
+                                        rows with no public read path — a
+                                        cascade being the obvious one
 """
 
 from __future__ import annotations
@@ -34,6 +37,8 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # refuses — which is how a suite certifies a bug.
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_-]{2,19}$")
 RESERVED_USERNAMES = {"me", "admin", "api", "root", "commons"}
+# Mirrors schemas.COMMENT_MAX.
+COMMENT_MAX = 2000
 LOCK = threading.Lock()
 
 
@@ -50,8 +55,10 @@ class State:
         self.tokens: dict[str, str] = {}  # token -> email
         self.posts: dict[int, dict] = {}  # id -> post row
         self.votes: set[tuple[str, int]] = set()  # (email, post_id)
+        self.comments: dict[int, dict] = {}  # id -> comment row
         self.next_user_id = 1
         self.next_post_id = 1
+        self.next_comment_id = 1
         self.fail_next: list[dict] = []
 
     # — users / auth ------------------------------------------------------------
@@ -126,6 +133,45 @@ class State:
         self.next_post_id += 1
         return row
 
+    # — comments ------------------------------------------------------------------
+    def comment_out(self, row: dict) -> dict:
+        author = row["author_email"]
+        return {
+            "id": row["id"],
+            "content": row["content"],
+            "created_at": row["created_at"],
+            "post_id": row["post_id"],
+            "user_id": self.users[author]["id"],
+            "user": self.public_user(author),
+        }
+
+    def add_comment(self, post_id: int, author_email: str, content: str) -> dict:
+        row = {
+            "id": self.next_comment_id,
+            "post_id": post_id,
+            "author_email": author_email,
+            "content": content,
+            # offset by the id so created_at ordering is stable and distinct,
+            # the same trick add_post uses
+            "created_at": now_iso(offset_seconds=self.next_comment_id),
+        }
+        self.comments[row["id"]] = row
+        self.next_comment_id += 1
+        return row
+
+    def comments_on(self, post_id: int) -> list[dict]:
+        """Oldest first — a thread is read top to bottom."""
+        rows = [r for r in self.comments.values() if r["post_id"] == post_id]
+        rows.sort(key=lambda r: (r["created_at"], r["id"]))
+        return rows
+
+    def drop_comments_on_post(self, post_id: int) -> None:
+        """ON DELETE CASCADE, by hand. The real schema does this in Postgres;
+        here it has to be remembered, which is exactly why there's a test for
+        it on both sides."""
+        for cid in [c["id"] for c in self.comments.values() if c["post_id"] == post_id]:
+            del self.comments[cid]
+
 
 ST = State()
 
@@ -188,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
     def _may_see(self, row: dict, viewer: str | None) -> bool:
         """Published posts are public; a draft belongs to its author.
 
-        Mirrors _visible_to() in backend/app/routers/post.py. If the two ever
+        Mirrors visible_to() in backend/app/routers/post.py. If the two ever
         disagree, this mock stops being worth having.
         """
         return row["published"] or row["author_email"] == viewer
@@ -249,6 +295,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if path == "/__seed" and method == "POST":
             return self._seed(self._json())
+        if path == "/__state" and method == "GET":
+            # The demo adapter's equivalent is its localStorage blob, which a
+            # spec reads straight out of the page. Same shape, same purpose:
+            # after a post is deleted its comments have no URL left to ask
+            # about, and "did the cascade run" needs some way to be answered.
+            return self._send(
+                200,
+                {
+                    "posts": list(ST.posts.values()),
+                    "comments": list(ST.comments.values()),
+                    "votes": [list(v) for v in ST.votes],
+                },
+            )
         if path == "/__fail_next" and method == "POST":
             rule = self._json()
             ST.fail_next.append(
@@ -280,6 +339,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._create_post(self._json())
         if path == "/vote/" and method == "POST":
             return self._vote(self._json())
+
+        m = re.match(r"^/posts/(\d+)/comments$", path)
+        if m:
+            pid = int(m.group(1))
+            if method == "GET":
+                return self._list_comments(pid, query)
+            if method == "POST":
+                return self._create_comment(pid, self._json())
+
+        m = re.match(r"^/comments/(\d+)$", path)
+        if m and method == "DELETE":
+            return self._delete_comment(int(m.group(1)))
 
         m = re.match(r"^/posts/(\d+)$", path)
         if m:
@@ -530,6 +601,111 @@ class Handler(BaseHTTPRequestHandler):
             )
         del ST.posts[pid]
         ST.votes = {(e, p) for (e, p) in ST.votes if p != pid}
+        ST.drop_comments_on_post(pid)
+        self._send(204, None)
+
+    # — comments -------------------------------------------------------------
+    # Comments inherit the post's visibility whole: a draft you can't see has
+    # no comments as far as you're concerned, and you can't add one either.
+    # Mirrors backend/app/routers/comment.py.
+    def _visible_post(self, pid: int, viewer: str | None) -> dict | None:
+        row = ST.posts.get(pid)
+        if not row or not self._may_see(row, viewer):
+            self._send(404, {"detail": f"Post with id: {pid} was not found"})
+            return None
+        return row
+
+    def _list_comments(self, pid: int, query: dict) -> None:
+        viewer = ST.email_for(self._token())
+        if self._visible_post(pid, viewer) is None:
+            return
+        try:
+            page = max(1, int(query.get("page", ["1"])[0]))
+            page_size = int(query.get("page_size", ["20"])[0])
+        except ValueError:
+            return self._send(422, {"detail": "bad pagination"})
+        if not (1 <= page_size <= 100):
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["query", "page_size"],
+                            "msg": "out of range",
+                            "type": "value_error",
+                        }
+                    ]
+                },
+            )
+
+        rows = ST.comments_on(pid)
+        total = len(rows)
+        pages = (total + page_size - 1) // page_size if total else 0
+        start = (page - 1) * page_size
+        self._send(
+            200,
+            {
+                "items": [ST.comment_out(r) for r in rows[start : start + page_size]],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": pages,
+                "has_next": page < pages,
+                "has_prev": page > 1,
+            },
+        )
+
+    def _create_comment(self, pid: int, data: dict) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        if self._visible_post(pid, email) is None:
+            return
+        content = data.get("content")
+        if not isinstance(content, str) or not content.strip():
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["body", "content"],
+                            "msg": "a comment needs something in it",
+                            "type": "value_error",
+                        }
+                    ]
+                },
+            )
+        content = content.strip()
+        if len(content) > COMMENT_MAX:
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["body", "content"],
+                            "msg": f"a comment can be at most {COMMENT_MAX} characters",
+                            "type": "value_error",
+                        }
+                    ]
+                },
+            )
+        row = ST.add_comment(pid, email, content)
+        self._send(201, ST.comment_out(row))
+
+    def _delete_comment(self, cid: int) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        row = ST.comments.get(cid)
+        if not row:
+            return self._send(404, {"detail": f"Comment with id: {cid} does not exist"})
+        # Yours to remove and nobody else's — the author of the post it sits on
+        # doesn't get to either.
+        if row["author_email"] != email:
+            return self._send(
+                403, {"detail": "Not authorized to perform requested action"}
+            )
+        del ST.comments[cid]
         self._send(204, None)
 
     def _vote(self, data: dict) -> None:

@@ -184,6 +184,19 @@ const test = base.test.extend({
           await install();
         },
         failNext: async (rule) => {
+          // Prefer the adapter the page is actually running. The Node-side
+          // backend only reaches the browser through an init script, which
+          // runs on a *document* load — so queueing a failure there after the
+          // app is already up would arrive too late to fail anything. The
+          // control surface config.js puts on window is the live store.
+          const queued = await page
+            .evaluate((r) => {
+              if (!window.__commonsDemo) return false;
+              window.__commonsDemo.failNext(r);
+              return true;
+            }, rule)
+            .catch(() => false);
+          if (queued) return;
           backend.control.failNext(rule);
           await install();
         },
@@ -195,6 +208,21 @@ const test = base.test.extend({
           });
           await install();
         },
+        // What's actually in the store, for the handful of assertions that
+        // have no public read path — a cascade, mostly: once a post is
+        // deleted its comments have no URL left to ask about.
+        //
+        // Read out of the *page*, not out of the Node-side backend: in demo
+        // mode the browser's localStorage is the authoritative copy, and
+        // anything the test did through the UI happened there.
+        dump: async (target) =>
+          target.evaluate(() => {
+            try {
+              return JSON.parse(localStorage.getItem("commons.demo.v1")) || {};
+            } catch (e) {
+              return {};
+            }
+          }),
         signIn: async (target, email, password) => {
           const token = backend.control.tokenFor(email, password);
           if (!token) throw new Error(`demo backend refused a login for ${email}`);
@@ -233,6 +261,8 @@ const test = base.test.extend({
       // request on the floor. The demo branch queues a failure inside the
       // adapter instead; same observable result.
       breakFeed: () => page.route(/\/posts\//, (route) => route.abort()),
+      // The mock's equivalent of reading the demo's localStorage blob.
+      dump: async () => (await ctx.get(`${API_ORIGIN}/__state`)).json(),
       signIn: async (target, email, password) => {
         const res = await target.request.post(`${API_ORIGIN}/login`, {
           form: { username: email, password },

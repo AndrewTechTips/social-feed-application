@@ -434,7 +434,7 @@ moment is better than bolting a banner onto a feed.
 > notice moved into it rather than being repeated: `main.js` stands the band down when
 > the masthead has it, so the sentence is on screen exactly once, always.
 
-**1.5 — Comments — 1.5–2 days.**
+**1.5 ✅ — Comments — 1.5–2 days.**
 The most conspicuous missing feature of a social feed, and the one that adds the most
 backend surface worth reviewing: a nested resource, cascade deletes, per-resource pagination,
 its own ownership rules, and a second place `get_owned_*` earns its keep. On the frontend it
@@ -443,6 +443,41 @@ patterns cover.
 *Do this before follows, profiles or real-time.*
 *Touches:* `models.py`, `schemas.py`, new `routers/comment.py`, migration, backend tests,
 `views/post.js`, `mock_api.py` + the demo adapter, new spec.
+
+> **Done (2026-09-14).** `Comment` is `id · content · created_at · post_id · user_id`,
+> both foreign keys `ON DELETE CASCADE` **at the database**, not in the ORM — the same
+> arrangement votes already had, so the rule holds whoever issues the DELETE. Two
+> indexes: `(post_id, created_at)`, which serves the only query this table really has
+> and hands back the ordering without a sort, and `user_id`, which nothing reads today
+> but deleting an account does. `routers/comment.py` carries `get_owned_comment` in the
+> exact shape of `get_owned_post`, and `get_visible_post`, which is just `visible_to`
+> from the post router applied one level down. Two path shapes on purpose: reading and
+> writing are things you do *to a post* (`/posts/{id}/comments`), removing one is
+> something you do to a comment you wrote (`/comments/{id}`).
+>
+> **Three design calls.** *No edit.* The plan didn't ask, and an edit endpoint means
+> `updated_at`, an "edited" marker, an edit affordance and a second form — it's not the
+> cheap half of a feature, it's most of another one. *A post's author can't delete
+> comments on it.* That's moderation, which has its own scope (who may remove what, is
+> the author told, does it leave a tombstone), and granting it here would be a policy
+> decision smuggled in as an ownership check. *Comments run oldest-first* where the feed
+> runs newest-first, because a thread is read like a conversation; the `ORDER BY` breaks
+> ties on `id`, since `now()` in Postgres is the transaction's clock and a handful of
+> inserts can share a timestamp to the microsecond.
+>
+> **The mirror, this time up front.** Both stand-ins got the whole thing — endpoints,
+> the draft rule, the cascade — and the new `comments.spec.js` runs against both, so
+> the gap that opened twice before (draft visibility, then usernames) had no chance to.
+> `seed.json` gained eight comments, five of them on the long post, so the published
+> demo opens on a conversation rather than an empty state.
+>
+> **Two things the work turned up.** The demo's saved state is versioned, and a
+> returning visitor's v1 blob has no `comments` array — every read of one would have
+> been a TypeError on somebody's *second* visit, so `STATE_VERSION` is now its own
+> constant and bumping it is what throws the old shape away. And `api.failNext` in the
+> demo fixture only ever reached the browser through an init script, which runs on a
+> document load — queueing a failure after the app was up quietly failed nothing. It
+> now prefers the live control surface on `window`.
 
 **1.6 ✅ — Usernames and profiles — 1 day.**
 Fixes three things at once: S3 (the API stops handing strangers email addresses), the fact

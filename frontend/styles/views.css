@@ -183,6 +183,163 @@
   flex: 1;
 }
 
+/* — comments ------------------------------------------------------------------
+   Below the post, inside the same reading column. Deliberately *not* cards:
+   a card says "this is a thing in a list of like things", and a comment is a
+   remark in the margin of something else. So: a rule across the top, a row of
+   type per remark, and nothing boxed.
+   -------------------------------------------------------------------------- */
+.comments {
+  margin-top: var(--s-7);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--border);
+}
+.comments__head {
+  font-size: var(--fs-h2);
+  margin-bottom: var(--s-5);
+}
+.comments__count {
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+  font-family: var(--font-ui);
+  font-weight: 400;
+  margin-left: var(--s-2);
+  font-variant-numeric: tabular-nums;
+}
+.comments__list {
+  list-style: none;
+  /* base.css zeroes margin but not padding, and a bare <ol> carries a 40px
+     padding-inline-start for markers this list doesn't show — which left the
+     thread out of line with the composer directly above it. */
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+.comments__status {
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+.comments__more {
+  margin-top: var(--s-5);
+  display: flex;
+  justify-content: center;
+}
+
+.comment {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-3);
+}
+.comment__body {
+  min-width: 0;
+}
+.comment__meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-1);
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+}
+.comment__author {
+  color: var(--text-dim);
+  font-weight: 500;
+  text-decoration: none;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .comment__author:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+}
+.comment__author:active {
+  color: var(--text);
+}
+.comment__text {
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--text) 92%, transparent);
+  max-width: var(--measure);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+/* The remove control stays out of the way until you're near the comment —
+   it belongs to one row, not to the page, and a row of live buttons down the
+   margin reads as a toolbar. On touch there's no hover, so it's simply always
+   there. */
+.comment__remove {
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+  font-family: inherit;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .comment__remove {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .comment:hover .comment__remove,
+  .comment__remove:focus-visible {
+    opacity: 1;
+  }
+  .comment__remove:hover {
+    color: var(--danger);
+  }
+}
+.comment__remove:active {
+  color: var(--danger);
+}
+/* Thirteen-pixel type is a fine target for a mouse and a poor one for a thumb.
+   Padding takes the hit box to 44px and an equal negative margin gives the
+   space back, so the meta row looks identical either way. */
+@media (pointer: coarse) {
+  .comment__remove {
+    min-height: 44px;
+    min-width: 44px;
+    padding: var(--s-3);
+    margin: calc(var(--s-3) * -1) calc(var(--s-3) * -1) calc(var(--s-3) * -1) auto;
+  }
+}
+/* A comment that's on screen but not yet acknowledged by the server. Dimmed
+   rather than spinner'd: the optimistic append is meant to feel like it's
+   already happened, and a spinner would argue the opposite. */
+.comment--pending {
+  opacity: 0.55;
+}
+
+/* — comment composer ----------------------------------------------------- */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+}
+.composer__row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-3);
+}
+.composer .textarea {
+  min-height: 5.5rem;
+}
+.composer__prompt {
+  margin-bottom: var(--s-6);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+
 /* — auth (sign in / register) --------------------------------------------- */
 .auth {
   display: grid;

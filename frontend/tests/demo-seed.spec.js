@@ -124,6 +124,38 @@ test("the long post fills the reading column", async ({ page }) => {
   expect(paragraphs, "the long post should show off the serif column").toBeGreaterThan(3);
 });
 
+test("the long post opens on a conversation, not an empty state", async ({ page }) => {
+  const onLongest = seed.comments.filter((c) => seed.posts[c.post - 1] === longest);
+  expect(
+    onLongest.length,
+    "the seed should demonstrate comments on the post people actually open"
+  ).toBeGreaterThan(2);
+
+  await page.goto("/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.locator(CARD)).toHaveCount(published.length);
+
+  const heading = page.getByRole("heading", { name: longest.title });
+  await heading.scrollIntoViewIfNeeded();
+  await heading.click();
+
+  await expect(page.locator(".comment")).toHaveCount(onLongest.length);
+  await expect(page.locator(".comments__count")).toHaveText(String(onLongest.length));
+  // Oldest first, and written by people who exist in the seed.
+  await expect(page.locator(".comment__text").first()).toHaveText(onLongest[0].content);
+  const names = seed.users.reduce(
+    (map, u) => Object.assign(map, { [u.email]: u.username }),
+    {}
+  );
+  await expect(page.locator(".comment__author").first()).toHaveText(
+    names[onLongest[0].author]
+  );
+
+  // A stranger can read the thread but has nothing to write with.
+  await expect(page.getByLabel("Add a comment")).toHaveCount(0);
+});
+
 test("what you write survives a refresh, and Reset puts it back", async ({ page }) => {
   const author = seed.users[0];
   await page.goto("/#/login");
