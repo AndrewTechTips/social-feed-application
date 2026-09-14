@@ -15,7 +15,7 @@ def login(
     request: Request,
     user_credentials: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(database.get_db),
-):
+) -> dict[str, str]:
     stmt = select(models.User).where(models.User.email == user_credentials.username)
     user = db.scalar(stmt)
 

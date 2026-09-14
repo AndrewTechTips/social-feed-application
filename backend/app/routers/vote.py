@@ -13,7 +13,7 @@ def vote(
     payload: schemas.Vote,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
-):
+) -> dict[str, str]:
 
     # Same visibility rule as the feed: you can't vote on a draft you aren't
     # allowed to see, and it's reported as missing rather than forbidden.

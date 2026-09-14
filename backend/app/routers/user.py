@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import status, HTTPException, Depends, APIRouter, Query, Request
 from sqlalchemy import select
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 @limiter.limit("10/hour")
 def create_user(
     request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)
-):
+) -> models.User:
     # Two columns can collide independently, and being told "that didn't work"
     # when only one of them is the problem is a miserable way to fill in a form.
     # So look first and name the one that clashed.
@@ -71,7 +71,7 @@ def create_user(
 # it is blocked too — see schemas.RESERVED_USERNAMES — because relying on route
 # ordering alone is one careless reshuffle away from a bug.)
 @router.get("/me", response_model=schemas.MeOut)
-def get_me(current_user: models.User = Depends(oauth2.get_current_user)):
+def get_me(current_user: models.User = Depends(oauth2.get_current_user)) -> models.User:
     """Who the caller is.
 
     Logging in takes an email and a password and hands back a token, which
@@ -86,7 +86,7 @@ def get_me(current_user: models.User = Depends(oauth2.get_current_user)):
 
 
 @router.get("/{username}", response_model=schemas.UserOut)
-def get_user(username: str, db: Session = Depends(get_db)):
+def get_user(username: str, db: Session = Depends(get_db)) -> models.User:
     user = db.scalar(
         select(models.User).where(models.User.username == username.lower())
     )
@@ -105,7 +105,7 @@ def get_user_posts(
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-):
+) -> dict[str, Any]:
     """Everything by one person — same page shape as the feed, same rules.
 
     Including the draft rule: their unpublished posts are theirs, so this shows

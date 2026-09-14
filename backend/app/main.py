@@ -1,8 +1,9 @@
 import logging
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     logger.info("Starting Social Feed API (environment=%s)", settings.environment)
     yield
@@ -61,7 +62,9 @@ SECURITY_HEADERS = {
 
 
 @app.middleware("http")
-async def security_headers(request: Request, call_next):
+async def security_headers(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     response = await call_next(request)
     for header, value in SECURITY_HEADERS.items():
         response.headers.setdefault(header, value)
@@ -75,7 +78,9 @@ async def security_headers(request: Request, call_next):
 
 
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -90,7 +95,7 @@ async def log_requests(request: Request, call_next):
 
 
 @app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={"detail": f"Rate limit exceeded: {exc.detail}"},
@@ -98,7 +103,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     # Log the full traceback server-side, return a generic message to the client
     # so internal details never leak.
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
@@ -116,10 +121,10 @@ app.include_router(comment.router)
 
 
 @app.get("/")
-def root():
+def root() -> dict[str, str]:
     return {"message": "Welcome to my api"}
 
 
 @app.get("/healthz", tags=["Health"])
-def healthz():
+def healthz() -> dict[str, str]:
     return {"status": "ok"}

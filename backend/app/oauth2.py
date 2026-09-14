@@ -17,7 +17,7 @@ ALGORITHM = settings.algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict[str, object]) -> str:
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
@@ -26,7 +26,9 @@ def create_access_token(data: dict) -> str:
     return encoded_jwt
 
 
-def verify_access_token(token: str, credentials_exception) -> schemas.TokenData:
+def verify_access_token(
+    token: str, credentials_exception: HTTPException
+) -> schemas.TokenData:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 

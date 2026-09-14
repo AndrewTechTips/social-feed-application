@@ -13,7 +13,7 @@ room nobody can enter.
 """
 
 import math
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
 from sqlalchemy import select, func
@@ -76,7 +76,7 @@ def get_comments(
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-):
+) -> dict[str, Any]:
     """One page of a post's comments, **oldest first**.
 
     The feed runs newest-first because you arrive at it to see what's new. A
@@ -123,7 +123,7 @@ def create_comment(
     payload: schemas.CommentCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
-):
+) -> models.Comment:
     get_visible_post(db, post_id, current_user)
 
     comment = models.Comment(
@@ -139,7 +139,7 @@ def create_comment(
 def delete_comment(
     comment: models.Comment = Depends(get_owned_comment),
     db: Session = Depends(get_db),
-):
+) -> Response:
     """Yours to remove, and nobody else's.
 
     Note what this deliberately isn't: the author of the *post* can't delete
