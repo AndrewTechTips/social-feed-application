@@ -444,7 +444,7 @@ patterns cover.
 *Touches:* `models.py`, `schemas.py`, new `routers/comment.py`, migration, backend tests,
 `views/post.js`, `mock_api.py` + the demo adapter, new spec.
 
-**1.6 — Usernames and profiles — 1 day.**
+**1.6 ✅ — Usernames and profiles — 1 day.**
 Fixes three things at once: S3 (the API stops handing strangers email addresses), the fact
 that the UI currently derives display names by splitting emails at `@` (`feed.js:17` — which
 means **the demo would show every seeded author's email local-part**), and the absence of any
@@ -452,6 +452,24 @@ means **the demo would show every seeded author's email local-part**), and the a
 identity, drop `email` from `UserOut`, add `GET /users/{username}/posts`.
 *Touches:* `models.py`, `schemas.py`, `routers/user.py`, migration, `store.js` (`isMine`
 currently compares emails), `views/*`, seed data, tests.
+
+> **Done (2026-09-14).** `username` is unique, lower-folded (so a plain UNIQUE is
+> case-insensitive too), 3–20 of `[a-z0-9_-]` starting with a letter, with `me` and a
+> few others reserved so they can't shadow a route. The migration backfills from the
+> email local-part with collision suffixes and is tested against a table that already
+> has people in it. `UserOut` has no email; `GET /users/{username}` and
+> `/users/{username}/posts` are new, the latter sharing the feed's pagination *and* its
+> draft rule through one helper.
+>
+> **The gap the one-liner didn't name:** a token says nothing about who it signed in,
+> and once the feed stopped carrying addresses there was nothing left to match on. Added
+> `GET /users/me` → `{id, username, email, created_at}`; the client calls it straight
+> after login and keeps `{token, id, username}`. `isMine` compares ids now.
+>
+> Two bugs this turned up: the route dedupe from 1.3 could leave a signed-in view on
+> screen after signing out (both queued hashchanges saw the hash they started from and
+> skipped), and `page.goto("/")` reloads the document where `page.goto("/#/")` doesn't —
+> which silently signs a demo-mode test back out.
 
 **1.7 — Full-text search — 4–6 h.**
 Replace `LIKE '%…%'` over titles with a Postgres `tsvector` column over title **and** body,

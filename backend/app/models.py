@@ -42,6 +42,12 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # The public identity. Everything a stranger can see about a person is this
+    # word — the email is a credential and never leaves the account it belongs
+    # to. Stored lower-case (schemas.USERNAME_RE enforces it) so a plain unique
+    # constraint is also a case-insensitive one, with no functional index and no
+    # second normalised column to keep in step.
+    username: Mapped[str] = mapped_column(unique=True)
     email: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(

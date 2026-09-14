@@ -37,6 +37,22 @@ const { pathToFileURL } = require("url");
 const API_PORT = process.env.API_PORT || "8000";
 const API_ORIGIN = `http://localhost:${API_PORT}`;
 
+// Specs identify people by email because that's what you sign in with. A
+// username is required now too, so derive a legal one when a spec doesn't care
+// what it is — the same shape the migration used for rows that predated the
+// column.
+function usernameFor(email) {
+  const base =
+    String(email || "")
+      .split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "")
+      .replace(/^[0-9_-]+/, "") || "person";
+  let name = base.slice(0, 20);
+  while (name.length < 3) name += "x";
+  return name;
+}
+
 const DEMO_PROJECT = "demo";
 const isDemo = (testInfo) => testInfo.project.name === DEMO_PROJECT;
 
@@ -57,6 +73,12 @@ async function newDemoBackend() {
 
 // Runs in the page before any app code: writing the key the demo backend reads
 // on boot is all the "seeding" that's needed.
+//
+// Worth knowing: this also clears the session, so every test starts signed out
+// — and it runs on every *document* load, not every navigation. page.goto("/")
+// has no fragment and so reloads the document; page.goto("/#/") doesn't. A test
+// that signs in through the UI and then navigates with the first form will find
+// itself signed out again.
 function installDemoState(state) {
   try {
     if (state) localStorage.setItem("commons.demo.v1", JSON.stringify(state));
@@ -71,14 +93,18 @@ function installDemoState(state) {
 
 // Plant a session in localStorage so a test can start on a signed-in screen
 // without walking the whole sign-in flow first.
-async function installSession(page, email, token) {
+//
+// The session is { token, id, username } — a token alone no longer tells the
+// app whose posts are whose, which is exactly what /users/me exists to answer.
+// So the fixture asks the same question the app asks.
+async function installSession(page, session) {
   await page.addInitScript(
-    ([e, t]) => {
+    (s) => {
       try {
-        localStorage.setItem("commons.session", JSON.stringify({ email: e, token: t }));
+        localStorage.setItem("commons.session", JSON.stringify(s));
       } catch (err) {}
     },
-    [email, token]
+    session
   );
   // An init script only runs on a document load, and this app is a hash router:
   // once a document is up, every goto is a same-document fragment change that
@@ -153,8 +179,8 @@ const test = base.test.extend({
           // specs can keep calling `(await api.seed(1, x)).json()`.
           return { json: async () => ({ ok: true, created }) };
         },
-        register: async (email, password) => {
-          backend.control.register(email, password);
+        register: async (email, password, username) => {
+          backend.control.register(email, password, username);
           await install();
         },
         failNext: async (rule) => {
@@ -172,11 +198,16 @@ const test = base.test.extend({
         signIn: async (target, email, password) => {
           const token = backend.control.tokenFor(email, password);
           if (!token) throw new Error(`demo backend refused a login for ${email}`);
+          const who = backend.control.whoIs(email);
           // onto the page's *own* context, which for several mobile specs is
           // one they built themselves rather than the `context` fixture — the
           // new token has to reach the page that's about to use it.
           await target.context().addInitScript(installDemoState, currentDemoState());
-          await installSession(target, email, token);
+          await installSession(target, {
+            token,
+            id: who.id,
+            username: who.username,
+          });
         },
         origin: "demo://in-browser",
       });
@@ -194,8 +225,10 @@ const test = base.test.extend({
       reset: () => post("/__reset"),
       seed: (count, author) => post("/__seed", author ? { count, author } : { count }),
       failNext: (rule) => post("/__fail_next", rule),
-      register: (email, password) =>
-        ctx.post(`${API_ORIGIN}/users/`, { data: { email, password } }),
+      register: (email, password, username) =>
+        ctx.post(`${API_ORIGIN}/users/`, {
+          data: { email, password, username: username || usernameFor(email) },
+        }),
       // There *is* a network here, so the bluntest possible outage: drop the
       // request on the floor. The demo branch queues a failure inside the
       // adapter instead; same observable result.
@@ -206,7 +239,15 @@ const test = base.test.extend({
         });
         if (!res.ok()) throw new Error(`mock /login refused a login for ${email}`);
         const { access_token: token } = await res.json();
-        await installSession(target, email, token);
+
+        // The same second call the app makes: a token says nothing about who
+        // it signed in.
+        const me = await target.request.get(`${API_ORIGIN}/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!me.ok()) throw new Error(`mock /users/me refused a token for ${email}`);
+        const { id, username } = await me.json();
+        await installSession(target, { token, id, username });
       },
       origin: API_ORIGIN,
     });
@@ -222,4 +263,4 @@ const test = base.test.extend({
 // one with real latency it silently matches a skeleton instead.
 const CARD = ".card:not(.card--skeleton)";
 
-module.exports = { test, expect: base.expect, API_ORIGIN, CARD };
+module.exports = { test, expect: base.expect, API_ORIGIN, CARD, usernameFor };

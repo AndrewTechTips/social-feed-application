@@ -94,12 +94,23 @@ def stagger(ids: list[int]) -> None:
 
 def main() -> int:
     wipe()
-    PEOPLE = ["maren.holt@example.com", "j.okafor@example.com",
-              "tessa.ward@example.com", "rafa.linden@example.com"]
+    # Same people, same usernames, as frontend/js/demo/seed.json — so the
+    # screenshots and the published demo show the same feed.
+    PEOPLE = {
+        "maren.holt@example.com": "marenholt",
+        "j.okafor@example.com": "jokafor",
+        "tessa.ward@example.com": "tessaward",
+        "rafa.linden@example.com": "rafalinden",
+        "del.arriaga@example.com": "delarriaga",
+    }
+    EMAILS = list(PEOPLE)  # POSTS below refers to people by position
     tokens = {}
     for email in PEOPLE:
         try:
-            call("/users/", {"email": email, "password": PW})
+            call(
+                "/users/",
+                {"username": PEOPLE[email], "email": email, "password": PW},
+            )
         except urllib.error.HTTPError as e:
             if e.code != 409:
                 raise
@@ -166,7 +177,7 @@ def main() -> int:
 
     ids = []
     for entry in POSTS:
-        who, title, content = PEOPLE[entry[0]], entry[1], entry[2]
+        who, title, content = EMAILS[entry[0]], entry[1], entry[2]
         published = entry[3] if len(entry) > 3 else True
         p = call("/posts/", {"title": title, "content": content, "published": published},
                  token=tokens[who])
@@ -176,7 +187,7 @@ def main() -> int:
     VOTES = {ids[1]: 4, ids[2]: 2, ids[3]: 1, ids[5]: 3, ids[6]: 1,
              ids[8]: 2, ids[9]: 3, ids[0]: 2, ids[7]: 1}
     for pid, n in VOTES.items():
-        for email in itertools.islice(PEOPLE, n):
+        for email in itertools.islice(EMAILS, n):
             try:
                 call("/vote/", {"post_id": pid, "dir": 1}, token=tokens[email])
             except urllib.error.HTTPError:

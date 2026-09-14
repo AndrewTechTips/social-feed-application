@@ -1,7 +1,7 @@
 // The full journey the brief asks for:
 // register -> sign in -> feed -> create -> vote -> edit -> delete -> sign out.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, usernameFor } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = () => `person-${Date.now()}@commons.test`;
@@ -24,13 +24,17 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   await page.getByRole("link", { name: "Create an account" }).click();
   await expect(page.getByRole("heading", { name: "Make an account." })).toBeVisible();
 
+  await page.getByLabel("Username").fill(usernameFor(email));
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/#\/$/);
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  // The header names you by username now. The address is a credential and
+  // shouldn't be on screen at all.
+  await expect(page.locator(".account__email")).toHaveText(usernameFor(email));
+  await expect(page.getByText(email, { exact: true })).toHaveCount(0);
 
   // — create a post ------------------------------------------------------
   await page.getByRole("link", { name: "Write a post" }).click();

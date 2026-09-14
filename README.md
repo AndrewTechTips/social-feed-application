@@ -32,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step. |
-| **Tested** | 76 pytest tests (94% coverage) · 151 Playwright end-to-end tests, run against two API implementations |
+| **Tested** | 107 pytest tests (95% coverage) · 180 Playwright end-to-end tests, run against two API implementations |
 | **Shipped** | Docker · GitHub Actions → Docker Hub |
 
 ---
@@ -160,7 +160,7 @@ frontend/
     store.js           tiny reactive store: session, feed cache, local vote mirror
     router.js          hash router with :params and a ?query
     ui.js              h() builder, toasts, relative time, avatars, skeletons, vote control
-    views/             feed.js · post.js · auth.js · compose.js
+    views/             feed.js · post.js · profile.js · auth.js · compose.js
     components/        palette.js — the ⌘K command palette
     actions.js         the few things both the header and the palette can do
     transitions.js     the card-title → post-title view transition
@@ -179,15 +179,16 @@ One page, hash routes.
 | Route | Screen |
 | --- | --- |
 | `#/` | Feed (public). Opens with a masthead for anyone not signed in — a line of type saying what this is, and in demo mode the notice too. Debounced title search drives `?search=`; infinite scroll with a visible end state; skeletons while loading. |
-| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. |
-| `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Register signs you in, so you land on the feed ready to post. |
+| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. The byline links to the author. |
+| `#/u/:username` | Everything one person has written — the feed's cards and rules with a single author, including their drafts staying theirs. |
+| `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, character count. `POST` to create; `PATCH` with only the changed fields to edit. |
 
 ### The API
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/users/` | – | register (password 8–72 bytes), 10/hour |
+| `POST` | `/users/` | – | register — username, email, password (8–72 bytes), 10/hour |
 | `POST` | `/login` | – | form login → `{access_token}`, 5/min |
 | `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — drafts only if they're yours |
 | `GET` | `/posts/{id}` | optional | one post + vote count |
@@ -196,6 +197,9 @@ One page, hash routes.
 | `PATCH` | `/posts/{id}` | bearer | partial update (author only) |
 | `DELETE` | `/posts/{id}` | bearer | author only |
 | `POST` | `/vote/` | bearer | `{post_id, dir}` — `dir` 1 = up, 0 = remove |
+| `GET` | `/users/me` | bearer | who the caller is — `{id, username, email}` |
+| `GET` | `/users/{username}` | – | a public profile: no email, ever |
+| `GET` | `/users/{username}/posts` | optional | everything by one person, paginated like the feed |
 | `GET` | `/healthz` | – | liveness probe |
 
 ---
@@ -203,8 +207,8 @@ One page, hash routes.
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 76 tests, coverage gate at 85%
-cd frontend && npm test          # 151 Playwright tests, no Postgres needed
+cd backend && pytest -q          # 107 tests, coverage gate at 85%
+cd frontend && npm test          # 180 Playwright tests, no Postgres needed
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
@@ -227,6 +231,7 @@ cd frontend && npm install && npx playwright install chromium
 | `responsive.spec.js` | No horizontal overflow at 320–1280, the header collapse, ≥44px tap targets, the reading column staying narrow. |
 | `palette.spec.js` | ⌘K: one flat list, a key on every row, filtering the loaded feed without touching the network, each of the five actions, and the shortcuts working outside the palette but staying out of the way while you type. |
 | `transitions.spec.js` | The title morph both ways, the name being released afterwards, reduced motion starting no transition at all, a browser without the API still navigating, and the per-card stagger staying gone. |
+| `identity.spec.js` | Registering with a username, a taken name named as the problem, no address anywhere on screen, profiles listing only that person's posts (and keeping their drafts), and — the one that matters — signing in on a browser with no local history and still seeing Edit only on your own posts. |
 | `masthead.spec.js` | Shown to strangers, gone once signed in, out of the way while searching, and — in demo mode — carrying the notice so it's said once rather than twice. |
 | `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
@@ -241,6 +246,21 @@ image once all of that is green.
 ---
 
 ## Decisions I made
+
+**The username is the public identity; the email is a credential.** A post used
+to carry its author's address, so anyone who could read the feed could collect them
+— and `GET /users/{id}` handed out the rest to anyone who could count. Now people
+have usernames (3–20 characters, letters, digits, `-` and `_`, starting with a
+letter, stored folded so a plain `UNIQUE` is also case-insensitive) and `UserOut`
+has no email in it at all.
+
+**Which meant something had to answer "who am I?".** Logging in takes an email and
+a password and hands back a token, and a token says nothing about the person it
+signed in. That was survivable while the feed carried addresses to match against;
+once it didn't, a browser with no local history could sign in successfully and
+still not know which posts were its own. `GET /users/me` closes it: the client
+asks straight after login and keeps `{id, username}` in the session. Ownership is
+decided by id — the one thing about a person that doesn't change.
 
 **Drafts are an access rule, not a display hint.** The feed used to filter on the search
 term and nothing else, which meant an unpublished post was served to everybody while the
@@ -438,7 +458,8 @@ of these was a deliberate pass over code that already worked:
 - [x] Drafts made private, the login timing oracle closed, indexes added, security headers
 - [x] Playwright in CI, coverage gate, `alembic check`, Dependabot
 - [x] A live demo that runs on a static host, with the suite run against it too
-- [ ] Comments, usernames and profiles, refresh tokens, full-text search
+- [x] Usernames and profiles — the email stops being anyone's public name
+- [ ] Comments, refresh tokens, full-text search
 
 The longer version — what I'd change, what I'd skip, and why — is in
 [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).

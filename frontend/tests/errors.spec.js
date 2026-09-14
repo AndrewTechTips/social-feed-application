@@ -1,7 +1,7 @@
 // The unhappy paths from the brief: wrong password, duplicate email, editing
 // someone else's post, empty fields, backend unreachable.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, usernameFor } = require("./support/fixtures");
 
 test("wrong password shows one friendly line and stays on the page", async ({
   page,
@@ -22,6 +22,7 @@ test("registering a taken email is explained", async ({ page, api }) => {
   await api.register("taken@commons.test", "password123");
   await page.goto("/#/register");
 
+  await page.getByLabel("Username").fill("somebodynew");
   await page.getByLabel("Email").fill("taken@commons.test");
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
@@ -47,7 +48,9 @@ test("you can't open the editor for someone else's post", async ({ page, api }) 
 
   // sign in as a different person
   await page.goto("/#/register");
-  await page.getByLabel("Email").fill(`intruder-${Date.now()}@commons.test`);
+  const intruder = `intruder-${Date.now()}@commons.test`;
+  await page.getByLabel("Username").fill(usernameFor(intruder));
+  await page.getByLabel("Email").fill(intruder);
   await page.getByLabel("Password", { exact: true }).fill("hunter2pw");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/#\/$/);

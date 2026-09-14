@@ -98,6 +98,28 @@
   margin-top: var(--s-3);
 }
 
+/* — profile -------------------------------------------------------------------
+   A feed with one author in it, so it borrows the feed's column and cards and
+   adds only a heading saying whose it is.
+   -------------------------------------------------------------------------- */
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+}
+.profile__name {
+  font-size: var(--fs-h2);
+  overflow-wrap: anywhere;
+}
+.profile__count {
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+  min-height: 1em;
+}
+
 /* — post detail --------------------------------------------------------------- */
 .detail {
   width: 100%;
@@ -118,6 +140,16 @@
 }
 .detail__byline .name {
   color: var(--text-dim);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .detail__byline .name:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+}
+.detail__byline .name:active {
+  color: var(--text);
 }
 .detail__byline .stack {
   display: flex;

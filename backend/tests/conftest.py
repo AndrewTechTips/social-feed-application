@@ -46,22 +46,34 @@ def client(session):
 
 @pytest.fixture
 def test_user(client):
-    user_data = {"email": "andrew@gmail.com", "password": "password1234"}
+    user_data = {
+        "username": "andrew",
+        "email": "andrew@gmail.com",
+        "password": "password1234",
+    }
     res = client.post("/users/", json=user_data)
 
     assert res.status_code == 201
     new_user = res.json()
+    # The response is a UserOut and no longer carries an email — but logging in
+    # still needs one, so put back what we know we sent.
+    new_user["email"] = user_data["email"]
     new_user["password"] = user_data["password"]
     return new_user
 
 
 @pytest.fixture
 def test_user2(client):
-    user_data = {"email": "andrew123@gmail.com", "password": "password1234"}
+    user_data = {
+        "username": "andrew123",
+        "email": "andrew123@gmail.com",
+        "password": "password1234",
+    }
     res = client.post("/users/", json=user_data)
 
     assert res.status_code == 201
     new_user = res.json()
+    new_user["email"] = user_data["email"]
     new_user["password"] = user_data["password"]
     return new_user
 

@@ -7,11 +7,19 @@ from backend.app import settings
 
 def test_create_user(client):
     res = client.post(
-        "/users/", json={"email": "hello123@gmail.com", "password": "password123"}
+        "/users/",
+        json={
+            "username": "hello123",
+            "email": "hello123@gmail.com",
+            "password": "password123",
+        },
     )
-    new_user = schemas.UserOut(**res.json())
-    assert new_user.email == "hello123@gmail.com"
     assert res.status_code == 201
+
+    new_user = schemas.UserOut(**res.json())
+    assert new_user.username == "hello123"
+    # The public shape has no email in it — see test_identity.py.
+    assert "email" not in res.json()
 
 
 def test_login_user(client, test_user):
@@ -57,13 +65,24 @@ def test_incorrect_login(test_user, client, email, password, status_code):
 )
 def test_create_user_password_rules(client, password, status_code):
     res = client.post(
-        "/users/", json={"email": "pwrules@example.com", "password": password}
+        "/users/",
+        json={
+            "username": "pwrules",
+            "email": "pwrules@example.com",
+            "password": password,
+        },
     )
     assert res.status_code == status_code
 
 
 def test_create_user_duplicate_email(client, test_user):
     res = client.post(
-        "/users/", json={"email": test_user["email"], "password": "password1234"}
+        "/users/",
+        json={
+            "username": "somebodyelse",
+            "email": test_user["email"],
+            "password": "password1234",
+        },
     )
     assert res.status_code == 409
+    assert "email" in res.json()["detail"].lower()

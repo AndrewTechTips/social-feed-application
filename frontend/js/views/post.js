@@ -56,9 +56,13 @@ export async function renderPost({ params, isStale }) {
   }
 
   const byline = h("div", { class: "detail__byline" },
-    avatar(post.user.email, "lg"),
+    avatar(post.user.username, "lg"),
     h("div", { class: "stack" },
-      h("span", { class: "name", title: post.user.email }, post.user.email.split("@")[0]),
+      h("a", {
+        class: "name",
+        href: `#/u/${encodeURIComponent(post.user.username)}`,
+        title: `Everything by ${post.user.username}`,
+      }, post.user.username),
       h("span", { style: { display: "inline-flex", alignItems: "center", gap: "8px" } }, timeBits)));
 
   const actions = h("div", { class: "detail__actions" });

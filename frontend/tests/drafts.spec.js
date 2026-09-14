@@ -5,13 +5,14 @@
 // while the UI cheerfully labelled it "Draft". These tests walk that from the
 // outside: write one, then look for it as someone else.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, usernameFor } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = (tag) => `${tag}-${Date.now()}@commons.test`;
 
 async function register(page, email) {
   await page.goto("/#/register");
+  await page.getByLabel("Username").fill(usernameFor(email));
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account" }).click();

@@ -138,6 +138,12 @@
   white-space: nowrap;
   color: var(--text-dim);
   font-size: var(--fs-meta);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .account__email:hover {
+    color: var(--text);
+  }
 }
 
 /* — buttons ------------------------------------------------------------------ */
@@ -364,12 +370,24 @@
   color: var(--text-faint);
   font-size: var(--fs-meta);
 }
+/* The author's name is a link to their posts, but inside a card that is
+   itself mostly one big link — so it stays quiet until you point at it. */
 .card__author {
   color: var(--text-dim);
   max-width: 22ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .card__author:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+}
+.card__author:active {
+  color: var(--text);
 }
 
 /* — vote control ------------------------------------------------------------- */

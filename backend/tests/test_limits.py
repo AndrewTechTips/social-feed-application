@@ -52,13 +52,21 @@ def test_signup_stops_after_ten_an_hour(limited_client):
     for i in range(10):
         res = limited_client.post(
             "/users/",
-            json={"email": f"person{i}@example.com", "password": "password1234"},
+            json={
+                "username": f"person{i}",
+                "email": f"person{i}@example.com",
+                "password": "password1234",
+            },
         )
         assert res.status_code == 201, f"signup {i + 1} should still be allowed"
 
     res = limited_client.post(
         "/users/",
-        json={"email": "one-too-many@example.com", "password": "password1234"},
+        json={
+            "username": "onetoomany",
+            "email": "one-too-many@example.com",
+            "password": "password1234",
+        },
     )
     assert res.status_code == 429
 

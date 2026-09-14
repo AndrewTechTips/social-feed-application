@@ -53,6 +53,21 @@ function resolveIfChanged() {
   resolve();
 }
 
+/**
+ * Forget what's on screen, so the next hashchange redraws it even if the hash
+ * hasn't moved.
+ *
+ * The dedupe above asks "is this screen already up?", and the answer stops
+ * being trustworthy the moment something other than the route changes what a
+ * screen would look like — signing out being the obvious one. Leave a profile,
+ * sign out (which navigates home), and come straight back: both queued events
+ * see the hash they started from, both decide there's nothing to do, and the
+ * page you're left looking at is the one you saw while signed in.
+ */
+export function forgetCurrentScreen() {
+  lastResolvedHash = null;
+}
+
 async function resolve() {
   lastResolvedHash = location.hash;
   const path = currentPath();

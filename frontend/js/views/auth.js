@@ -8,6 +8,10 @@ import { get, setSession } from "../store.js";
 import { navigate } from "../router.js";
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
+// Mirrors schemas.USERNAME_RE in the backend. Case-insensitive here because
+// the server folds what it's given rather than refusing it.
+const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_-]{2,19}$/;
+const USERNAME_HINT = "3–20 characters: letters, digits, - and _";
 
 const MARK = () =>
   h("svg", { viewBox: "0 0 24 24", width: 26, height: 26, "aria-hidden": "true" },
@@ -51,6 +55,15 @@ function field({ id, label, type, autocomplete, hint }) {
 function screen(mode) {
   const isRegister = mode === "register";
 
+  const username = isRegister
+    ? field({
+        id: "username",
+        label: "Username",
+        type: "text",
+        autocomplete: "username",
+        hint: USERNAME_HINT,
+      })
+    : null;
   const email = field({ id: "email", label: "Email", type: "email", autocomplete: "email" });
   const password = field({
     id: "password", label: "Password", type: "password",
@@ -62,6 +75,8 @@ function screen(mode) {
   const submit = h("button", { class: "btn btn--primary btn--block", type: "submit" },
     isRegister ? "Create account" : "Sign in");
   const form = h("form", { class: "auth__form", novalidate: true },
+    // The name people will see comes first; the address is a credential.
+    username ? username.wrap : null,
     email.wrap, password.wrap, formError, submit);
 
   let pending = false;
@@ -69,6 +84,16 @@ function screen(mode) {
   function validate() {
     const ev = email.input.value.trim();
     const pv = password.input.value;
+    if (username) {
+      const uv = username.input.value.trim();
+      username.setError(
+        !uv
+          ? "Pick a username."
+          : !USERNAME_RE.test(uv)
+          ? USERNAME_HINT + ", starting with a letter."
+          : ""
+      );
+    }
     email.setError(
       !ev ? "Enter your email." : !EMAIL_RE.test(ev) ? "That doesn't look like an email." : ""
     );
@@ -99,22 +124,39 @@ function screen(mode) {
     if (!validate()) return;
 
     const creds = { email: email.input.value.trim(), password: password.input.value };
+    if (username) creds.username = username.input.value.trim();
     setPending(true);
     try {
-      let id;
       if (isRegister) {
-        id = (await api.post("/users/", creds, { auth: false })).id;
+        await api.post("/users/", creds, { auth: false });
       }
+
+      // "username" here is the OAuth2 password-flow field name, and this API
+      // signs people in by email — it is not the username they just picked.
       const tok = await api.form("/login",
         { username: creds.email, password: creds.password }, { auth: false });
-      setSession({ email: creds.email, token: tok.access_token, id });
+
+      // The token says nothing about the person it just signed in, and the feed
+      // no longer carries anyone's address to match against. So ask: /users/me
+      // is what makes "which of these posts are mine" answerable on a browser
+      // that has never been here before.
+      const me = await api.get("/users/me", { token: tok.access_token });
+      setSession({ token: tok.access_token, id: me.id, username: me.username });
+
       toast(isRegister ? "Welcome to Commons." : "Signed in.");
       navigate("/");
     } catch (err) {
       setPending(false);
       if (isRegister && err.status === 409) {
-        email.setError("There's already an account with that email.");
-        email.input.focus();
+        // The backend says which of the two collided.
+        const aboutUsername = /username/i.test(err.detail || "");
+        const field = aboutUsername ? username : email;
+        field.setError(
+          aboutUsername
+            ? "That username is taken."
+            : "There's already an account with that email."
+        );
+        field.input.focus();
       } else {
         formError.textContent =
           err.status === 401

@@ -29,6 +29,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Mirrors schemas.USERNAME_RE in the real backend. Three implementations of one
+# rule is two too many, but the alternative is a mock that accepts what the API
+# refuses — which is how a suite certifies a bug.
+USERNAME_RE = re.compile(r"^[a-z][a-z0-9_-]{2,19}$")
+RESERVED_USERNAMES = {"me", "admin", "api", "root", "commons"}
 LOCK = threading.Lock()
 
 
@@ -50,9 +55,10 @@ class State:
         self.fail_next: list[dict] = []
 
     # — users / auth ------------------------------------------------------------
-    def create_user(self, email: str, password: str) -> dict:
+    def create_user(self, email: str, password: str, username: str) -> dict:
         user = {
             "id": self.next_user_id,
+            "username": username,
             "email": email,
             "password": password,
             "created_at": now_iso(),
@@ -60,6 +66,13 @@ class State:
         self.users[email] = user
         self.next_user_id += 1
         return user
+
+    def user_by_username(self, username: str) -> dict | None:
+        folded = (username or "").lower()
+        for user in self.users.values():
+            if user["username"] == folded:
+                return user
+        return None
 
     def issue_token(self, email: str) -> str:
         tok = secrets.token_urlsafe(24)
@@ -71,8 +84,14 @@ class State:
 
     # — posts ---------------------------------------------------------------------
     def public_user(self, email: str) -> dict:
+        """UserOut: the username is the public identity, and the email stays
+        with the account it belongs to."""
         u = self.users[email]
-        return {"id": u["id"], "email": u["email"], "created_at": u["created_at"]}
+        return {
+            "id": u["id"],
+            "username": u["username"],
+            "created_at": u["created_at"],
+        }
 
     def post_out(self, row: dict) -> dict:
         author = row["author_email"]
@@ -244,6 +263,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/users/" and method == "POST":
             return self._register(self._json())
+        if path == "/users/me" and method == "GET":
+            return self._me()
+
+        m = re.match(r"^/users/([^/]+)/posts$", path)
+        if m and method == "GET":
+            return self._user_posts(m.group(1), query)
+        m = re.match(r"^/users/([^/]+)$", path)
+        if m and method == "GET":
+            return self._profile(m.group(1))
         if path == "/login" and method == "POST":
             return self._login(self._form())
         if path == "/posts/" and method == "GET":
@@ -271,7 +299,16 @@ class Handler(BaseHTTPRequestHandler):
     def _register(self, data: dict) -> None:
         email = (data.get("email") or "").strip()
         password = data.get("password") or ""
+        username = (data.get("username") or "").strip().lower()
         errors = []
+        if not USERNAME_RE.match(username) or username in RESERVED_USERNAMES:
+            errors.append(
+                {
+                    "loc": ["body", "username"],
+                    "msg": "3–20 characters: letters, digits, - and _, starting with a letter",
+                    "type": "value_error",
+                }
+            )
         if not EMAIL_RE.match(email):
             errors.append(
                 {
@@ -298,19 +335,52 @@ class Handler(BaseHTTPRequestHandler):
             )
         if errors:
             return self._send(422, {"detail": errors})
+        # Username and email collide independently; say which one did.
+        if ST.user_by_username(username):
+            return self._send(409, {"detail": "That username is taken"})
         if email in ST.users:
             return self._send(
                 409, {"detail": "An account with this email already exists"}
             )
-        user = ST.create_user(email, password)
+        user = ST.create_user(email, password, username)
+        self._send(201, ST.public_user(email))
+
+    def _me(self) -> None:
+        """Who the caller is.
+
+        Login takes an email and returns a token, which says nothing about the
+        person. The frontend needs a name and an id to work out which posts are
+        its own — see the note in backend/app/routers/user.py."""
+        email = self._require_auth()
+        if not email:
+            return
+        user = ST.users[email]
         self._send(
-            201,
+            200,
             {
                 "id": user["id"],
+                "username": user["username"],
                 "email": user["email"],
                 "created_at": user["created_at"],
             },
         )
+
+    def _profile(self, username: str) -> None:
+        user = ST.user_by_username(username)
+        if not user:
+            return self._send(
+                404, {"detail": f"There's nobody here called {username}"}
+            )
+        self._send(200, ST.public_user(user["email"]))
+
+    def _user_posts(self, username: str, query: dict) -> None:
+        user = ST.user_by_username(username)
+        if not user:
+            return self._send(
+                404, {"detail": f"There's nobody here called {username}"}
+            )
+        # Same page shape and the same draft rule as the feed.
+        self._list_posts(query, only_author=user["email"])
 
     def _login(self, form: dict) -> None:
         email = (form.get("username") or "").strip()
@@ -320,7 +390,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"detail": "Invalid Credentials"})
         self._send(200, {"access_token": ST.issue_token(email), "token_type": "bearer"})
 
-    def _list_posts(self, query: dict) -> None:
+    def _list_posts(self, query: dict, only_author: str | None = None) -> None:
         try:
             page = max(1, int(query.get("page", ["1"])[0]))
             page_size = int(query.get("page_size", ["10"])[0])
@@ -351,7 +421,9 @@ class Handler(BaseHTTPRequestHandler):
         rows = [
             r
             for r in ST.posts.values()
-            if search in r["title"] and self._may_see(r, viewer)
+            if search in r["title"]
+            and self._may_see(r, viewer)
+            and (only_author is None or r["author_email"] == only_author)
         ]
         rows.sort(
             key=lambda r: (r["created_at"], r["id"]), reverse=True
@@ -488,7 +560,17 @@ class Handler(BaseHTTPRequestHandler):
         author = (data.get("author") or "seed@commons.test").strip()
         password = data.get("password") or "seedpassword"
         if author not in ST.users:
-            ST.create_user(author, password)
+            # Derive a username the same way the real migration derived them
+            # for rows that predated the column.
+            base = re.sub(r"[^a-z0-9_-]", "", author.split("@")[0].lower())
+            base = base.lstrip("0123456789_-") or "person"
+            username = (base[:20] + "xxx")[: max(3, min(20, len(base)))]
+            suffix = 1
+            while ST.user_by_username(username) or username in RESERVED_USERNAMES:
+                suffix += 1
+                tail = str(suffix)
+                username = base[: 20 - len(tail)] + tail
+            ST.create_user(author, password, username)
         created = []
         for _ in range(count):
             n = ST.next_post_id

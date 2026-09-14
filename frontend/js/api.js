@@ -25,11 +25,17 @@ function readDetail(data, status) {
   return `Request failed (${status})`;
 }
 
-async function request(path, { method = "GET", body, form, auth = true, signal } = {}) {
+async function request(
+  path,
+  { method = "GET", body, form, auth = true, signal, token } = {}
+) {
   const headers = {};
   const session = get("session");
-  const sendAuth = auth && session && session.token;
-  if (sendAuth) headers.Authorization = `Bearer ${session.token}`;
+  // `token` is for the one moment a caller has a token the store hasn't been
+  // told about yet: straight after login, asking /users/me who this is.
+  const bearer = token || (session && session.token);
+  const sendAuth = auth && !!bearer;
+  if (sendAuth) headers.Authorization = `Bearer ${bearer}`;
 
   let payload;
   if (form) {

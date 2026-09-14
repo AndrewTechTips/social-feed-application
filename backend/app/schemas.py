@@ -1,7 +1,25 @@
+import re
 from datetime import datetime
 from typing import Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+# The username rule, in one place because three things enforce it: this module,
+# the register form in frontend/js/views/auth.js, and the two stand-in backends
+# the end-to-end suite runs against.
+#
+#   · 3–20 characters
+#   · letters, digits, underscore, hyphen
+#   · must start with a letter — so a username can never be mistaken for an id
+#     in a URL, and "123" can't become a person
+#   · folded to lower case, which is what makes the plain UNIQUE constraint on
+#     the column a case-insensitive one as well
+USERNAME_RE = re.compile(r"^[a-z][a-z0-9_-]{2,19}$")
+USERNAME_RULE = "3–20 characters: letters, digits, - and _, starting with a letter"
+
+# Names the API needs for itself. Without this, registering "me" would shadow
+# GET /users/me for everyone.
+RESERVED_USERNAMES = frozenset({"me", "admin", "api", "root", "commons"})
 
 
 class PostBase(BaseModel):
@@ -15,10 +33,21 @@ class PostCreate(PostBase):
 
 
 class UserOut(BaseModel):
+    """A person, as everybody else sees them. No email: that's a credential,
+    and handing it to anyone who can walk a list of ids is how address books
+    get scraped."""
+
     id: int
-    email: EmailStr
+    username: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class MeOut(UserOut):
+    """A person, as they see themselves. Same shape plus the email, because on
+    this one endpoint the caller is the only person it belongs to."""
+
+    email: EmailStr
 
 
 class PostUpdate(BaseModel):
@@ -52,8 +81,19 @@ class PostPage(BaseModel):
 
 
 class UserCreate(BaseModel):
+    username: str
     email: EmailStr
     password: str = Field(min_length=8)
+
+    @field_validator("username")
+    @classmethod
+    def username_is_usable(cls, value: str) -> str:
+        folded = value.strip().lower()
+        if not USERNAME_RE.match(folded):
+            raise ValueError(USERNAME_RULE)
+        if folded in RESERVED_USERNAMES:
+            raise ValueError("that username is reserved")
+        return folded
 
     @field_validator("password")
     @classmethod

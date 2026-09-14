@@ -9,12 +9,20 @@ const VOTES_KEY = "commons.votes";
 // this origin, so an XSS bug would leak it — the accepted tradeoff here: there's
 // no refresh-token flow yet, and the alternative (an httpOnly cookie) needs
 // backend work that's out of scope. Revisit if refresh tokens land.
+// A session is { token, id, username } — who you are, not just what lets you
+// in. The id is the durable half (a username could in principle be changed);
+// the username is what's shown.
+//
+// Sessions saved before usernames existed carried an email instead. They're
+// discarded rather than migrated: the token in them is still good, but nothing
+// can work out whose posts are whose from an email any more, and a session that
+// can't answer that is worse than no session.
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.token && s.email ? s : null;
+    return s && s.token && s.username && s.id ? s : null;
   } catch (e) {
     return null;
   }
@@ -66,9 +74,13 @@ export function clearSession() {
   setSession(null);
 }
 
+// Ownership is decided by id, which is the one thing about a person that
+// doesn't change. This used to compare email addresses, which only worked
+// because posts carried their author's address — the reason it can't any more
+// is the whole point of the change.
 export function isMine(post) {
   const s = state.session;
-  return !!(s && post && post.user && post.user.email === s.email);
+  return !!(s && post && post.user && post.user.id === s.id);
 }
 
 // — vote mirror -----------------------------------------------------------------
@@ -115,7 +127,7 @@ const CACHE_TTL = 60000;
 // both the session and the cache — so the stale list would be written back
 // already wearing the new viewer's name, one line before it's read.
 export function viewerKey() {
-  return state.session ? state.session.email : null;
+  return state.session ? state.session.id : null;
 }
 
 export function cacheFeed(snapshot) {

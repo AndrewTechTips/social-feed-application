@@ -1,7 +1,14 @@
 // Boot: paint the header, wire the theme toggle and search, register routes,
 // start the router.
 
-import { route, startRouter, navigate, currentPath, currentQuery } from "./router.js";
+import {
+  route,
+  startRouter,
+  navigate,
+  currentPath,
+  currentQuery,
+  forgetCurrentScreen,
+} from "./router.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
@@ -10,6 +17,7 @@ import { h, icon } from "./ui.js";
 import { mountPalette, openPalette } from "./components/palette.js";
 import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
+import { renderProfile } from "./views/profile.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
@@ -51,7 +59,17 @@ function renderAccount() {
       icon("pencil"),
       h("span", { class: "btn__label" }, "Write")
     );
-    const email = h("span", { class: "account__email", title: session.email }, session.email);
+    // Your name, linking to your own posts — the same place anyone else's
+    // byline goes.
+    const who = h(
+      "a",
+      {
+        class: "account__email",
+        href: `#/u/${encodeURIComponent(session.username)}`,
+        title: `Everything by ${session.username}`,
+      },
+      session.username
+    );
     const out = h(
       "button",
       {
@@ -64,7 +82,7 @@ function renderAccount() {
       h("span", { class: "btn__label" }, "Sign out")
     );
     out.addEventListener("click", signOut);
-    kids.push(write, email, out, themeButton());
+    kids.push(write, who, out, themeButton());
   } else {
     kids.push(
       h("a", { class: "btn btn--quiet", href: "#/login" }, "Sign in"),
@@ -137,6 +155,12 @@ function syncChrome() {
     if (document.activeElement !== input) input.value = q;
   }
   syncDemoStrip();
+  const path = currentPath();
+  const profile = path.match(/^\/u\/(.+)$/);
+  if (profile) {
+    document.title = `${decodeURIComponent(profile[1])} · Commons`;
+    return;
+  }
   const titles = {
     "/": "Commons",
     "/login": "Sign in · Commons",
@@ -156,8 +180,12 @@ route("/register", renderRegister);
 route("/compose", renderCompose);
 route("/posts/:id", renderPost);
 route("/posts/:id/edit", renderEdit);
+route("/u/:username", renderProfile);
 
 subscribe(renderAccount);
+// Signing in or out changes what every screen shows, so the router mustn't
+// decide the one already on screen is still good enough.
+subscribe(forgetCurrentScreen);
 // Signing in or out moves the notice between the masthead and the band, and a
 // same-route navigate() fires no hashchange — so the store drives this too.
 subscribe(syncDemoStrip);

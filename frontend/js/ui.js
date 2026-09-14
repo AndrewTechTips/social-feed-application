@@ -4,7 +4,7 @@
 
 import { api } from "./api.js";
 import { get, hasVoted, setVoted } from "./store.js";
-import { tryTransition } from "./transitions.js";
+import { tryTransition, nameForMorph, claimReturn } from "./transitions.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SVG_TAGS = new Set(["svg", "path", "circle", "line", "rect", "g", "polyline", "polygon"]);
@@ -146,13 +146,15 @@ export function wasEdited(post) {
 }
 
 // — initials avatar (no image fetch, quiet deterministic tint) -----------
-export function initials(email) {
-  const local = String(email || "").split("@")[0];
-  const parts = local.split(/[^a-z0-9]+/i).filter(Boolean);
+// Takes a username. It used to take an email and split it at the @, which was
+// only ever possible because posts carried their author's address around.
+export function initials(username) {
+  const name = String(username || "");
+  const parts = name.split(/[^a-z0-9]+/i).filter(Boolean);
   const pick =
     parts.length >= 2
       ? parts[0][0] + parts[1][0]
-      : (local.replace(/[^a-z0-9]/gi, "") || "?").slice(0, 2);
+      : (name.replace(/[^a-z0-9]/gi, "") || "?").slice(0, 2);
   return pick.toUpperCase();
 }
 
@@ -162,15 +164,68 @@ function hueFor(str) {
   return Math.abs(hash) % 360;
 }
 
-export function avatar(email, variant) {
+export function avatar(username, variant) {
   return h(
     "span",
     {
       class: "avatar" + (variant ? ` avatar--${variant}` : ""),
-      style: { "--h": hueFor(String(email || "")) },
+      style: { "--h": hueFor(String(username || "")) },
       "aria-hidden": "true",
     },
-    initials(email)
+    initials(username)
+  );
+}
+
+// — post card ---------------------------------------------------------------
+// One card, used by the feed and by a profile. A profile is a feed with one
+// author in it, so it would be strange for the two to draw a post differently
+// — and stranger still for only one of them to hand the title to the view
+// transition on the way out.
+function preview(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  return t.length > 280 ? t.slice(0, 280).trimEnd() + "…" : t;
+}
+
+export function postCard(post) {
+  const title = h("h2", { class: "card__title" }, post.title);
+  const link = h(
+    "a",
+    { class: "card__link", href: `#/posts/${post.id}` },
+    title,
+    h("p", { class: "card__preview" }, preview(post.content))
+  );
+
+  // Hand this title to the transition on the way out, so it becomes the
+  // heading of the post screen rather than being replaced by it. Set at the
+  // moment of the click: only one element may carry the name at a time.
+  link.addEventListener("click", () => nameForMorph(title));
+
+  // Coming back the other way, the card the reader left from takes the name
+  // so the journey reverses instead of just fading.
+  if (claimReturn(post.id)) nameForMorph(title);
+
+  const meta = h(
+    "div",
+    { class: "card__meta" },
+    avatar(post.user.username, "sm"),
+    h(
+      "a",
+      {
+        class: "card__author",
+        href: `#/u/${encodeURIComponent(post.user.username)}`,
+        title: `Everything by ${post.user.username}`,
+      },
+      post.user.username
+    ),
+    h("time", { datetime: post.created_at }, relativeTime(post.created_at)),
+    post.published ? null : h("span", { class: "tag" }, "Draft")
+  );
+
+  return h(
+    "article",
+    { class: "card" },
+    voteControl(post),
+    h("div", { class: "card__body" }, link, meta)
   );
 }
 

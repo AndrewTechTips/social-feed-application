@@ -47,7 +47,7 @@ def get_owned_post(
     return post
 
 
-def _visible_to(user: Optional[models.User]):
+def visible_to(user: Optional[models.User]):
     """Rows the caller is allowed to see: everything published, plus your own
     drafts. ``published`` is a real access rule, not a display hint — an
     unpublished post belongs to its author until they say otherwise."""
@@ -56,29 +56,23 @@ def _visible_to(user: Optional[models.User]):
     return or_(models.Post.published.is_(True), models.Post.user_id == user.id)
 
 
-@router.get("/", response_model=schemas.PostPage)
-def get_posts(
-    db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
-    search: Optional[str] = Query("", max_length=100),
-):
-    # autoescape: without it a `%` or `_` typed into the search box is a live
-    # LIKE wildcard rather than the character the person typed.
-    search_filter = models.Post.title.contains(search, autoescape=True)
-    visible = _visible_to(current_user)
+def page_of_posts(db: Session, *, filters, page: int, page_size: int) -> dict:
+    """One page of posts, newest first, with their vote counts — in the shape
+    ``PostPage`` describes.
+
+    Shared so the feed and a person's profile can't drift apart: the same
+    ordering, the same pagination arithmetic, and above all the same visibility
+    filter, which is an access rule rather than a display one.
+    """
     offset = (page - 1) * page_size
 
-    total = db.scalar(
-        select(func.count()).select_from(models.Post).where(search_filter, visible)
-    )
+    total = db.scalar(select(func.count()).select_from(models.Post).where(*filters))
 
     stmt = (
         select(models.Post, func.count(models.Vote.post_id).label("votes"))
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
         .options(selectinload(models.Post.user))
-        .where(search_filter, visible)
+        .where(*filters)
         .group_by(models.Post.id)
         .order_by(models.Post.created_at.desc())
         .limit(page_size)
@@ -100,6 +94,25 @@ def get_posts(
         "has_next": page < pages,
         "has_prev": page > 1,
     }
+
+
+@router.get("/", response_model=schemas.PostPage)
+def get_posts(
+    db: Session = Depends(get_db),
+    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query("", max_length=100),
+):
+    # autoescape: without it a `%` or `_` typed into the search box is a live
+    # LIKE wildcard rather than the character the person typed.
+    search_filter = models.Post.title.contains(search, autoescape=True)
+    return page_of_posts(
+        db,
+        filters=(search_filter, visible_to(current_user)),
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.PostOut)
@@ -125,7 +138,7 @@ def get_post(
     post = db.scalar(
         select(models.Post)
         .options(selectinload(models.Post.user))
-        .where(models.Post.id == id, _visible_to(current_user))
+        .where(models.Post.id == id, visible_to(current_user))
     )
     if post is None:
         # Someone else's draft is reported as missing, not as forbidden: a 403

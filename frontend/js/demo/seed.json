@@ -4,11 +4,13 @@
     "writes into a throwaway database for the README screenshots, so the live",
     "site and the images in the README show the same feed.",
     "",
-    "Addresses are @example.com (RFC 2606). The real backend validates email",
-    "with email-validator, which rejects reserved TLDs like .test and .invalid",
-    "outright — so seed data written against those would be demo-only fiction",
-    "that the actual API would refuse. These addresses register cleanly against",
-    "the real thing.",
+    "Every author has a username — that's the public identity. The address is a",
+    "credential and is only here because signing in needs one.",
+    "",
+    "Addresses are @example.com (RFC 2606). The real backend validates email with",
+    "email-validator, which rejects reserved TLDs like .test and .invalid outright,",
+    "so seed data written against those would be demo-only fiction the actual API",
+    "would refuse. These register cleanly against the real thing.",
     "",
     "Ages are minutes_ago rather than timestamps: the feed then reads as",
     "'16m ago / 3h ago / 5d ago' whenever someone opens it, instead of drifting",
@@ -18,11 +20,11 @@
   ],
 
   "users": [
-    { "email": "maren.holt@example.com", "password": "commons-demo-pw" },
-    { "email": "j.okafor@example.com", "password": "commons-demo-pw" },
-    { "email": "tessa.ward@example.com", "password": "commons-demo-pw" },
-    { "email": "rafa.linden@example.com", "password": "commons-demo-pw" },
-    { "email": "del.arriaga@example.com", "password": "commons-demo-pw" }
+    { "username": "marenholt", "email": "maren.holt@example.com", "password": "commons-demo-pw" },
+    { "username": "jokafor", "email": "j.okafor@example.com", "password": "commons-demo-pw" },
+    { "username": "tessaward", "email": "tessa.ward@example.com", "password": "commons-demo-pw" },
+    { "username": "rafalinden", "email": "rafa.linden@example.com", "password": "commons-demo-pw" },
+    { "username": "delarriaga", "email": "del.arriaga@example.com", "password": "commons-demo-pw" }
   ],
 
   "posts": [

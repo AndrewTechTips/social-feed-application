@@ -3,9 +3,9 @@
 // post restores the list and scroll position from a short-lived cache.
 
 import { api } from "../api.js";
-import { h, mountView, skeletonCards, avatar, relativeTime, voteControl } from "../ui.js";
+import { h, mountView, skeletonCards, postCard } from "../ui.js";
 import { get, cacheFeed, readFeedCache, viewerKey, setKnownPosts } from "../store.js";
-import { nameForMorph, claimReturn, forgetReturn } from "../transitions.js";
+import { forgetReturn } from "../transitions.js";
 import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
 
@@ -14,13 +14,6 @@ const FIRST_SKELETONS = 5;
 
 // Only one feed instance should own the observer + hashchange listener at a time.
 let activeTeardown = null;
-
-const authorName = (email) => String(email || "").split("@")[0];
-
-function preview(text) {
-  const t = String(text || "").replace(/\s+/g, " ").trim();
-  return t.length > 280 ? t.slice(0, 280).trimEnd() + "…" : t;
-}
 
 // A quiet line of type above the feed, for people who haven't signed in — the
 // app otherwise opens on skeletons with nothing saying what it is.
@@ -82,32 +75,6 @@ export function renderFeed({ query, isStale }) {
     status.classList.toggle("feed__status--pad", !!pad);
   }
 
-  function cardEl(post) {
-    const title = h("h2", { class: "card__title" }, post.title);
-    const link = h("a", { class: "card__link", href: `#/posts/${post.id}` },
-      title,
-      h("p", { class: "card__preview" }, preview(post.content)));
-
-    // Hand this title to the transition on the way out, so it becomes the
-    // heading of the post screen rather than being replaced by it. Set at the
-    // moment of the click: only one element may carry the name at a time.
-    link.addEventListener("click", () => nameForMorph(title));
-
-    // Coming back the other way, the card the reader left from takes the name
-    // so the journey reverses instead of just fading.
-    if (claimReturn(post.id)) nameForMorph(title);
-
-    const meta = h("div", { class: "card__meta" },
-      avatar(post.user.email, "sm"),
-      h("span", { class: "card__author", title: post.user.email }, authorName(post.user.email)),
-      h("time", { datetime: post.created_at }, relativeTime(post.created_at)),
-      post.published ? null : h("span", { class: "tag" }, "Draft"));
-
-    return h("article", { class: "card" },
-      voteControl(post),
-      h("div", { class: "card__body" }, link, meta));
-  }
-
   function renderTail() {
     if (total === 0) {
       setStatus(
@@ -163,7 +130,7 @@ export function renderFeed({ query, isStale }) {
       const frag = document.createDocumentFragment();
       data.items.forEach((post) => {
         items.push(post);
-        frag.append(cardEl(post));
+        frag.append(postCard(post));
       });
       list.append(frag);
       setKnownPosts(items);
@@ -206,7 +173,7 @@ export function renderFeed({ query, isStale }) {
     ({ page, pages, hasNext, total, viewer } = cached);
     cached.items.forEach((post) => {
       items.push(post);
-      list.append(cardEl(post));
+      list.append(postCard(post));
     });
     setKnownPosts(items);
     renderTail();
