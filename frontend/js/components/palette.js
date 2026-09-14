@@ -1,3 +1,4 @@
+// @ts-check
 // The command palette — ⌘K, or Ctrl-K.
 //
 // Two habits borrowed, and deliberately nothing else:
@@ -27,11 +28,12 @@ let lastFocused = null;
 // — the five things it does ---------------------------------------------------
 // `key` is a real global shortcut (see wireShortcuts); rows without one show ↵,
 // which is true of every row.
+/** @returns {import("../types.js").Command[]} */
 function commands() {
   const signedIn = !!get("session");
   const onPost = /^\/posts\/\d+$/.test(currentPath());
 
-  return [
+  const rows = [
     {
       id: "compose",
       label: "Write a post",
@@ -61,7 +63,11 @@ function commands() {
     signedIn
       ? { id: "signout", label: "Sign out", run: signOut }
       : { id: "signin", label: "Sign in", run: () => navigate("/login") },
-  ].filter(Boolean);
+    // `onPost &&` leaves a literal false in the list when you aren't on a
+    // post; filter(Boolean) drops it. The checker can't follow that on its
+    // own, so the cast says what the filter did.
+  ];
+  return /** @type {import("../types.js").Command[]} */ (rows.filter(Boolean));
 }
 
 async function copyLink() {
@@ -83,6 +89,7 @@ const matches = (text, query) => text.toLowerCase().includes(query);
 function rowsFor(query) {
   const q = query.trim().toLowerCase();
   const actions = commands().filter((c) => !q || matches(c.label, q));
+  /** @type {import("../types.js").Command[]} */
   const posts = (q ? knownPosts().filter((p) => matches(p.title, q)) : [])
     .slice(0, MAX_POSTS)
     .map((p) => ({

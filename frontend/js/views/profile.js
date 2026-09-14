@@ -1,3 +1,4 @@
+// @ts-check
 // Profile (#/u/:username) — public. Everything one person has written.
 //
 // Deliberately the same list as the feed, built from the same cards: a profile
@@ -65,7 +66,8 @@ export function renderProfile({ params, isStale }) {
 
   function renderTail() {
     if (total === 0) {
-      const mine = get("session") && get("session").username === username;
+      const session = get("session");
+      const mine = session?.username === username;
       setStatus(
         mine ? "You haven't written anything yet." : "Nothing here yet.",
         true
@@ -111,7 +113,7 @@ export function renderProfile({ params, isStale }) {
     if (initial) list.replaceChildren(skeletonCards(FIRST_SKELETONS));
 
     try {
-      const qs = new URLSearchParams({ page: wantPage, page_size: PAGE_SIZE });
+      const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
       const data = await api.get(
         `/users/${encodeURIComponent(username)}/posts?${qs}`,
         { signal: controller.signal }

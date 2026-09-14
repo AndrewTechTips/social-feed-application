@@ -1,3 +1,4 @@
+// @ts-check
 // Post detail (#/posts/:id) — public. Full content, byline with timestamps
 // ("edited" when it's been changed), the vote control, and Edit / Delete when
 // the post is yours. Delete asks first, inline — never window.confirm.
@@ -195,7 +196,10 @@ function comments(post, isStale) {
     if (wantPage === 1) list.replaceChildren(skeletonComments(2));
 
     try {
-      const qs = new URLSearchParams({ page: wantPage, page_size: COMMENTS_PER_PAGE });
+      const qs = new URLSearchParams({
+        page: String(wantPage),
+        page_size: String(COMMENTS_PER_PAGE),
+      });
       const data = await api.get(`/posts/${post.id}/comments?${qs}`);
       if (isStale()) return;
 
@@ -354,6 +358,10 @@ function comments(post, isStale) {
   // that isn't recoverable from their side.
   async function send(content, box) {
     const session = get("session");
+    // Signed out in another tab between opening the composer and pressing the
+    // button: there's nobody to attribute the optimistic row to, so let the
+    // request go and let the 401 handler do the talking.
+    if (!session) return;
     const ghost = commentRow(
       {
         id: null,

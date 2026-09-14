@@ -1,3 +1,4 @@
+// @ts-check
 // A tiny reactive store: get / set / subscribe. No dependencies, no magic.
 // It holds two things — the session, and a small cache of the last feed render
 // so going back to the feed from a post feels instant.
@@ -17,6 +18,7 @@ const VOTES_KEY = "commons.votes";
 // discarded rather than migrated: the token in them is still good, but nothing
 // can work out whose posts are whose from an email any more, and a session that
 // can't answer that is worse than no session.
+/** @returns {import("./types.js").Session | null} */
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -28,6 +30,7 @@ function loadSession() {
   }
 }
 
+/** @returns {Set<number>} */
 function loadVotes() {
   try {
     return new Set(JSON.parse(localStorage.getItem(VOTES_KEY) || "[]"));
@@ -36,19 +39,32 @@ function loadVotes() {
   }
 }
 
+/**
+ * Everything the app holds, in one object. The shape is in js/types.js rather
+ * than in a comment now, which is the difference between documentation and
+ * something a checker can hold you to.
+ * @type {import("./types.js").State}
+ */
 const state = {
   session: loadSession(),
-  feedCache: null, // { key, items, page, total, pages, hasNext, scrollY, at }
+  feedCache: null,
   knownPosts: [], // what's on screen now, for the command palette to search
   voted: loadVotes(), // post ids this browser has upvoted (best-effort mirror)
 };
 
+/** @type {Set<(state: import("./types.js").State) => void>} */
 const subs = new Set();
 
+/**
+ * @template {keyof import("./types.js").State} K
+ * @param {K} key
+ * @returns {import("./types.js").State[K]}
+ */
 export function get(key) {
   return state[key];
 }
 
+/** @param {Partial<import("./types.js").State>} patch */
 export function set(patch) {
   Object.assign(state, patch);
   subs.forEach((fn) => fn(state));
@@ -60,6 +76,7 @@ export function subscribe(fn) {
 }
 
 // — session helpers ---------------------------------------------------------
+/** @param {import("./types.js").Session | null} session */
 export function setSession(session) {
   try {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -78,6 +95,7 @@ export function clearSession() {
 // doesn't change. This used to compare email addresses, which only worked
 // because posts carried their author's address — the reason it can't any more
 // is the whole point of the change.
+/** @param {import("./types.js").Post | null | undefined} post */
 export function isMine(post) {
   const s = state.session;
   return !!(s && post && post.user && post.user.id === s.id);
@@ -130,14 +148,19 @@ export function viewerKey() {
   return state.session ? state.session.id : null;
 }
 
+/** @param {Omit<import("./types.js").FeedCache, "at">} snapshot */
 export function cacheFeed(snapshot) {
   state.feedCache = { ...snapshot, at: Date.now() };
 }
 
+/**
+ * @param {string} key
+ * @returns {import("./types.js").FeedCache | null}
+ */
 export function readFeedCache(key) {
   const c = state.feedCache;
   if (!c || c.key !== key || c.viewer !== viewerKey()) return null;
-  if (Date.now() - c.at >= CACHE_TTL) return null;
+  if (Date.now() - (c.at ?? 0) >= CACHE_TTL) return null;
   return c;
 }
 
@@ -149,6 +172,7 @@ export function dropFeedCache() {
 // The posts currently on screen, so the command palette can filter them without
 // going near the network. Like the feed cache this is read, never rendered
 // from, so it doesn't go through set()/subscribe.
+/** @param {import("./types.js").Post[]} posts */
 export function setKnownPosts(posts) {
   state.knownPosts = posts.slice();
 }

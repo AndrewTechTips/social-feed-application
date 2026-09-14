@@ -1,3 +1,4 @@
+// @ts-check
 // fetch wrapper: attaches the auth header, sends/parses JSON, normalises errors,
 // and handles the three cross-cutting status codes (401 / 403 / 429) in one place.
 
@@ -25,10 +26,21 @@ function readDetail(data, status) {
   return `Request failed (${status})`;
 }
 
+/**
+ * @param {string} path
+ * @param {object} [options]
+ * @param {string} [options.method]
+ * @param {unknown} [options.body]     JSON body
+ * @param {Record<string, string>} [options.form]  form-encoded body, for /login
+ * @param {boolean} [options.auth]     send the bearer token if there is one
+ * @param {AbortSignal} [options.signal]
+ * @param {string} [options.token]     a token the store hasn't been told about yet
+ */
 async function request(
   path,
   { method = "GET", body, form, auth = true, signal, token } = {}
 ) {
+  /** @type {Record<string, string>} */
   const headers = {};
   const session = get("session");
   // `token` is for the one moment a caller has a token the store hasn't been

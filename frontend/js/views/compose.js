@@ -1,3 +1,4 @@
+// @ts-check
 // Compose (#/compose) and Edit (#/posts/:id/edit). New posts POST; edits PATCH
 // only the fields that actually changed. Both are pessimistic — the button waits
 // for the server before we move on.
@@ -12,9 +13,19 @@ const CONTENT_MAX = 5000;
 const field = (id, label, control, err) =>
   h("div", { class: "field" }, h("label", { class: "field__label", for: id }, label), control, err);
 
+/**
+ * @param {object} spec
+ * @param {"new" | "edit"} spec.mode
+ * @param {import("../types.js").Post} [spec.post]  the post being edited
+ */
 function buildForm({ mode, post }) {
   const editing = mode === "edit";
   const start = post || { title: "", content: "", published: true };
+  // Every read of `edited` below sits behind `editing`, and renderEdit is the
+  // only caller that sets mode to "edit" — it loads the post first and bails
+  // if it can't. The cast states that pairing once instead of asking five call
+  // sites to re-check it.
+  const edited = /** @type {import("../types.js").Post} */ (post);
 
   const title = h("input", {
     id: "post-title", class: "input title-input", type: "text",
@@ -52,7 +63,7 @@ function buildForm({ mode, post }) {
   const submit = h("button", { class: "btn btn--primary", type: "submit" },
     editing ? "Save changes" : "Post");
   const cancel = h("a",
-    { class: "btn btn--quiet", href: editing ? `#/posts/${post.id}` : "#/" }, "Cancel");
+    { class: "btn btn--quiet", href: editing ? `#/posts/${edited.id}` : "#/" }, "Cancel");
 
   const form = h("form", { class: "compose", novalidate: true },
     h("h1", { class: "compose__title" }, editing ? "Edit your post" : "New post"),
@@ -106,12 +117,12 @@ function buildForm({ mode, post }) {
         }
         if (!Object.keys(changed).length) {
           toast("Nothing changed.");
-          return navigate(`/posts/${post.id}`);
+          return navigate(`/posts/${edited.id}`);
         }
-        await api.patch(`/posts/${post.id}`, changed);
+        await api.patch(`/posts/${edited.id}`, changed);
         dropFeedCache();
         toast("Saved.");
-        navigate(`/posts/${post.id}`);
+        navigate(`/posts/${edited.id}`);
       } else {
         const created = await api.post("/posts/", next);
         dropFeedCache();
@@ -120,7 +131,7 @@ function buildForm({ mode, post }) {
       }
     } catch (err) {
       setPending(false);
-      if (err.status === 403) navigate(`/posts/${post.id}`);
+      if (err.status === 403) navigate(`/posts/${edited.id}`);
       else if (err.status !== 401) {
         toast(err.status === 0
           ? "Can't reach the server. Try again?"

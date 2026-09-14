@@ -1,0 +1,41 @@
+{
+  // Type checking without TypeScript.
+  //
+  // No build step and nothing emitted: `checkJs` makes tsc read the JSDoc in
+  // js/*.js, `noEmit` makes sure it never writes a file. `npm run typecheck`
+  // runs it, and so does CI. What ships is exactly what's in js/ — see
+  // docs/adr/0001-vanilla-js-with-jsdoc-types.md.
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+
+    // The browser runs these as native ES modules from a static file server,
+    // so the resolver has to accept the "./router.js" specifiers the browser
+    // actually needs, rather than the extensionless ones a bundler would.
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    "strict": true,
+
+    // A catch clause really can receive anything, and this app's handlers say
+    // so out loud: they branch on `err.name === "AbortError"` for a cancelled
+    // fetch and on `err.status` for an ApiError. Narrowing `unknown` at every
+    // one of those would mean a cast per catch that asserts something the code
+    // is deliberately not assuming. TypeScript's own default before 4.4.
+    "useUnknownInCatchVariables": false,
+
+    // `h()` builds elements from a loose prop bag and the views read API JSON;
+    // both are places where a cast is the honest answer and a type assertion
+    // would just be noise. Strictness is on everywhere it earns its keep.
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["js/**/*.js"],
+  "exclude": ["node_modules", "tests"]
+}

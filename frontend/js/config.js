@@ -1,3 +1,4 @@
+// @ts-check
 // Where the API lives — or, on a static host, the fact that it doesn't.
 //
 // This app ships to GitHub Pages, which serves files and nothing else. FastAPI
@@ -40,7 +41,12 @@ async function demoBackend() {
   // The control surface the end-to-end suite drives in place of mock_api.py's
   // /__reset, /__seed and /__fail_next helpers. It is only ever reachable in
   // demo mode, where there is no real data to put at risk.
-  window.__commonsDemo = demo.control;
+  // The control surface the end-to-end suite drives. Declared on a widened
+  // view of window rather than in a .d.ts, so there is still nothing here but
+  // the files the browser loads.
+  /** @type {Window & { __commonsDemo?: unknown }} */ (
+    window
+  ).__commonsDemo = demo.control;
   window.dispatchEvent(new CustomEvent("commons:demo-ready"));
   return demo;
 }

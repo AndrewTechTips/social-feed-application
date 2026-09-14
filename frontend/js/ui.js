@@ -1,3 +1,4 @@
+// @ts-check
 // Small shared UI helpers: a hyperscript builder, toasts, relative time,
 // initials avatars, skeletons, the view-mount routine, and the vote control
 // (shared by the feed and the post page).
@@ -47,8 +48,8 @@ export function clear(el) {
 export function icon(name, size = 16) {
   const s = document.createElementNS(SVG_NS, "svg");
   s.setAttribute("class", "icon");
-  s.setAttribute("width", size);
-  s.setAttribute("height", size);
+  s.setAttribute("width", String(size));
+  s.setAttribute("height", String(size));
   s.setAttribute("aria-hidden", "true");
   s.setAttribute("focusable", "false");
   const use = document.createElementNS(SVG_NS, "use");
@@ -58,8 +59,14 @@ export function icon(name, size = 16) {
 }
 
 // — view mounting ---------------------------------------------------------------
-const viewEl = () => document.getElementById("view");
+// #view is in index.html and the whole router depends on it; a call site that
+// checked for null would be pretending otherwise.
+const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view"));
 
+/**
+ * @param {Element | DocumentFragment} node
+ * @param {{ restoreScroll?: number }} [options]
+ */
 export function mountView(node, { restoreScroll } = {}) {
   const view = viewEl();
 
@@ -79,12 +86,11 @@ export function mountView(node, { restoreScroll } = {}) {
   // exactly one of them runs.
   if (!(replacingAView && tryTransition(swap))) {
     swap();
-    node.classList.add("route-enter");
-    node.addEventListener(
-      "animationend",
-      () => node.classList.remove("route-enter"),
-      { once: true }
-    );
+    const el = /** @type {Element} */ (node);
+    el.classList.add("route-enter");
+    el.addEventListener("animationend", () => el.classList.remove("route-enter"), {
+      once: true,
+    });
   }
 
   // Move focus to the top of the new screen for keyboard + screen-reader users —
@@ -95,11 +101,16 @@ export function mountView(node, { restoreScroll } = {}) {
 }
 
 // — toasts (aria-live region lives in index.html) --------------------------
+/**
+ * @param {string} message
+ * @param {{ duration?: number }} [options]
+ */
 export function toast(message, { duration = 4200 } = {}) {
-  const host = document.getElementById("toasts");
+  // The aria-live region, likewise from index.html.
+  const host = /** @type {HTMLElement} */ (document.getElementById("toasts"));
   const el = h("div", { class: "toast" }, message);
   host.append(el);
-  while (host.children.length > 3) host.firstElementChild.remove();
+  while (host.children.length > 3) host.firstElementChild?.remove();
 
   const remove = () => {
     if (!el.isConnected) return;
@@ -231,7 +242,9 @@ export function postCard(post) {
 
 // — skeletons ---------------------------------------------------------------
 export function skeletonCards(n) {
-  const tpl = document.getElementById("tpl-skeleton-card");
+  const tpl = /** @type {HTMLTemplateElement} */ (
+    document.getElementById("tpl-skeleton-card")
+  );
   const frag = document.createDocumentFragment();
   for (let i = 0; i < n; i++) frag.append(tpl.content.cloneNode(true));
   return frag;

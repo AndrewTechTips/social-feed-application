@@ -1,3 +1,4 @@
+// @ts-check
 // The handful of things the app can do from more than one place.
 //
 // The header has always owned the theme toggle and the sign-out button. The

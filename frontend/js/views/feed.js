@@ -1,3 +1,4 @@
+// @ts-check
 // Feed (#/) — public. A stream of post cards, newest first, with a debounced
 // title search (driven from the header) and infinite scroll. Coming back from a
 // post restores the list and scroll position from a short-lived cache.
@@ -115,7 +116,7 @@ export function renderFeed({ query, isStale }) {
     if (initial) list.replaceChildren(skeletonCards(FIRST_SKELETONS));
 
     try {
-      const qs = new URLSearchParams({ page: wantPage, page_size: PAGE_SIZE });
+      const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
       if (search) qs.set("search", search);
       const data = await api.get(`/posts/?${qs}`, { signal: controller.signal });
       if (isStale()) return;

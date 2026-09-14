@@ -1,3 +1,4 @@
+// @ts-check
 // Boot: paint the header, wire the theme toggle and search, register routes,
 // start the router.
 
@@ -89,14 +90,19 @@ function renderAccount() {
       themeButton()
     );
   }
-  box.replaceChildren(...kids);
+  if (box) box.replaceChildren(...kids);
 }
 
 // — search (feed only) ------------------------------------------------------
 function wireSearch() {
-  const form = document.querySelector(".search");
-  const input = document.getElementById("search-input");
+  // These three live in index.html and are not optional; the casts say so
+  // rather than pretending each call site might get null.
+  const form = /** @type {HTMLFormElement} */ (document.querySelector(".search"));
+  const input = /** @type {HTMLInputElement} */ (
+    document.getElementById("search-input")
+  );
   const hint = document.getElementById("palette-hint");
+  /** @type {ReturnType<typeof setTimeout>} */
   let timer;
 
   if (hint) hint.addEventListener("click", openPalette);
@@ -137,8 +143,12 @@ function paintPaletteHint() {
   if (!hint) return;
   // userAgentData.platform where it exists; navigator.platform is deprecated
   // but still the only answer in Safari and Firefox.
-  const platform =
-    navigator.userAgentData?.platform || navigator.platform || "";
+  // userAgentData isn't in lib.dom yet; navigator.platform is deprecated but
+  // still the only answer in Safari and Firefox.
+  const nav = /** @type {Navigator & { userAgentData?: { platform?: string } }} */ (
+    navigator
+  );
+  const platform = nav.userAgentData?.platform || nav.platform || "";
   const mac = /mac/i.test(platform);
   hint.replaceChildren(
     h("kbd", { "aria-hidden": "true" }, mac ? "\u2318K" : "Ctrl K")
@@ -147,8 +157,10 @@ function paintPaletteHint() {
 
 function syncChrome() {
   const onFeed = currentPath() === "/";
-  const form = document.querySelector(".search");
-  const input = document.getElementById("search-input");
+  const form = /** @type {HTMLFormElement} */ (document.querySelector(".search"));
+  const input = /** @type {HTMLInputElement} */ (
+    document.getElementById("search-input")
+  );
   form.hidden = !onFeed;
   if (onFeed) {
     const q = currentQuery().get("search") || "";
@@ -161,6 +173,7 @@ function syncChrome() {
     document.title = `${decodeURIComponent(profile[1])} · Commons`;
     return;
   }
+  /** @type {Record<string, string>} */
   const titles = {
     "/": "Commons",
     "/login": "Sign in · Commons",
@@ -171,7 +184,9 @@ function syncChrome() {
 }
 
 // — brand: a click always means "fresh feed" -----------------------------
-document.querySelector(".brand").addEventListener("click", () => dropFeedCache());
+document
+  .querySelector(".brand")
+  ?.addEventListener("click", () => dropFeedCache());
 
 // — routes -------------------------------------------------------------------
 route("/", renderFeed);

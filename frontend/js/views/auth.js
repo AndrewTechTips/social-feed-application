@@ -1,3 +1,4 @@
+// @ts-check
 // Sign in (#/login) and Register (#/register). One builder, two modes.
 // Register creates the account, then signs in straight away so the person lands
 // on the feed able to post — the API hands back a token only from /login.
@@ -22,6 +23,14 @@ const MARK = () =>
       fill: "currentColor",
     }));
 
+/**
+ * @param {object} spec
+ * @param {string} spec.id
+ * @param {string} spec.label
+ * @param {string} spec.type
+ * @param {string} spec.autocomplete
+ * @param {string | null} [spec.hint]  the line under the box, where there is one
+ */
 function field({ id, label, type, autocomplete, hint }) {
   const input = h("input", { id, class: "input", type, autocomplete, "aria-describedby": `${id}-err` });
   const err = h("p", { class: "field__error", id: `${id}-err`, role: "alert" });
@@ -150,7 +159,9 @@ function screen(mode) {
       if (isRegister && err.status === 409) {
         // The backend says which of the two collided.
         const aboutUsername = /username/i.test(err.detail || "");
-        const field = aboutUsername ? username : email;
+        // A 409 about a username can only come from the register screen, which
+        // is the only screen that has that field.
+        const field = (aboutUsername ? username : email) ?? email;
         field.setError(
           aboutUsername
             ? "That username is taken."

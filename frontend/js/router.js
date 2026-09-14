@@ -1,3 +1,4 @@
+// @ts-check
 // Hash router. Patterns use :name for segments. Handlers get { params, isStale }
 // where isStale() tells a slow async handler that the user has since navigated on.
 

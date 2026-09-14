@@ -1,3 +1,4 @@
+// @ts-check
 // The demo-mode notice.
 //
 // The published site answers its own API calls (js/demo/backend.js), and a
@@ -128,6 +129,6 @@ export function mountDemoStrip() {
   });
 
   paint(folded());
-  document.querySelector(".site-header").after(strip);
+  document.querySelector(".site-header")?.after(strip);
   return strip;
 }

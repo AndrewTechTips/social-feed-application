@@ -1,3 +1,4 @@
+// @ts-check
 // The one orchestrated movement in the app: the title you tapped becomes the
 // title of the screen you land on.
 //
