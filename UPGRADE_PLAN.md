@@ -506,18 +506,60 @@ currently compares emails), `views/*`, seed data, tests.
 > skipped), and `page.goto("/")` reloads the document where `page.goto("/#/")` doesn't —
 > which silently signs a demo-mode test back out.
 
-**1.7 — Full-text search — 4–6 h.**
+**1.7 ✅ — Full-text search — 4–6 h.**
 Replace `LIKE '%…%'` over titles with a Postgres `tsvector` column over title **and** body,
 a GIN index, and `ts_rank` ordering. Also fixes S9.
 *Why it lands:* "I used my database's full-text search instead of a LIKE scan" is a small
 sentence that says a lot about how you think, and it's one migration plus one query change.
 *Touches:* migration, `models.py`, `routers/post.py`, tests, `mock_api.py`.
 
-**1.8 — Types without a build step — 4–6 h — see §6.**
+> **Done (2026-09-14).** A `search_vector` column, `GENERATED ALWAYS AS … STORED`
+> over `setweight(title,'A') || setweight(body,'B')`, with a GIN index behind it.
+> Generated rather than trigger-maintained or application-maintained: Postgres
+> recomputes it on every INSERT and UPDATE, so no writer — a migration, psql, a
+> future script — can produce a row whose index disagrees with its own text.
+> Queried with `websearch_to_tsquery`, which takes what people actually type and
+> never raises on punctuation, and ordered by `ts_rank` with `created_at` as the
+> tiebreak: a good match from last year beats a poor one from this morning, but
+> two equal matches still arrive newest-first.
+>
+> **The case the obvious version gets wrong:** a query of nothing but stop words
+> ("the") parses to an empty tsquery, and an empty tsquery matches *no rows*. So
+> typing one honest word would have emptied the feed with no explanation.
+> `numnode(query) = 0` spots it and lets the search fall away instead, which is
+> what an empty box already does. S9 is closed as a side effect — `%` is now a
+> character with no word in it rather than a live wildcard.
+>
+> Both stand-ins mirror it in ~60 lines each: the real Postgres stop-word list
+> read out of `share/tsearch_data/english.stop`, a deliberately crude suffix
+> stripper, AND across terms, and a 1.0/0.4 title-vs-body weighting. Checked
+> term by term against the real backend — all fourteen probe queries agree on
+> totals and ordering. The stemmer needed a trailing-`e` rule before "kettles"
+> would find "kettle", which is exactly the sort of thing that only shows up if
+> you compare the two.
+
+**1.8 ✅ — Types without a build step — 4–6 h — see §6.**
 *Touches:* every `js/` file (one comment line each), new `js/types.js`, `tsconfig.json`,
 `package.json`, workflow.
 
-**1.9 — Trust-signal pass — 4–6 h.**
+> **Done (2026-09-14).** `// @ts-check` on all 16 modules, `js/types.js` with the
+> API shapes (`Post`, `User`, `Me`, `Comment`, a generic `Page<T>`, `Session`,
+> `FeedCache`, `State`, `Command`), `checkJs`/`noEmit`, and `npm run typecheck`
+> in CI. Not one runtime line changed meaning: the diffs are JSDoc comments,
+> four `String()` calls where an attribute wanted a string anyway, and two real
+> fixes below.
+>
+> **What it found in the first run**, which is the whole argument for doing it:
+> the optimistic comment append read `session.id` without checking the session
+> still existed (sign out in another tab, then post), and the profile's empty
+> state called `get("session")` twice and would have thrown between the two.
+>
+> `useUnknownInCatchVariables` is off, deliberately and with the reason written
+> down in tsconfig: every handler here branches on `err.name === "AbortError"`
+> or `err.status`, and narrowing `unknown` at each would assert a type the code
+> is pointedly not assuming.
+
+**1.9 ✅ — Trust-signal pass — 4–6 h.**
 - `docs/adr/` with five short ADRs on decisions you actually made: vanilla JS + JSDoc types
   over TypeScript; hash routing over History API (and why it makes Pages trivial); the token
   in `localStorage` and what that costs; demo mode as the answer to a static host; offset
@@ -536,11 +578,81 @@ sentence that says a lot about how you think, and it's one migration plus one qu
 - `404.html` that redirects into the hash router, so deep links survive a Pages 404.
 - Lighthouse CI in the workflow, with the real numbers (and their date) in the README.
 
-**1.10 — Close the auth test gaps — 3 h.**
+> **Done (2026-09-14).** Five ADRs in `docs/adr/`, each ending in what would
+> change our minds — 3,000 lines or a second contributor for the JSDoc
+> decision, 50,000 posts for offset pagination — so they read as decisions
+> rather than as defences. Linked from a table in the README.
+>
+> `mypy --strict` on `backend/app` and `pip-audit` on both requirements files,
+> in CI. mypy took 39 errors to clear and two of them were worth having: the
+> `Settings()` call needed the pydantic plugin rather than a `type: ignore`,
+> and `post.votes = n` onto an undeclared attribute — the "it works and it's a
+> trick" the audit flagged in §4 — is now a declared `query_expression()`.
+> pip-audit found six advisories against `httpx2` 2.7 (the test client), fixed
+> by pinning 2.12 rather than documenting an exception.
+>
+> **ruff skipped**, per standing preference. black only.
+>
+> PWA and link-preview assets are all generated from the one brand mark by
+> `docs/make_icons.mjs` (Chromium, since the mark is an SVG path and the OG
+> card wants the real typeface), so none of them can drift from the header:
+> `manifest.webmanifest`, 192/512 plain and maskable, `apple-touch-icon`, an
+> SVG favicon, 16/32 PNGs, a real multi-resolution `favicon.ico`, and a
+> 1200×630 `og.png`. Verified in a browser: the manifest parses, every icon it
+> promises resolves 200, and the OG tags are all present.
+>
+> `404.html` translates a real path into the fragment the router understands,
+> taking the repo-name segment from its own URL rather than hard-coding it —
+> checked against a server that mimics Pages' 404 behaviour, at the domain
+> root and under a project path.
+>
+> **Lighthouse numbers, measured rather than remembered.** The README said
+> 96–98; the real figure on throttled mobile is **92**, and desktop is 100
+> across all four categories. The README now says so, with the date, and says
+> why: Lighthouse wants the CSS and JS minified and the four stylesheets
+> bundled, and both are only fixable with the build step this frontend exists
+> not to have. TBT 0 ms and CLS 0 are the numbers a person feels.
+
+**1.10 ✅ — Close the auth test gaps — 3 h.**
 Expired token, malformed token, token signed with the wrong key, missing bearer, token for a
 deleted user, `page_size` out of range, `updated_at` moving on PATCH, a rejected write
 leaving the row untouched, `/healthz`. Plus `@axe-core/playwright` across all five screens,
 and a keyboard-only journey. ~15 tests total.
+
+> **Done (2026-09-14).** Most of the token list was already covered by 0.9, so
+> the new `test_api_contract.py` takes the parts that weren't: a token that is
+> correctly signed and carries no `user_id`, the same token being *anonymous*
+> rather than a 401 on a public route, pagination refusing nonsense instead of
+> clamping it (0, −1, 101, "abc"), a page past the end being empty rather than
+> an error, `updated_at` moving on PATCH and PUT and not on a read, and four
+> rejected writes each leaving the row byte-identical — including the empty
+> PATCH, where an unconditional commit would have moved `updated_at` on a 400.
+> 28 tests; the backend suite is 189.
+>
+> `a11y.spec.js` runs axe (WCAG 2.1 A + AA) over every screen that exists —
+> thirteen of them, not the original five — and one journey through the core
+> flow with no mouse at all.
+>
+> **Three real bugs, and one lesson about the tool.** The lesson first: axe's
+> first run reported thirteen contrast failures that did not exist, because it
+> was measuring during the 120 ms route-enter fade and blending every
+> foreground into its background. `settled()` waits for that and for any other
+> finite animation, and says why.
+>
+> What survived that were genuine: `--text-faint` on the page background
+> measured **4.29:1**, under AA; and the demo strip's amber label measured
+> **1.84:1** in the light theme — on every page of the published site. The
+> accent is a fill colour, not a text colour, so there is now an
+> `--accent-text` token that is the same hue walked down to where 13px type
+> clears AA on every light surface.
+>
+> The keyboard journey found two more. **Neither the composer nor the sign-in
+> form ever autofocused its first field** — `mountView(form); field.focus()`
+> focuses a detached element, because a view transition defers the DOM swap;
+> focus moved inside the swap and both work now. And **Escape on the delete
+> confirm focused a button that `mountActions()` had already replaced**,
+> dropping the cursor to the body — which the README claimed worked. Both are
+> the kind of thing only a keyboard finds.
 
 ### Tier 2 — Stretch
 

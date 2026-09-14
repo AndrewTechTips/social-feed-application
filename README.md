@@ -31,9 +31,10 @@ feed. Reading is public; writing needs a token.
 | | |
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
-| **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step. |
-| **Tested** | 107 pytest tests (95% coverage) · 180 Playwright end-to-end tests, run against two API implementations |
-| **Shipped** | Docker · GitHub Actions → Docker Hub |
+| **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step — type-checked anyway, with JSDoc and `tsc --noEmit`. |
+| **Tested** | 189 pytest tests (97% coverage) · 250 Playwright end-to-end tests, run against two API implementations · axe on every screen |
+| **Checked** | `black` · `mypy --strict` · `pip-audit` · `alembic check` · Lighthouse CI |
+| **Shipped** | Docker · GitHub Actions → Docker Hub · GitHub Pages |
 
 ---
 
@@ -190,7 +191,7 @@ One page, hash routes.
 | --- | --- | --- | --- |
 | `POST` | `/users/` | – | register — username, email, password (8–72 bytes), 10/hour |
 | `POST` | `/login` | – | form login → `{access_token}`, 5/min |
-| `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — drafts only if they're yours |
+| `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — full-text search over title and body, drafts only if they're yours |
 | `GET` | `/posts/{id}` | optional | one post + vote count |
 | `POST` | `/posts/` | bearer | create |
 | `PUT` | `/posts/{id}` | bearer | full replace (author only) |
@@ -210,8 +211,10 @@ One page, hash routes.
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 135 tests, coverage gate at 85%
-cd frontend && npm test          # 208 Playwright tests, no Postgres needed
+cd backend && pytest -q          # 189 tests, coverage gate at 85%
+cd frontend && npm test          # 250 Playwright tests, no Postgres needed
+cd frontend && npm run typecheck # tsc --noEmit over the JSDoc types
+cd frontend && npm run lighthouse
 ```
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
@@ -239,6 +242,8 @@ cd frontend && npm install && npx playwright install chromium
 | `comments.spec.js` | Saying something and seeing it before the server answers, getting your words back when the write fails, removing your own and only your own (not even as the author of the post), a draft having no conversation to read or join, and a deleted post taking its comments with it. |
 | `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, opens the long post on a real thread, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
+| `search.spec.js` | A word that's only in the body, any form of a word finding every other form, a title match ranking above a body match, two words narrowing rather than widening, `%` as a character rather than a wildcard, and a draft never turning up in someone else's results. |
+| `a11y.spec.js` | axe (WCAG 2.1 A + AA) on every screen there is — feed, empty feed, post, sign in, register, a form mid-error, compose, edit, profile, owner controls, the delete confirm, a comment thread and the palette — plus one journey through the whole core flow without a mouse. |
 
 CI runs both suites on every push, checks `black`, verifies the migrations apply to an
 empty database *and* still match the models (`alembic check`), and only publishes an
@@ -250,6 +255,20 @@ image once all of that is green.
 ---
 
 ## Decisions I made
+
+The five that shaped the shape of the thing have their own records in
+[`docs/adr/`](docs/adr/) — each says what it costs and what would change my
+mind, which is the part that makes it a decision rather than a preference:
+
+| # | Decision | The short version |
+| --- | --- | --- |
+| [0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md) | Vanilla JS with JSDoc types, not TypeScript | Type checking is worth having; a build step isn't worth what it costs here. Revisit at ~3,000 lines or a second contributor. |
+| [0002](docs/adr/0002-hash-routing.md) | Hash routing, not the History API | There is no server to answer `/posts/12`. Ugly URLs, zero Pages configuration. |
+| [0003](docs/adr/0003-token-in-localstorage.md) | The token lives in `localStorage` | An `httpOnly` cookie is safer and needs CSRF, refresh tokens and credentialed CORS. Stated plainly: an XSS bug would leak the session. |
+| [0004](docs/adr/0004-demo-mode-for-a-static-host.md) | Demo mode is the answer to a static host | Three implementations of one contract, held together by running the same suite against all of them. |
+| [0005](docs/adr/0005-offset-pagination.md) | Offset pagination | It matches the UI and the index. Switch to keyset at ~50k posts, and here's the exact change. |
+
+And the smaller ones, in place:
 
 **The username is the public identity; the email is a credential.** A post used
 to carry its author's address, so anyone who could read the feed could collect them
@@ -421,8 +440,26 @@ buttons were between 26 and 40px tall. They're 44px on a phone.
 <details>
 <summary><strong>Performance</strong></summary>
 
-Lighthouse (mobile, throttled, against the mock backend): **96–98** performance,
-**100** accessibility, **100** best practices.
+Measured **2026-09-14** with Lighthouse 13.4.1, against the demo build — the same
+files GitHub Pages serves. `npm run lighthouse` reproduces it; CI runs it on every
+push and fails below the floors in `lighthouserc.json`.
+
+| | Performance | Accessibility | Best practices | SEO |
+| --- | --- | --- | --- | --- |
+| **Desktop** (median of 3) | **100** | **100** | **100** | **100** |
+| **Mobile** (Moto G Power, 4× CPU, slow 4G) | **92** | **100** | **100** | **100** |
+
+Desktop: FCP 0.4 s, LCP 0.6 s, CLS 0.004, TBT 0 ms.
+Mobile: FCP 1.9 s, LCP 3.2 s, CLS 0, TBT 0 ms.
+
+**Why mobile is 92 and not 100, honestly.** Lighthouse wants the CSS and JS
+minified — it estimates 73 KB across the two — and four separate stylesheets in
+`<head>` cost about 600 ms of render-blocking on a throttled connection. Both are
+fixable only with a build step, which is the one thing this frontend is built not
+to have ([ADR 0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md)). The comments in
+the CSS are a meaningful part of what this repo is; shipping them costs eight points
+on one synthetic mobile run, and that is a trade I'd make again. TBT is 0 ms and CLS
+is 0, which are the numbers a person actually feels.
 
 No layout shift — skeletons match their final sizes, and off-screen cards use
 `content-visibility` with a reserved `contain-intrinsic-size`. One preloaded font file,
@@ -464,7 +501,9 @@ of these was a deliberate pass over code that already worked:
 - [x] A live demo that runs on a static host, with the suite run against it too
 - [x] Usernames and profiles — the email stops being anyone's public name
 - [x] Comments — a nested resource with its own ownership rule and real cascades
-- [ ] Refresh tokens, follows, full-text search
+- [x] Postgres full-text search, and types without a build step
+- [x] Decision records, a changelog, PWA and link-preview assets, Lighthouse in CI
+- [ ] Refresh tokens, follows, a WebSocket live feed
 
 The longer version — what I'd change, what I'd skip, and why — is in
 [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
