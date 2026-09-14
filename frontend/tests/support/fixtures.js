@@ -172,8 +172,8 @@ const test = base.test.extend({
           backend.reset();
           await install();
         },
-        seed: async (count, author) => {
-          const created = backend.control.seed({ count, author });
+        seed: async (count, author, votes) => {
+          const created = backend.control.seed({ count, author, votes });
           await install();
           // Shaped like the Playwright APIResponse the HTTP branch returns, so
           // specs can keep calling `(await api.seed(1, x)).json()`.
@@ -251,7 +251,14 @@ const test = base.test.extend({
 
     await use({
       reset: () => post("/__reset"),
-      seed: (count, author) => post("/__seed", author ? { count, author } : { count }),
+      // `votes` gives every post this call creates that many upvotes — the one
+      // way a spec can put a post on either side of the warmth threshold.
+      seed: (count, author, votes) =>
+        post("/__seed", {
+          count,
+          ...(author ? { author } : {}),
+          ...(votes ? { votes } : {}),
+        }),
       failNext: (rule) => post("/__fail_next", rule),
       register: (email, password, username) =>
         ctx.post(`${API_ORIGIN}/users/`, {

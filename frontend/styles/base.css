@@ -79,6 +79,13 @@ h3 {
   font-weight: 460;
   line-height: var(--lh-tight);
   letter-spacing: 0.005em;
+  /* `balance`, not the `pretty` prose gets below. A heading is short enough
+     for the browser to even out every line of it, and what that prevents —
+     one word left stranded on a line of its own — is what a wrapped card title
+     does on a phone almost every time. `pretty` only guards the last line,
+     which is the whole problem in a two-line headline. Nothing here is deep
+     enough to hit the four-line cap the spec puts on balancing. */
+  text-wrap: balance;
 }
 
 :where(p, li) {

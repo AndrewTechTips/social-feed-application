@@ -725,7 +725,16 @@ export function createDemoBackend({
   }
 
   // Only reachable from the test control surface below, never from the UI.
-  function seedPosts({ count = 0, author = "seed@commons.test", password = "seedpassword" }) {
+  // `votes` hangs that many upvotes on each post it creates. The voters are
+  // synthetic addresses with no accounts behind them, exactly as in
+  // mock_api.py: a vote is a (voter, post) pair and the count is a tally of
+  // pairs, so inventing five accounts to raise one number would be furniture.
+  function seedPosts({
+    count = 0,
+    author = "seed@commons.test",
+    password = "seedpassword",
+    votes = 0,
+  }) {
     if (!userByEmail(author)) {
       state.users.push({
         id: state.nextUserId++,
@@ -754,6 +763,9 @@ export function createDemoBackend({
         created_at: ts,
         updated_at: ts,
       });
+      for (let v = 0; v < votes; v++) {
+        state.votes.push(voteKey(`voter${v + 1}@commons.test`, n));
+      }
       created.push(n);
     }
     save();

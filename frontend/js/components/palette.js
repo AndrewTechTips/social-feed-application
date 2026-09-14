@@ -13,21 +13,24 @@
 //   shortcut that doesn't exist is just decoration.
 //
 // Not borrowed: fuzzy matching everything in the product. This searches the
-// posts already on screen and runs five actions. It doesn't grow.
+// posts already on screen and runs a handful of actions. It doesn't grow.
 
 import { h, toast } from "../ui.js";
 import { get, knownPosts } from "../store.js";
 import { otherTheme, toggleTheme, signOut } from "../actions.js";
 import { navigate, currentPath } from "../router.js";
+import { focusCursor, hasCards, typing } from "./feedkeys.js";
 
 const MAX_POSTS = 7; // a palette you scroll is a list, not a palette
 
 let open = false;
 let lastFocused = null;
 
-// — the five things it does ---------------------------------------------------
+// — the things it does --------------------------------------------------------
 // `key` is a real global shortcut (see wireShortcuts); rows without one show ↵,
-// which is true of every row.
+// which is true of every row. `owned` marks the one row whose keys are
+// registered by the control they belong to rather than here — the promise the
+// hints make is that the key works, not that this file is what makes it work.
 /** @returns {import("../types.js").Command[]} */
 function commands() {
   const signedIn = !!get("session");
@@ -54,6 +57,16 @@ function commands() {
       key: "G",
       run: () => navigate("/"),
     },
+    // Only where there's a list to move through, which is the feed and a
+    // profile. j and k are a pair everyone who knows one knows the other, so
+    // the chip shows both; Enter and u follow from having a card focused.
+    hasCards() && {
+      id: "feedkeys",
+      label: "Move through the feed",
+      key: "J K",
+      owned: true,
+      run: focusCursor,
+    },
     onPost && {
       id: "copy",
       label: "Copy a link to this post",
@@ -63,9 +76,9 @@ function commands() {
     signedIn
       ? { id: "signout", label: "Sign out", run: signOut }
       : { id: "signin", label: "Sign in", run: () => navigate("/login") },
-    // `onPost &&` leaves a literal false in the list when you aren't on a
-    // post; filter(Boolean) drops it. The checker can't follow that on its
-    // own, so the cast says what the filter did.
+    // `onPost &&` and `hasCards() &&` leave a literal false in the list when
+    // they don't apply; filter(Boolean) drops it. The checker can't follow
+    // that on its own, so the cast says what the filter did.
   ];
   return /** @type {import("../types.js").Command[]} */ (rows.filter(Boolean));
 }
@@ -83,7 +96,8 @@ async function copyLink() {
 
 // — matching ------------------------------------------------------------------
 // Plain case-insensitive substring, on purpose. Fuzzy matching earns its keep
-// over hundreds of commands; over five it mostly produces surprising results.
+// over hundreds of commands; over half a dozen it mostly produces surprising
+// results.
 const matches = (text, query) => text.toLowerCase().includes(query);
 
 function rowsFor(query) {
@@ -268,11 +282,9 @@ export function close() {
 export const isOpen = () => open;
 
 // — keyboard ------------------------------------------------------------------
-const typing = (target) =>
-  target instanceof HTMLElement &&
-  (target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.isContentEditable);
+// `typing` is imported rather than declared twice: the feed cursor needs the
+// identical guard, and two copies of a rule about which keys belong to the
+// page is how they drift apart.
 
 function wireShortcuts() {
   addEventListener("keydown", (e) => {
@@ -289,7 +301,7 @@ function wireShortcuts() {
     // The single keys the palette advertises. They have to work out here, or
     // the hints beside each row are a lie.
     const row = commands().find(
-      (c) => c.key && c.key.toLowerCase() === e.key.toLowerCase()
+      (c) => c.key && !c.owned && c.key.toLowerCase() === e.key.toLowerCase()
     );
     if (!row) return;
     e.preventDefault();

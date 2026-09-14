@@ -11,7 +11,7 @@ import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
 import { get, isMine, dropFeedCache } from "../store.js";
 import { nameForMorph, morphingBackTo } from "../transitions.js";
-import { navigate } from "../router.js";
+import { navigate, previousScreen } from "../router.js";
 
 // Mirrors schemas.COMMENT_MAX. The server is the one that decides; this is so
 // you find out before you've typed another paragraph.
@@ -19,8 +19,27 @@ const COMMENT_MAX = 2000;
 const COMMENTS_PER_PAGE = 20;
 const EMPTY = "Nothing said about this one yet.";
 
-const backLink = () =>
-  h("a", { class: "back", href: "#/" }, icon("chevron-left", 15), "Back to the feed");
+// "Back" should name the place it goes back to.
+//
+// The title-morph already carries the reader here from whichever card they
+// tapped, and reverses on the way out — and that card is as often on someone's
+// profile, or in a set of search results, as it is on the feed. A link that
+// says "the feed" regardless is the one thing that can make the journey they
+// just watched feel like it lied. It also quietly loses work: the feed cache
+// is keyed by search term, so "#/" from a set of results refetches the
+// unfiltered feed and the query is gone.
+function backTo() {
+  const from = previousScreen() || "";
+  const profile = from.match(/^#\/u\/([^?]+)$/);
+  if (profile) return { href: from, label: `Back to ${decodeURIComponent(profile[1])}` };
+  if (/^#\/\?search=/.test(from)) return { href: from, label: "Back to the results" };
+  return { href: "#/", label: "Back to the feed" };
+}
+
+const backLink = () => {
+  const { href, label } = backTo();
+  return h("a", { class: "back", href }, icon("chevron-left", 15), label);
+};
 
 const sk = (style) => h("span", { class: "sk", style: { display: "block", ...style } });
 

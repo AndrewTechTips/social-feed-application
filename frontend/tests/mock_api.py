@@ -12,7 +12,7 @@ Run:  python3 frontend/tests/mock_api.py [--port 8000]
 
 Test-only helpers (prefixed __ so they can't be mistaken for the real API):
   POST /__reset                         wipe all state
-  POST /__seed   {count, author?}       create N published posts
+  POST /__seed   {count, author?, votes?}  create N published posts
   POST /__fail_next {method, path, status, detail?}
                                         force the next matching request to fail
   GET  /__state                         the whole store, for assertions about
@@ -831,6 +831,11 @@ class Handler(BaseHTTPRequestHandler):
         count = int(data.get("count", 0))
         author = (data.get("author") or "seed@commons.test").strip()
         password = data.get("password") or "seedpassword"
+        # Upvotes to hang on each post created by this call. The voters are
+        # synthetic addresses and no account is made for them: a vote is a
+        # (voter, post) pair and the count is a tally of pairs, so inventing
+        # five accounts to raise one number would be furniture.
+        votes = int(data.get("votes", 0))
         if author not in ST.users:
             # Derive a username the same way the real migration derived them
             # for rows that predated the column.
@@ -853,6 +858,8 @@ class Handler(BaseHTTPRequestHandler):
                 "It exists so the feed has something to paginate through.",
                 True,
             )
+            for v in range(votes):
+                ST.votes.add((f"voter{v + 1}@commons.test", row["id"]))
             created.append(row["id"])
         self._send(200, {"ok": True, "created": created})
 

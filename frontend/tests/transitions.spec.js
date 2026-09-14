@@ -178,3 +178,59 @@ test("no separator dots left in the card meta", async ({ page, api }) => {
   await expect(page.locator(CARD).first()).toBeVisible();
   await expect(page.locator(".card__meta .dot")).toHaveCount(0);
 });
+
+// ── the other half of the journey: where "Back" says it goes ────────────────
+// The morph carries the reader from whichever card they tapped and reverses on
+// the way out. A Back link that always said "the feed" was the one thing that
+// could make that journey feel like it lied — and, from a set of search
+// results, it quietly threw the search away.
+test.describe("the Back link names its destination", () => {
+  test("from the feed, it's the feed", async ({ page, api }) => {
+    await api.seed(2, "ada@commons.test");
+    await page.goto("/");
+    await expect(page.locator(CARD).first()).toBeVisible();
+
+    await page.locator(".card__title").first().click();
+    await expect(page.locator(".detail__title")).toBeVisible();
+    await expect(page.locator(".back")).toHaveText("Back to the feed");
+    await expect(page.locator(".back")).toHaveAttribute("href", "#/");
+  });
+
+  test("from a profile, it's that person", async ({ page, api }) => {
+    await api.seed(2, "ada@commons.test");
+    await page.goto("/#/u/ada");
+    await expect(page.locator(CARD).first()).toBeVisible();
+
+    await page.locator(".card__title").first().click();
+    await expect(page.locator(".detail__title")).toBeVisible();
+    await expect(page.locator(".back")).toHaveText("Back to ada");
+
+    await page.locator(".back").click();
+    await expect(page).toHaveURL(/#\/u\/ada$/);
+  });
+
+  test("from a search, it keeps the search", async ({ page, api }) => {
+    await api.seed(3, "ada@commons.test");
+    await page.goto("/");
+    await expect(page.locator(CARD).first()).toBeVisible();
+
+    await page.locator("#search-input").fill("Seeded post 2");
+    await expect(page).toHaveURL(/search=/);
+    await expect(page.locator(CARD)).toHaveCount(1);
+
+    await page.locator(".card__title").first().click();
+    await expect(page.locator(".detail__title")).toBeVisible();
+    await expect(page.locator(".back")).toHaveText("Back to the results");
+
+    await page.locator(".back").click();
+    await expect(page).toHaveURL(/search=/);
+    await expect(page.locator(CARD)).toHaveCount(1);
+  });
+
+  test("arriving cold — a pasted link — goes to the feed", async ({ page, api }) => {
+    const { created } = await (await api.seed(1, "ada@commons.test")).json();
+    await page.goto(`/#/posts/${created[0]}`);
+    await expect(page.locator(".detail__title")).toBeVisible();
+    await expect(page.locator(".back")).toHaveText("Back to the feed");
+  });
+});

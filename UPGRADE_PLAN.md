@@ -656,13 +656,34 @@ and a keyboard-only journey. ~15 tests total.
 
 ### Tier 2 — Stretch
 
-**2.1 — Feed keyboard navigation (`j`/`k`/`Enter`/`u`) — 3 h.**
+**2.1 ✅ — Feed keyboard navigation (`j`/`k`/`Enter`/`u`) — 3 h.**
 *Borrowed from:* Hacker News, Reddit and Superhuman — the convention for feeds, so it needs
 no teaching. Pairs naturally with the palette (which can advertise the shortcuts). Genuinely
 appropriate rather than decorative, because a linear list of items is exactly the shape this
 pattern was invented for.
 
-**2.2 — "Warmth" on the card — 2 h. The one idea specific to *this* product.**
+> **Done (2026-09-14).** `js/components/feedkeys.js`, wired once from `main.js`.
+> The decision the whole thing rests on: **the cursor is real DOM focus**, not a
+> `.selected` class. Enter then needs no handler at all (the browser already opens a
+> focused link, and the card's existing click listener still hands the title to the
+> morph), the focus ring already draws, a screen reader already follows, and pagination,
+> the feed cache and the profile view need no bookkeeping — the cards are read out of the
+> DOM at the moment a key lands. `u` presses the vote button that's already there, so the
+> optimistic count, the pulse, the sign-in prompt and the rollback all happen exactly as
+> if it had been clicked.
+> Two small things fell out of it. The focus ring is drawn around the *card* rather than
+> around the title-and-preview block that happens to be the link, because otherwise the
+> cursor reads as a rectangle through a card instead of as the card. And `.card` gained a
+> `scroll-margin-top`, so `scrollIntoView({block:"nearest"})` never leaves a card tucked
+> under the sticky header.
+> The palette advertises it with one row (`Move through the feed`, chip `J K`) that also
+> *starts* the cursor. That needed a new `owned` flag on a command: the palette's standing
+> promise is that every key it shows works outside it, not that this file is what makes it
+> work — j/k/u are contextual and belong to the list. `typing()` moved into `feedkeys.js`
+> and the palette imports it, so there is one rule about which keys belong to the page
+> rather than two copies drifting apart.
+
+**2.2 ✅ — "Warmth" on the card — 2 h. The one idea specific to *this* product.**
 Commons is a hearth metaphor — the brand mark is a lamp, the accent is honey amber, the
 stated design goal is "a quiet, lamplit reading room." The app's only live quantity is votes.
 So: a post above a vote threshold gets a single warm hairline along its leading edge, using
@@ -671,11 +692,60 @@ one rule that *encodes information as structure* rather than decorating. Restrai
 makes it read as taste: you get one signature detail, and this is it, so nothing else in the
 card may compete with it.
 
-**2.3 — Reading progress on the post detail — 1 h.**
+> **Done (2026-09-14).** `WARM_AT = 3` in `ui.js`, one `.card--warm::before` rule in
+> `components.css`: a 2px amber gradient down the leading edge, fading out at both ends so
+> it never has to meet the 18px corner radius and so it reads as light on an edge rather
+> than as a drawn rule. No badge, no chip, no new token — `--accent` and nothing else.
+> Three is a judgement, written down rather than computed: a threshold that moved with
+> whatever happened to be loaded would mean a card could warm up because you scrolled.
+> Against the seeded demo it marks four of fourteen.
+> Two details worth keeping: the class is toggled in the vote control's `paint()`, not in
+> its click handler, so your own vote can carry a card over the line — **and carry it back
+> when an optimistic vote is rolled back**. And it is deliberately *not* announced: the
+> vote button beside it already says "Upvote, now 4 votes" out loud, so this is the same
+> fact drawn, not a second one to listen to.
+
+**2.3 ✅ — Reading progress on the post detail — 1 h.**
 Pure CSS via `animation-timeline: scroll()` — a 2px amber hairline under the header that
 tracks your position through the post. Six lines, no JS, degrades to nothing. Earns its place
 specifically because long serif posts are the reading experience the whole type system was
 built for.
+
+> **Done (2026-09-14).** A `<span class="reading">` inside the header in `index.html`,
+> switched on by `body:has(#view .detail)` and driven by
+> `animation-timeline: scroll(root block)`. No JavaScript and no scroll listener anywhere.
+> It lives *in the header* rather than being fixed at `--header-h`, and that turned out to
+> matter: the mobile header is a two-row grid and measures **69px**, not 60. Absolute
+> positioning against the header's own box puts the line on its bottom border at any
+> viewport and under any notch; a `top: calc(var(--header-h) + env(safe-area-inset-top))`
+> would have been wrong on every phone.
+> It measures the page, comments included, which is the honest reading — a bar that filled
+> two thirds of the way down the screen would be saying you had finished something you
+> hadn't.
+> Two things the suite caught. `base.css` collapses every `animation-duration` to 0.01ms
+> under reduced motion, which for a progress-based timeline would fill the bar at the
+> first pixel of scroll; `.reading` keeps `animation-duration: auto`, because nothing here
+> moves unless the reader moves the page. And `settled()` in `a11y.spec.js` waited on every
+> finite animation's `finished` promise — a scroll-driven one finishes when the reader
+> reaches the bottom, so it hung the whole accessibility suite until the helper learned to
+> skip anything not on a `DocumentTimeline`.
+
+### Two more, beyond the three above
+
+**Headings balance their lines.** `text-wrap: balance` on `h1, h2, h3` in `base.css`.
+Prose has had `text-wrap: pretty` since the type system was written; headings were missed,
+and `pretty` only guards the last line — which in a two-line headline is the whole problem.
+*One sentence:* a headline should never leave one word stranded on a line of its own, and on
+a phone that's where nearly every card title breaks.
+
+**"Back" names where back is.** `previousScreen()` in `router.js`, read by `backTo()` in
+`views/post.js`. The morph already carries the reader here from whichever card they tapped
+and reverses on the way out — and that card is as often on a profile, or in a set of search
+results, as it is on the feed. This is completing that signature rather than adding a new
+one. It also closes a real papercut: the feed cache is keyed by search term, so `#/` from a
+set of results refetched an unfiltered feed and threw the query away.
+*One sentence:* a link that said "the feed" regardless was the one thing that could make the
+journey the reader just watched feel like it lied.
 
 **2.4 — Refresh tokens — 1 day.**
 Short-lived access token in memory + a refresh token in an `httpOnly` cookie. This directly

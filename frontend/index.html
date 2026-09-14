@@ -92,6 +92,13 @@
 
       <div class="account" id="account"><!-- rendered by main.js --></div>
     </div>
+
+    <!-- Reading progress. It lives in the header because what it draws on is
+         the header's bottom edge, and nothing but the header knows where that
+         is once a notch has moved it. CSS alone decides when it's on (only on
+         a post) and how far along it is (the page's own scroll) — see
+         .reading in components.css. -->
+    <span class="reading" aria-hidden="true"></span>
   </header>
 
   <main id="view" tabindex="-1"><!-- rendered by the router --></main>

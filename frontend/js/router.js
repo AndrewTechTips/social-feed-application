@@ -69,7 +69,19 @@ export function forgetCurrentScreen() {
   lastResolvedHash = null;
 }
 
+// The screen we came from, hash and query intact. Only one thing reads it —
+// the post page's Back link, which has no business saying "the feed" when the
+// card you tapped was on someone's profile or in a set of search results.
+// Null after forgetCurrentScreen(), i.e. straight after signing in or out,
+// which is exactly when "where you were" has stopped being a useful answer.
+let previousHash = null;
+
+export function previousScreen() {
+  return previousHash;
+}
+
 async function resolve() {
+  previousHash = lastResolvedHash;
   lastResolvedHash = location.hash;
   const path = currentPath();
   const query = currentQuery();

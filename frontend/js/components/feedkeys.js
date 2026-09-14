@@ -1,0 +1,113 @@
+// @ts-check
+// j / k / Enter / u over the feed.
+//
+// Borrowed whole from Hacker News, Reddit and Superhuman. A linear list of
+// items is the exact shape this convention was invented for, so there is
+// nothing here to invent and nothing to teach — the palette advertises it once
+// (the "Move through the feed" row) and otherwise it stays out of the way.
+//
+// The cursor is real DOM focus, not a `.selected` class, and that one decision
+// buys most of the behaviour for free: Enter already opens a focused link, the
+// focus ring already draws, a screen reader already follows, and there is no
+// second idea of "where you are" to keep in step with the browser's. It also
+// means pagination, the feed cache and the profile view need no bookkeeping
+// whatsoever — the cards are read out of the DOM at the moment a key lands.
+//
+// Which is also why Enter has no handler below. Adding one would be writing a
+// worse version of something the browser already does.
+
+// The profile view draws the same list from the same cards, so it gets the
+// same keys; skeletons are excluded because there is nothing to open yet.
+const CARDS = ".feed__list .card:not(.card--skeleton)";
+
+const cards = () => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(CARDS)]);
+
+/** Is there a list to move through on this screen? */
+export const hasCards = () => cards().length > 0;
+
+/**
+ * Don't steal a letter someone is typing. palette.js needs the same guard for
+ * the same reason and imports this one — and it doubles as the "is the palette
+ * open?" check, because when it is, focus is in its own text field.
+ * @param {EventTarget | null} target
+ */
+export function typing(target) {
+  return (
+    target instanceof HTMLElement &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable)
+  );
+}
+
+/** Where the cursor is now: the index of the card holding focus, or -1. */
+function cursorIn(list) {
+  const el = document.activeElement;
+  const card = el instanceof Element ? el.closest(".card") : null;
+  return card ? list.indexOf(/** @type {HTMLElement} */ (card)) : -1;
+}
+
+// Nothing focused yet — start from the first card the header isn't already
+// covering, so pressing j after a long scroll picks up where the eye is rather
+// than throwing you back to the top of the list.
+function firstInView(list) {
+  const header = document.querySelector(".site-header");
+  const top = header ? header.getBoundingClientRect().bottom : 0;
+  const i = list.findIndex((card) => card.getBoundingClientRect().bottom > top + 1);
+  return i === -1 ? list.length - 1 : i;
+}
+
+function put(card) {
+  const link = /** @type {HTMLElement | null} */ (card.querySelector(".card__link"));
+  if (!link) return;
+  // preventScroll, then scroll deliberately: `nearest` moves the page as
+  // little as it can, and .card's scroll-margin-top keeps the card clear of
+  // the sticky header. Together that's a list that steps rather than jumps.
+  link.focus({ preventScroll: true });
+  card.scrollIntoView({ block: "nearest" });
+}
+
+/**
+ * Move the cursor by `step`. It stops at both ends rather than wrapping: a
+ * list you can fall off the bottom of and reappear at the top of is a list you
+ * have to watch instead of read.
+ * @param {number} step
+ */
+function move(step) {
+  const list = cards();
+  if (!list.length) return;
+  const at = cursorIn(list);
+  const next =
+    at === -1 ? firstInView(list) : Math.min(Math.max(at + step, 0), list.length - 1);
+  put(list[next]);
+}
+
+/** Put the cursor on the list without moving it — what the palette row runs. */
+export const focusCursor = () => move(0);
+
+// u upvotes whatever the cursor is on, by pressing the button that's already
+// there. Everything the vote control does — the optimistic count, the pulse,
+// the sign-in prompt, the rollback — happens exactly as if it had been
+// clicked, because it was.
+function upvote() {
+  const el = document.activeElement;
+  const card = el instanceof Element ? el.closest(".card") : null;
+  const btn = /** @type {HTMLElement | null} */ (card && card.querySelector(".vote"));
+  if (btn) btn.click();
+}
+
+export function wireFeedKeys() {
+  addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (typing(e.target)) return;
+
+    const key = e.key.toLowerCase();
+    if (key !== "j" && key !== "k" && key !== "u") return;
+    // Only once there's a list. Otherwise the letters belong to the page.
+    if (!hasCards()) return;
+
+    e.preventDefault();
+    if (key === "u") upvote();
+    else move(key === "j" ? 1 : -1);
+  });
+}

@@ -35,13 +35,22 @@ async function settled(page) {
   await page.waitForFunction(() => !document.querySelector(".route-enter"));
   // And anything else still moving — the delete confirm fades in on its own
   // animation, which is short enough to miss and long enough to skew a scan.
-  // Infinite ones are skipped: the skeleton shimmer and the background blooms
-  // never finish, and waiting on them would hang here forever.
+  //
+  // Two kinds are skipped, both because waiting on them would hang here
+  // forever. Infinite ones: the skeleton shimmer and the background blooms.
+  // And progress-based ones — the post's reading hairline runs on a scroll
+  // timeline, so it finishes when the reader reaches the bottom of the page
+  // and not before. It is already showing its correct value at every moment,
+  // which is the only sense in which "settled" means anything for it.
   await page.evaluate(() =>
     Promise.all(
       document
         .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .filter(
+          (a) =>
+            a.effect?.getComputedTiming().iterations !== Infinity &&
+            a.timeline instanceof DocumentTimeline
+        )
         .map((a) => a.finished.catch(() => {}))
     )
   );

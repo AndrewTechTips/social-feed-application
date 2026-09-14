@@ -207,6 +207,17 @@ function preview(text) {
   return t.length > 280 ? t.slice(0, 280).trimEnd() + "…" : t;
 }
 
+// Where a post stops being one person's opinion and starts being the room's.
+// Three is a judgement, not a measurement, and it's written here rather than
+// computed from the page on purpose: a threshold that moved with whatever
+// happened to be loaded would mean a card could warm up because you scrolled.
+// Against the seeded demo — five authors, a fourteen-post feed — it marks four
+// cards: often enough to mean something, rare enough to notice.
+export const WARM_AT = 3;
+
+/** @param {{ votes?: number } | null | undefined} post */
+export const isWarm = (post) => Number(post?.votes || 0) >= WARM_AT;
+
 export function postCard(post) {
   const title = h("h2", { class: "card__title" }, post.title);
   const link = h(
@@ -244,7 +255,7 @@ export function postCard(post) {
 
   return h(
     "article",
-    { class: "card" },
+    { class: "card" + (isWarm(post) ? " card--warm" : "") },
     voteControl(post),
     h("div", { class: "card__body" }, link, meta)
   );
@@ -294,6 +305,12 @@ export function voteControl(post, { inline = false } = {}) {
     btn.setAttribute("aria-pressed", String(on));
     btn.setAttribute("aria-label", label(on, count));
     num.textContent = String(count);
+    // Your vote is the one that can carry a card over the line, so the warmth
+    // has to move when the count does — including back again when an
+    // optimistic vote is rolled back, which is why it lives in paint() rather
+    // than in the click handler. Null off a card (the post screen draws the
+    // same control inline), where there is no edge to warm.
+    btn.closest(".card")?.classList.toggle("card--warm", count >= WARM_AT);
   };
 
   btn.addEventListener("click", async () => {

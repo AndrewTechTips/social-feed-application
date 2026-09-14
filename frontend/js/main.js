@@ -16,6 +16,7 @@ import { get, subscribe, dropFeedCache } from "./store.js";
 import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
 import { h, icon } from "./ui.js";
 import { mountPalette, openPalette } from "./components/palette.js";
+import { wireFeedKeys } from "./components/feedkeys.js";
 import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
 import { renderProfile } from "./views/profile.js";
@@ -211,5 +212,6 @@ wireSearch();
 syncChrome();
 mountPalette();
 paintPaletteHint();
+wireFeedKeys();
 
 startRouter();

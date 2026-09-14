@@ -115,6 +115,9 @@
  * @property {string} label
  * @property {string} [key]   the global shortcut that also runs it; rows
  *   without one show ↵, which is true of every row
+ * @property {boolean} [owned] the key is registered by the control it belongs
+ *   to rather than by the palette — set on contextual keys the palette can
+ *   honestly advertise but has no business dispatching
  * @property {boolean} [post] set on the rows that are posts rather than actions
  * @property {() => void} run
  */

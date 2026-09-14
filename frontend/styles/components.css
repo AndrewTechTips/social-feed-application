@@ -21,6 +21,63 @@
   height: 1px;
   background: var(--hairline);
 }
+/* — reading progress ------------------------------------------------------------
+   A 2px amber hairline lying along the header's bottom edge, filling as you
+   read. It exists because long serif posts are the reading experience the
+   whole type system was built for, and a reader forty percent into one has no
+   other way to know it.
+
+   No JavaScript and no scroll listener: animation-timeline hands the animation
+   the document's own scroll progress, so it is exact by construction, cannot
+   drift out of step with the page, and costs nothing per frame — it animates a
+   transform, which never leaves the compositor.
+
+   It measures the page rather than the post element, comments included. That's
+   the honest reading: the thread is part of what you came for, and a bar that
+   filled up two thirds of the way down the screen would be telling you you had
+   finished something you hadn't.
+
+   Everything is inside @supports, and the element is display:none outside it,
+   so a browser without scroll-driven animations gets an empty span and no
+   stray amber rule. That is the entire fallback story.
+   -------------------------------------------------------------------------- */
+.reading {
+  display: none;
+}
+@supports (animation-timeline: scroll()) {
+  body:has(#view .detail) .reading {
+    display: block;
+    position: absolute;
+    /* -1px so it lies *on* the header's bottom border rather than under it:
+       the line the eye already reads as "the chrome ends here" is the one
+       that fills. */
+    inset: auto 0 -1px 0;
+    height: 2px;
+    z-index: 1;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    animation: reading linear both;
+    animation-timeline: scroll(root block);
+  }
+
+  /* base.css collapses every animation-duration to 0.01ms under reduced
+     motion, which is right for anything that plays at you and wrong here: with
+     a progress-based timeline it would snap the bar to full at the first
+     pixel. Nothing about this moves unless the reader moves the page, so it
+     keeps its progress-based duration and stays truthful. */
+  @media (prefers-reduced-motion: reduce) {
+    body:has(#view .detail) .reading {
+      animation-duration: auto !important;
+    }
+  }
+}
+@keyframes reading {
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .site-header__inner {
   max-width: var(--page-max);
   margin-inline: auto;
@@ -322,6 +379,55 @@
 }
 .card + .card {
   margin-top: var(--s-3);
+}
+/* j / k focus the card's link, and scrollIntoView({block:"nearest"}) honours
+   this — so a card the cursor steps onto never arrives tucked under the
+   sticky header. */
+.card {
+  scroll-margin-top: calc(var(--header-h) + var(--s-4));
+}
+/* The keyboard cursor *is* focus (see js/components/feedkeys.js), so it needs
+   no mark of its own — but the ring belongs around the card, not around the
+   title-and-preview block that happens to be the link. Otherwise the cursor
+   reads as a rectangle drawn through a card rather than as the card. */
+.card:has(.card__link:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-color: var(--border-strong);
+}
+.card__link:focus-visible {
+  outline: none;
+}
+
+/* — warmth ---------------------------------------------------------------------
+   The one signature detail on the card, and deliberately the only one.
+
+   Commons is a hearth: the mark is a lamp, the accent is honey amber, and the
+   only live quantity in the whole app is votes. So a post the room has agreed
+   on gets a single warm hairline down its leading edge — structure carrying
+   information, rather than a badge or a chip placed on top of it. Nothing else
+   on the card is allowed to compete with it.
+
+   Not announced to assistive tech, and that's on purpose rather than an
+   oversight: the vote button beside it already says "Upvote, now 4 votes" out
+   loud. This is the same fact drawn, not a second one; saying it twice would
+   make the card noisier to listen to, not clearer.
+
+   The gradient fades out at both ends so it never has to meet the card's 18px
+   corner radius, and so it reads as light falling on an edge rather than as a
+   drawn rule. --accent, no new colour, no new token. */
+.card--warm::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--s-5);
+  inset-inline-start: 0;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--accent),
+    transparent
+  );
 }
 @media (hover: hover) {
   .card:hover {
