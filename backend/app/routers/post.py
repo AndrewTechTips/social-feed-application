@@ -1,8 +1,10 @@
 import math
 from typing import Optional
 
+from typing import Any
+
 from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import ColumnElement, UnaryExpression, select, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2
@@ -47,7 +49,7 @@ def get_owned_post(
     return post
 
 
-def visible_to(user: Optional[models.User]):
+def visible_to(user: Optional[models.User]) -> ColumnElement[bool]:
     """Rows the caller is allowed to see: everything published, plus your own
     drafts. ``published`` is a real access rule, not a display hint — an
     unpublished post belongs to its author until they say otherwise."""
@@ -56,17 +58,71 @@ def visible_to(user: Optional[models.User]):
     return or_(models.Post.published.is_(True), models.Post.user_id == user.id)
 
 
-def page_of_posts(db: Session, *, filters, page: int, page_size: int) -> dict:
-    """One page of posts, newest first, with their vote counts — in the shape
-    ``PostPage`` describes.
+# The text-search configuration, named once. Changing it means rebuilding the
+# generated column, so it is not a thing to sprinkle around as a literal.
+SEARCH_CONFIG = "english"
+
+
+def search_query(search: str) -> ColumnElement[Any]:
+    """The caller's words as a tsquery.
+
+    ``websearch_to_tsquery`` rather than ``to_tsquery`` because this is fed
+    straight from a search box: it accepts what people actually type — bare
+    words, "quoted phrases", ``or``, a leading ``-`` to exclude — and it never
+    raises on punctuation. ``to_tsquery`` would turn a stray apostrophe into a
+    500.
+    """
+    return func.websearch_to_tsquery(SEARCH_CONFIG, search)
+
+
+def matching(search: str) -> ColumnElement[bool]:
+    """Rows matching a search, or everything when the search says nothing.
+
+    The second half is the interesting one. A query of only stop words —
+    "the", "is", "a" — parses to an empty tsquery, and an empty tsquery
+    matches no rows at all, so a reader who typed one honest word would get a
+    blank feed and no explanation. ``numnode() = 0`` spots that case and lets
+    the search fall away instead, which is also exactly what an empty box
+    already does.
+    """
+    tsquery = search_query(search)
+    return or_(
+        func.numnode(tsquery) == 0,
+        models.Post.search_vector.op("@@")(tsquery),
+    )
+
+
+def page_of_posts(
+    db: Session,
+    *,
+    filters: tuple[ColumnElement[bool], ...],
+    page: int,
+    page_size: int,
+    search: str = "",
+) -> dict[str, Any]:
+    """One page of posts with their vote counts — in the shape ``PostPage``
+    describes.
 
     Shared so the feed and a person's profile can't drift apart: the same
     ordering, the same pagination arithmetic, and above all the same visibility
     filter, which is an access rule rather than a display one.
+
+    Ordering depends on whether anyone asked a question. With no search there
+    is no notion of a better match, so the answer is simply the newest posts.
+    With one, relevance leads and recency breaks the ties — a good match from
+    last year should outrank a poor one from this morning, but two equally good
+    matches should come back newest first.
     """
     offset = (page - 1) * page_size
 
     total = db.scalar(select(func.count()).select_from(models.Post).where(*filters))
+
+    order: tuple[UnaryExpression[Any], ...]
+    if search:
+        rank = func.ts_rank(models.Post.search_vector, search_query(search))
+        order = (rank.desc(), models.Post.created_at.desc())
+    else:
+        order = (models.Post.created_at.desc(),)
 
     stmt = (
         select(models.Post, func.count(models.Vote.post_id).label("votes"))
@@ -74,7 +130,7 @@ def page_of_posts(db: Session, *, filters, page: int, page_size: int) -> dict:
         .options(selectinload(models.Post.user))
         .where(*filters)
         .group_by(models.Post.id)
-        .order_by(models.Post.created_at.desc())
+        .order_by(*order)
         .limit(page_size)
         .offset(offset)
     )
@@ -102,16 +158,21 @@ def get_posts(
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    search: Optional[str] = Query("", max_length=100),
-):
-    # autoescape: without it a `%` or `_` typed into the search box is a live
-    # LIKE wildcard rather than the character the person typed.
-    search_filter = models.Post.title.contains(search, autoescape=True)
+    search: str = Query("", max_length=100),
+) -> dict[str, Any]:
+    """The feed, and the search over it.
+
+    Searching covers the title *and* the body: the old title-only ``LIKE``
+    meant a post about repairing a kettle couldn't be found by the word
+    "kettle" unless it happened to be in the heading, which is not what anyone
+    typing into a search box expects.
+    """
     return page_of_posts(
         db,
-        filters=(search_filter, visible_to(current_user)),
+        filters=(matching(search), visible_to(current_user)),
         page=page,
         page_size=page_size,
+        search=search,
     )
 
 
@@ -120,7 +181,7 @@ def create_posts(
     post: schemas.PostCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
-):
+) -> models.Post:
     new_post = models.Post(user_id=current_user.id, **post.model_dump())
     db.add(new_post)
     db.commit()
@@ -134,7 +195,7 @@ def get_post(
     id: int,
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
-):
+) -> models.Post:
     post = db.scalar(
         select(models.Post)
         .options(selectinload(models.Post.user))
@@ -155,7 +216,7 @@ def get_post(
 def delete_post(
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
-):
+) -> Response:
     db.delete(post)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -166,7 +227,7 @@ def update_post(
     updated_post: schemas.PostCreate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
-):
+) -> models.Post:
     # PUT = full replacement: every field of PostCreate is applied.
     for key, value in updated_post.model_dump().items():
         setattr(post, key, value)
@@ -180,7 +241,7 @@ def patch_post(
     payload: schemas.PostUpdate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
-):
+) -> models.Post:
     # PATCH = partial update: only the fields the client actually sent.
     data = payload.model_dump(exclude_unset=True)
     if not data:

@@ -1,11 +1,29 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, func
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy import Computed, ForeignKey, Index, func
+from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.orm import query_expression, relationship, Mapped, mapped_column
 from sqlalchemy.sql.expression import text
 from sqlalchemy.types import TIMESTAMP
 
 from .database import Base
+
+# What the feed's search actually searches.
+#
+# Kept as a GENERATED ... STORED column rather than maintained by a trigger or
+# by the application: the database computes it on every INSERT and UPDATE, so
+# there is no way to write a row whose index disagrees with its text. A trigger
+# would do the same job with more moving parts; doing it in Python would mean
+# any other writer — a migration, psql, a future script — silently skips it.
+#
+# setweight is the whole reason this isn't one call to to_tsvector: a word in
+# the title should count for more than the same word buried in the body, and
+# 'A' vs 'B' is what ts_rank reads to make that true (1.0 against 0.4 with the
+# default weights).
+SEARCH_VECTOR_SQL = (
+    "setweight(to_tsvector('english', coalesce(title, '')), 'A') || "
+    "setweight(to_tsvector('english', coalesce(content, '')), 'B')"
+)
 
 
 class Post(Base):
@@ -20,6 +38,10 @@ class Post(Base):
     __table_args__ = (
         Index("ix_posts_published_created_at", "published", "created_at"),
         Index("ix_posts_user_id", "user_id"),
+        # GIN, not btree: a tsvector holds many lexemes per row and btree can
+        # only index the value as a whole. This is the index that makes search
+        # a lookup instead of a scan-and-stem of every post.
+        Index("ix_posts_search_vector", "search_vector", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -33,8 +55,25 @@ class Post(Base):
         TIMESTAMP(timezone=True), server_default=text("now()"), onupdate=func.now()
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Derived, never written. Declared here so create_all() and `alembic check`
+    # both know about it; see SEARCH_VECTOR_SQL above for what's in it.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR, Computed(SEARCH_VECTOR_SQL, persisted=True), nullable=True
+    )
 
     user: Mapped["User"] = relationship()
+
+    # Not a column. The vote count is attached per query — page_of_posts()
+    # selects it as an aggregate, _attach_votes() counts it for one row — and
+    # PostOut reads it back through from_attributes.
+    #
+    # This used to be a bare `post.votes = n` onto an unmapped attribute, which
+    # worked and was a trick: nothing declared it, so nothing could check it and
+    # a reader had to find the assignment to learn the field existed.
+    # query_expression() is SQLAlchemy's name for exactly this — an ORM
+    # attribute with no column behind it — so the shape is declared in the one
+    # place people look for it.
+    votes: Mapped[int] = query_expression()
 
 
 class User(Base):
