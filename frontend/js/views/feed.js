@@ -12,6 +12,9 @@ import { demoNote } from "../demo/strip.js";
 
 const PAGE_SIZE = 10;
 const FIRST_SKELETONS = 5;
+// How far below the fold the sentinel still counts as "coming up" — the feed
+// starts fetching the next page this far before you reach the end of this one.
+const PREFETCH_MARGIN = 700;
 
 // Only one feed instance should own the observer + hashchange listener at a time.
 let activeTeardown = null;
@@ -109,6 +112,7 @@ export function renderFeed({ query, isStale }) {
   async function load(initial) {
     if (loading || (!initial && !hasNext)) return;
     loading = true;
+    let landed = false;
     if (controller) controller.abort();
     controller = new AbortController();
     const wantPage = page + 1;
@@ -136,19 +140,56 @@ export function renderFeed({ query, isStale }) {
       list.append(frag);
       setKnownPosts(items);
       renderTail();
+      landed = true;
     } catch (err) {
       if (err.name === "AbortError" || isStale()) return;
       showError();
     } finally {
       loading = false;
+      // Only after a page that actually landed. Re-arming on the error path
+      // would turn a failing endpoint into a request loop behind a "Try again"
+      // button nobody pressed.
+      if (landed && hasNext && !isStale()) rearm();
     }
   }
 
   function setupObserver() {
     observer = new IntersectionObserver(
       (entries) => entries.some((e) => e.isIntersecting) && load(false),
-      { rootMargin: "700px 0px" }
+      { rootMargin: `${PREFETCH_MARGIN}px 0px` }
     );
+    observer.observe(sentinel);
+  }
+
+  /**
+   * Start the sentinel's observation over, once a page has landed.
+   *
+   * An IntersectionObserver reports *changes*, and it decides what counts as a
+   * change by comparing against the last state it reported. That baseline is
+   * set early — often while the first request is still in flight and the page
+   * is nothing but skeletons — and two things then go wrong, both seen in the
+   * wild:
+   *
+   *   · The first report says "in view", because at that moment it is. The
+   *     load it asks for is declined by the guard at the top of load(), since
+   *     the first page is already loading. On a tall screen the sentinel never
+   *     leaves the margin afterwards, so nothing ever changes, nothing is ever
+   *     reported again, and the feed stops at one page.
+   *
+   *   · The sentinel leaves the margin and comes back inside a single frame —
+   *     which is exactly what a fast render followed by a scroll looks like.
+   *     Blink never observes the state in between, so it has nothing to report,
+   *     and the scroll that should have loaded the next page loads nothing.
+   *
+   * In both cases the feed stops paginating and there is nothing the reader can
+   * do about it — on a tall screen there isn't even any scrolling left to try.
+   * Re-observing forces a fresh initial notification against the layout as it
+   * stands now: it re-bases the comparison, and it asks again in case the
+   * sentinel is still in reach.
+   */
+  function rearm() {
+    if (!observer) return;
+    observer.unobserve(sentinel);
     observer.observe(sentinel);
   }
 

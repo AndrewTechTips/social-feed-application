@@ -71,37 +71,97 @@ test.describe("tap highlight", () => {
 test.describe("press feedback on touch", () => {
   test.use(phone(390));
 
-  // A finger produces a tap *gesture*, and the gesture is what puts Blink into
-  // the :active state — raw touch events dispatched over CDP skip the gesture
-  // recognizer and never light it up. So drive a real held tap and sample the
-  // computed style from inside the page while the finger is still down.
-  async function peakUnderTap(page, selector, sampleSelector = selector) {
+  // Two different questions, and they need two different instruments.
+  //
+  // The one that is *ours*: does the app draw a press state at all, and is it
+  // actually different from resting? That is CSS we wrote and can break, and
+  // pressedStyle() answers it everywhere by forcing :active through CDP.
+  //
+  // The one that is the *browser's*: does a real held finger put Blink into
+  // :active in the first place? heldTap() answers it where the platform's
+  // gesture recognizer runs — which is not everywhere. See the note there.
+
+  /**
+   * Force :active on `selector` and read the settled style of `sampleSelector`.
+   *
+   * The wait matters. Both of these elements transition background-color over
+   * --t-mid, and getComputedStyle *during* a transition returns the
+   * interpolated value — at t=0 that is the colour being left, not the one
+   * being arrived at. Reading immediately made a perfectly good press state
+   * look identical to resting, which is a false green rather than a false red
+   * and therefore the worse of the two.
+   */
+  async function pressedStyle(page, selector, sampleSelector = selector) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const { root } = await cdp.send("DOM.getDocument");
+    const { nodeId } = await cdp.send("DOM.querySelector", {
+      nodeId: root.nodeId,
+      selector,
+    });
+    expect(nodeId, `${selector} should be on the page`).toBeTruthy();
+
+    const settled = () =>
+      page
+        .locator(sampleSelector)
+        .first()
+        .evaluate(async (el) => {
+          await Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})));
+          const s = getComputedStyle(el);
+          return { bg: s.backgroundColor, ink: s.color, border: s.borderColor };
+        });
+
+    const force = (on) =>
+      cdp.send("CSS.forcePseudoState", {
+        nodeId,
+        forcedPseudoClasses: on ? ["active"] : [],
+      });
+
+    const resting = await settled();
+    await force(true);
+    const pressed = await settled();
+    await force(false);
+    const released = await settled();
+    return { resting, pressed, released };
+  }
+
+  /**
+   * Hold a real tap on `selector` and report whether Blink lit :active.
+   *
+   * `gestureRan` is the part worth explaining. A finger produces a tap
+   * *gesture*, and the gesture — not the raw touch events — is what puts Blink
+   * into :active. On Linux, `Input.synthesizeTapGesture` delivers the touch and
+   * pointer events faithfully and then never runs the recognizer: no
+   * GestureShowPress, so no :active, and no compatibility mousedown/mouseup or
+   * click either. macOS runs it and produces all of them.
+   *
+   * So the absence of a `click` is a reliable, behavioural signal that the
+   * platform never produced a gesture at all — which means there is nothing
+   * about *this app* to learn from the attempt. Detected rather than hardcoded
+   * to an OS, so this starts asserting again by itself if Chromium changes.
+   *
+   * The sampler is stopped by the test rather than by a timer inside the page.
+   * The old version gave itself a 1200ms budget starting before the tap was
+   * even sent, so a slow machine could spend the budget on round trips and the
+   * gesture and then sample nothing.
+   */
+  async function heldTap(page, selector) {
     const cdp = await page.context().newCDPSession(page);
     const box = await page.locator(selector).first().boundingBox();
     expect(box, `${selector} should be on screen`).toBeTruthy();
 
-    await page.evaluate(
-      ([sel, sampleSel]) => {
-        const el = document.querySelector(sel);
-        const sampled = document.querySelector(sampleSel);
-        window.__peak = { sawActive: false, bg: null };
-        const id = setInterval(() => {
-          if (el.matches(":active")) {
-            window.__peak = {
-              sawActive: true,
-              bg: getComputedStyle(sampled).backgroundColor,
-            };
-          }
-        }, 12);
-        setTimeout(() => clearInterval(id), 1200);
-      },
-      [selector, sampleSelector]
-    );
-
-    const resting = await page
-      .locator(sampleSelector)
-      .first()
-      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      window.__tap = { sawActive: false, clicked: false };
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.__tap.clicked = true;
+      });
+      window.__tapSampler = setInterval(() => {
+        if (el.matches(":active")) window.__tap.sawActive = true;
+      }, 8);
+    }, selector);
 
     await cdp.send("Input.synthesizeTapGesture", {
       x: Math.round(box.x + box.width / 2),
@@ -109,30 +169,69 @@ test.describe("press feedback on touch", () => {
       duration: 350,
       tapCount: 1,
     });
-    await page.waitForTimeout(500);
 
-    return { resting, ...(await page.evaluate(() => window.__peak)) };
+    // The gesture's compatibility events land a frame or two after the touch
+    // ends, so give them one before deciding nothing arrived.
+    await page.waitForTimeout(150);
+    return page.evaluate(() => {
+      clearInterval(window.__tapSampler);
+      return window.__tap;
+    });
   }
 
-  test("the vote control visibly presses under a finger", async ({ page, api }) => {
+  async function onTheFeed(page, api) {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
     await expect(page.locator(CARD).first()).toBeVisible();
+  }
 
-    const { resting, sawActive, bg } = await peakUnderTap(page, ".vote");
-    expect(sawActive, ":active never applied while the finger was down").toBe(true);
-    expect(bg, "the press state looked identical to the resting state").not.toBe(resting);
+  test("the vote control visibly presses under a finger", async ({ page, api }, info) => {
+    await onTheFeed(page, api);
+
+    const { resting, pressed, released } = await pressedStyle(page, ".vote");
+    expect(pressed.bg, "the press tint is the same as no tint at all").not.toBe(
+      resting.bg
+    );
+    expect(pressed.ink, "the caret and count should darken too").not.toBe(resting.ink);
+    // And it lets go again — a press state that sticks is worse than none.
+    expect(released, "the press state outlived the press").toEqual(resting);
+
+    const { sawActive, clicked } = await heldTap(page, ".vote");
+    if (clicked) {
+      expect(sawActive, ":active never applied while the finger was down").toBe(true);
+    } else {
+      info.annotations.push({
+        type: "note",
+        description:
+          "this platform's gesture recognizer produced no tap gesture, so :active " +
+          "under a real finger is not observable here — the press state itself is " +
+          "asserted above",
+      });
+    }
   });
 
-  test("a post card visibly presses under a finger", async ({ page, api }) => {
-    await api.seed(3, "ada@commons.test");
-    await page.goto("/");
-    await expect(page.locator(CARD).first()).toBeVisible();
+  test("a post card visibly presses under a finger", async ({ page, api }, info) => {
+    await onTheFeed(page, api);
 
-    // the card tints, not the link inside it — hence the separate sample target
-    const { resting, sawActive, bg } = await peakUnderTap(page, ".card__link", CARD);
-    expect(sawActive, ":active never applied while the finger was down").toBe(true);
-    expect(bg, "the card gave no sign it had been tapped").not.toBe(resting);
+    // The card tints, the link inside it is what takes :active — hence the
+    // separate sample target, and hence `.card:has(.card__link:active)`.
+    const { resting, pressed, released } = await pressedStyle(page, ".card__link", CARD);
+    expect(pressed.bg, "the card gave no sign it had been tapped").not.toBe(resting.bg);
+    expect(pressed.border, "the card's edge should firm up under a finger").not.toBe(
+      resting.border
+    );
+    expect(released, "the press state outlived the press").toEqual(resting);
+
+    const { sawActive, clicked } = await heldTap(page, ".card__link");
+    if (clicked) {
+      expect(sawActive, ":active never applied while the finger was down").toBe(true);
+    } else {
+      info.annotations.push({
+        type: "note",
+        description:
+          "no tap gesture on this platform; the press state itself is asserted above",
+      });
+    }
   });
 
   test("hover-only states stay behind (hover: hover)", async ({ page, api }) => {

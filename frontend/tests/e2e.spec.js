@@ -115,6 +115,66 @@ test("the feed paginates as you scroll and shows an end state", async ({
   await expect(page.locator(CARD)).toHaveCount(25);
 });
 
+test("the feed keeps filling while the sentinel is still in view", async ({
+  browser,
+  api,
+}) => {
+  // The case that scrolling hides.
+  //
+  // An IntersectionObserver reports *changes*, not states. On a tall screen the
+  // sentinel sits inside the prefetch margin from the first paint and stays
+  // there, so it is reported exactly once — and if that one report lands while
+  // the first page is still in flight, the load it asks for is declined by the
+  // `loading` guard and no second report is ever coming. The feed stops at ten
+  // posts and nothing the reader can do brings the rest back, because on a
+  // screen that tall there is no scrolling left to do.
+  //
+  // Found on CI as a flaky pagination assertion, which is what this looks like
+  // from the outside: on a shorter screen the sentinel does leave and come
+  // back, so the missed report is usually covered by the next one — unless the
+  // render and the scroll land inside one frame, in which case Blink never
+  // observes the intermediate state either and the page is dropped for good.
+  await api.seed(25, "ada@commons.test");
+
+  // Seeded before the context exists: in demo mode the state reaches the page
+  // through an init script captured when the context is created, so a context
+  // built first would be built around an empty feed.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 2400 } });
+  const page = await context.newPage();
+
+  // Hold the feed request long enough that the observer's first report is
+  // certain to arrive while it is still in flight — the condition the bug
+  // needs, which otherwise happens only sometimes and only on some machines.
+  // No-op against the demo adapter, which answers in the page and has ~150ms
+  // of simulated latency of its own doing the same job.
+  await page.route(/\/posts\/\?/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+
+  await page.goto("/");
+
+  // Two pages, with no scrolling at all. One is what the bug left behind.
+  await expect(page.locator(CARD)).toHaveCount(20);
+  expect(await page.evaluate(() => window.scrollY), "nothing was scrolled").toBe(0);
+
+  // And it stopped for the right reason: the sentinel is finally out of reach,
+  // not because a report went missing. Anything else would be a feed that fills
+  // the whole thing on load, which is a different bug.
+  const reach = await page.evaluate(() => {
+    const top = document.querySelector(".feed__sentinel").getBoundingClientRect().top;
+    return { top: Math.round(top), limit: window.innerHeight + 700 };
+  });
+  expect(reach.top, "it stopped with the sentinel still in view").toBeGreaterThan(
+    reach.limit
+  );
+
+  // The rest are one scroll away, as they should be.
+  await page.mouse.wheel(0, 20000);
+  await expect(page.locator(CARD)).toHaveCount(25);
+  await context.close();
+});
+
 test("search filters the feed and drives the query string", async ({
   page,
   api,

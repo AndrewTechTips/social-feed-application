@@ -129,11 +129,22 @@ test("the carried-over address doesn't linger on a later visit", async ({ page, 
   await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
   await api.failNext({ method: "POST", path: "^/login$", status: 429 });
   await page.getByRole("button", { name: "Create account" }).click();
+
+  // Wait for the *sign-in* screen, not just for an Email field holding that
+  // address — the register screen has one of those too, still full of what was
+  // typed into it. Without this the assertion below passed on the screen we
+  // were leaving, the test walked on while the navigation was still in flight,
+  // and the login screen mounted *after* the two gotos — consuming the carried
+  // address at exactly the moment the test was checking it had been consumed.
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveValue("passerby@commons.test");
 
   // Read once and cleared: coming back to the sign-in screen later is a blank
   // form like any other, not somebody else's address waiting in a shared browser.
   await page.goto("/#/");
+  await expect(page.locator(".feed")).toBeVisible();
   await page.goto("/#/login");
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveValue("");
 });

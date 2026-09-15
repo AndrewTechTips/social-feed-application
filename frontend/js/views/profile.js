@@ -13,6 +13,8 @@ import { forgetReturn } from "../transitions.js";
 
 const PAGE_SIZE = 10;
 const FIRST_SKELETONS = 4;
+// Mirrors the feed's, for the reason written down there.
+const PREFETCH_MARGIN = 700;
 
 // Only one profile instance should own the observer at a time — same rule as
 // the feed, for the same reason.
@@ -106,6 +108,7 @@ export function renderProfile({ params, isStale }) {
   async function load(initial) {
     if (loading || (!initial && !hasNext)) return;
     loading = true;
+    let landed = false;
     if (controller) controller.abort();
     controller = new AbortController();
     const wantPage = page + 1;
@@ -135,6 +138,7 @@ export function renderProfile({ params, isStale }) {
       setKnownPosts(items);
       paintCount();
       renderTail();
+      landed = true;
     } catch (err) {
       if (err.name === "AbortError" || isStale()) return;
       if (err instanceof ApiError && err.status === 404) {
@@ -147,14 +151,25 @@ export function renderProfile({ params, isStale }) {
       showError("Couldn't load these posts.");
     } finally {
       loading = false;
+      // Same re-arm the feed does, for the same reason and with the same
+      // caveat about the error path — see the long note in views/feed.js.
+      if (landed && hasNext && !isStale()) rearm();
     }
   }
 
   function setupObserver() {
     observer = new IntersectionObserver(
       (entries) => entries.some((e) => e.isIntersecting) && load(false),
-      { rootMargin: "700px 0px" }
+      { rootMargin: `${PREFETCH_MARGIN}px 0px` }
     );
+    observer.observe(sentinel);
+  }
+
+  // See the note on the feed's rearm(); this list has the same observer and
+  // therefore the same way of quietly stopping.
+  function rearm() {
+    if (!observer) return;
+    observer.unobserve(sentinel);
     observer.observe(sentinel);
   }
 

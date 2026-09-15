@@ -6,8 +6,15 @@ name: Pages
 # what gets uploaded is what's in the repo. On a static host the app answers its
 # own API calls from js/demo/backend.js; see js/config.js for how it decides.
 #
-# Requires Pages to be enabled once, by hand:
-#   Settings → Pages → Build and deployment → Source: GitHub Actions
+# `enablement: true` below means this no longer has to be switched on by hand.
+# It was, and the failure mode was confusing: with the source left on "Deploy
+# from a branch", GitHub's own legacy Jekyll builder keeps running and publishes
+# a rendered README at the same URL, so the site looks live while this workflow
+# fails every time at configure-pages with "Get Pages site failed ... Not
+# Found". A green padlock on a page nobody meant to publish.
+#
+# With enablement on, this workflow sets the source to GitHub Actions itself,
+# which also stops the legacy builder from running.
 
 on:
   push:
@@ -39,6 +46,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/configure-pages@v6
+        with:
+          # Enable Pages and point it at this workflow if it isn't already.
+          # Needs the `pages: write` permission above, which is here for the
+          # deploy step anyway.
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v5
         with:
