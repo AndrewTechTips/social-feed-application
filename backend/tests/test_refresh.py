@@ -93,7 +93,7 @@ def test_the_cookie_carries_every_flag_that_makes_it_a_refresh_cookie(
     assert f"Path={oauth2.REFRESH_COOKIE_PATH}" in cookie
     # Not Secure in tests, because tests run over http — but the flag exists
     # and is driven by a setting, so this pins the wiring rather than a value.
-    assert ("Secure" in cookie) is bool(settings.cookie_secure)
+    assert ("Secure" in cookie) is settings.secure_cookies
 
 
 def test_a_failed_login_sets_no_cookie_and_opens_no_session(client, test_user, session):
@@ -478,3 +478,31 @@ def test_nothing_usable_is_stored(client, test_user, session):
     assert secret not in row.csrf_token
     assert len(row.token_hash) == 64
     assert row.csrf_token == body["csrf_token"]
+
+
+# ---------------------------------------------------------------------------
+# Where the Secure flag comes from
+#
+# It follows `environment` rather than defaulting either way, because both
+# defaults are wrong on their own: True breaks every development machine
+# silently, and False is a security property kept in a deployment checklist.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("environment", "override", "expected"),
+    [
+        ("development", None, False),
+        ("production", None, True),
+        # An explicit setting still wins — for TLS terminated in front of a
+        # service that doesn't call itself production.
+        ("development", True, True),
+        ("production", False, False),
+    ],
+)
+def test_secure_cookies_follows_the_environment(environment, override, expected):
+    from backend.app.config import Settings
+
+    probe = settings.model_copy(
+        update={"environment": environment, "cookie_secure": override}
+    )
+    assert isinstance(probe, Settings)
+    assert probe.secure_cookies is expected

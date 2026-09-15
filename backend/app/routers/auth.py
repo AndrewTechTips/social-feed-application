@@ -48,9 +48,10 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
     ``127.0.0.1`` instead would make it cross-site and the cookie would vanish,
     which is a confusing hour if you don't know to expect it.
 
-    ``secure`` is off by default because a Secure cookie is dropped over plain
-    http and every development machine is plain http; settings.cookie_secure
-    turns it on where there is TLS to turn it on for.
+    ``secure`` follows the environment — on in production, off elsewhere, and
+    overridable — because a Secure cookie is dropped outright over plain http
+    and every development machine is plain http. See Settings.secure_cookies
+    for why neither default is safe on its own.
     """
     response.set_cookie(
         key=oauth2.REFRESH_COOKIE,
@@ -58,7 +59,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
         httponly=True,
         samesite="lax",
-        secure=settings.cookie_secure,
+        secure=settings.secure_cookies,
         path=oauth2.REFRESH_COOKIE_PATH,
     )
 
@@ -75,7 +76,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         path=oauth2.REFRESH_COOKIE_PATH,
         httponly=True,
         samesite="lax",
-        secure=settings.cookie_secure,
+        secure=settings.secure_cookies,
     )
 
 

@@ -280,3 +280,30 @@ test("signing out looks immediate, even when the server is slow about it", async
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(signedOut(page)).toBeVisible({ timeout: 1500 });
 });
+
+// ── what signing out leaves behind ──────────────────────────────────────────
+test("signing out takes the upvote mirror with it", async ({ page, api }) => {
+  // The mirror exists because the API has no "did I vote on this" flag, so the
+  // vote control keeps a local record of what you pressed. Left behind on sign
+  // out, it paints filled carets for the *previous* person on a shared browser
+  // — somebody else's history, shown to a stranger, on posts they never
+  // touched. Found on a live pass, not by a test.
+  await api.register("bob@commons.test", "seedpassword", "bob");
+  await api.seed(1, "ada@commons.test");
+  await api.signIn(page, "bob@commons.test", "seedpassword");
+  await page.goto("/");
+
+  const vote = page.locator(`.feed__list ${CARD}`).first().locator(".vote");
+  await vote.click();
+  await expect(vote).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("commons.votes")))
+    .not.toBe(null);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(signedOut(page)).toBeVisible();
+
+  expect(await page.evaluate(() => localStorage.getItem("commons.votes"))).toBeNull();
+  // And the next person to open the page sees an unpressed control.
+  await expect(vote).toHaveAttribute("aria-pressed", "false");
+});

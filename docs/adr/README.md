@@ -15,3 +15,4 @@ comment nobody reads.
 | [0003](0003-token-in-an-httponly-cookie.md) | The refresh token lives in an `httpOnly` cookie |
 | [0004](0004-demo-mode-for-a-static-host.md) | Demo mode is the answer to a static host |
 | [0005](0005-offset-pagination.md) | Offset pagination, and when to switch to keyset |
+| [0006](0006-lighthouse-without-lhci.md) | Lighthouse runs from a script, not from `@lhci/cli` |

@@ -20,6 +20,9 @@ const appDir = path.join(__dirname, "..");
 module.exports = defineConfig({
   testDir: __dirname,
   outputDir: path.join(__dirname, ".artifacts"),
+  // Checks that the API port is answered by the mock and not by a real backend
+  // somebody left running. See the file for why that is worth a round trip.
+  globalSetup: path.join(__dirname, "global-setup.js"),
   // mock_api.py is one process with in-memory state, and each test resets it —
   // so tests run serially. The suite is small and fast enough that this is fine.
   fullyParallel: false,

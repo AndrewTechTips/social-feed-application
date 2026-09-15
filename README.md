@@ -32,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step — type-checked anyway, with JSDoc and `tsc --noEmit`. |
-| **Tested** | 227 pytest tests (97% coverage) · 332 Playwright end-to-end tests, run against two API implementations · axe on every screen |
+| **Tested** | 231 pytest tests (97% coverage) · 338 Playwright end-to-end tests, run against two API implementations · axe on every screen |
 | **Checked** | `black` · `mypy --strict` · `pip-audit` · `alembic check` · Lighthouse CI |
 | **Shipped** | Docker · GitHub Actions → Docker Hub · GitHub Pages |
 
@@ -226,11 +226,16 @@ to a client generator without running anything. CI fails if it drifts from the c
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 227 tests, coverage gate at 85%
-cd frontend && npm test          # 332 Playwright tests, no Postgres needed
+cd backend && pytest -q          # 231 tests, coverage gate at 85%
+cd frontend && npm test          # 338 Playwright tests, no Postgres needed
 cd frontend && npm run typecheck # tsc --noEmit over the JSDoc types
-cd frontend && npm run lighthouse
+cd frontend && npm run lighthouse           # desktop, the floors CI gates on
+cd frontend && npm run lighthouse -- --mobile
 ```
+
+Node 22 or newer, and `frontend/.nvmrc` pins the version CI uses — worth respecting,
+because a lockfile written by a newer npm than the one installing from it is a failure
+that only shows up on CI ([ADR 0006](docs/adr/0006-lighthouse-without-lhci.md)).
 
 The backend suite needs a reachable Postgres and a `<DATABASE_NAME>_test` database; it
 creates and drops the tables itself on every test.
@@ -271,7 +276,7 @@ image once all of that is green.
 
 ## Decisions I made
 
-The five that shaped the shape of the thing have their own records in
+The ones that shaped the shape of the thing have their own records in
 [`docs/adr/`](docs/adr/) — each says what it costs and what would change my
 mind, which is the part that makes it a decision rather than a preference:
 
@@ -282,6 +287,7 @@ mind, which is the part that makes it a decision rather than a preference:
 | [0003](docs/adr/0003-token-in-an-httponly-cookie.md) | The refresh token lives in an `httpOnly` cookie | Short access token in memory, long refresh token the page can't read. Supersedes the `localStorage` decision, which said to revisit exactly when this landed. |
 | [0004](docs/adr/0004-demo-mode-for-a-static-host.md) | Demo mode is the answer to a static host | Three implementations of one contract, held together by running the same suite against all of them. |
 | [0005](docs/adr/0005-offset-pagination.md) | Offset pagination | It matches the UI and the index. Switch to keyset at ~50k posts, and here's the exact change. |
+| [0006](docs/adr/0006-lighthouse-without-lhci.md) | Lighthouse runs from a script, not `@lhci/cli` | Sixty lines replaced 331 packages and all ten `npm audit` findings — and fixed an `npm ci` that only failed on CI. |
 
 And the smaller ones, in place:
 
@@ -470,26 +476,27 @@ buttons were between 26 and 40px tall. They're 44px on a phone.
 <details>
 <summary><strong>Performance</strong></summary>
 
-Measured **2026-09-14** with Lighthouse 13.4.1, against the demo build — the same
-files GitHub Pages serves. `npm run lighthouse` reproduces it; CI runs it on every
-push and fails below the floors in `lighthouserc.json`.
+Measured **2026-09-15** with Lighthouse 13.4.1, against the demo build — the same
+files GitHub Pages serves, through the same Chromium the test suite pins.
+`npm run lighthouse` reproduces it; CI runs it on every push and fails below the
+floors in [`frontend/tests/lighthouse.mjs`](frontend/tests/lighthouse.mjs).
 
 | | Performance | Accessibility | Best practices | SEO |
 | --- | --- | --- | --- | --- |
 | **Desktop** (median of 3) | **100** | **100** | **100** | **100** |
-| **Mobile** (Moto G Power, 4× CPU, slow 4G) | **92** | **100** | **100** | **100** |
+| **Mobile** (Moto G Power, 4× CPU, slow 4G) | **97** | **100** | **100** | **100** |
 
-Desktop: FCP 0.4 s, LCP 0.6 s, CLS 0.004, TBT 0 ms.
-Mobile: FCP 1.9 s, LCP 3.2 s, CLS 0, TBT 0 ms.
+Desktop: FCP 0.4 s, LCP 0.6 s, CLS 0, TBT 0 ms.
+Mobile: FCP 1.5 s, LCP 2.4 s, CLS 0, TBT 0 ms. Reproduce it with
+`npm run lighthouse -- --mobile`.
 
-**Why mobile is 92 and not 100, honestly.** Lighthouse wants the CSS and JS
-minified — it estimates 73 KB across the two — and four separate stylesheets in
-`<head>` cost about 600 ms of render-blocking on a throttled connection. Both are
-fixable only with a build step, which is the one thing this frontend is built not
-to have ([ADR 0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md)). The comments in
-the CSS are a meaningful part of what this repo is; shipping them costs eight points
-on one synthetic mobile run, and that is a trade I'd make again. TBT is 0 ms and CLS
-is 0, which are the numbers a person actually feels.
+**Why mobile is 97 and not 100, honestly.** Lighthouse wants the CSS and JS
+minified — it estimates about 19 KB across the two — which is fixable only with a
+build step, the one thing this frontend is built not to have
+([ADR 0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md)). The comments in the CSS
+are a meaningful part of what this repo is; shipping them costs three points on one
+synthetic mobile run, and that is a trade I'd make again. TBT is 0 ms and CLS is 0,
+which are the numbers a person actually feels.
 
 No layout shift — skeletons match their final sizes, and off-screen cards use
 `content-visibility` with a reserved `contain-intrinsic-size`. One preloaded font file,
@@ -533,7 +540,9 @@ of these was a deliberate pass over code that already worked:
 - [x] Comments — a nested resource with its own ownership rule and real cascades
 - [x] Postgres full-text search, and types without a build step
 - [x] Decision records, a changelog, PWA and link-preview assets, Lighthouse in CI
-- [ ] Refresh tokens, follows, a WebSocket live feed
+- [x] Keyboard navigation, the warmth hairline, reading progress, refresh tokens, OpenAPI polish
+- Not doing: follows (no social graph worth showing yet), a WebSocket live feed (nowhere
+  in production to run it) — reasoning for both is in `UPGRADE_PLAN.md`
 
 The longer version — what I'd change, what I'd skip, and why — is in
 [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).

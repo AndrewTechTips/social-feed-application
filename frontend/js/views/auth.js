@@ -8,6 +8,20 @@ import { h, icon, mountView, toast } from "../ui.js";
 import { get, setSession, setAccess } from "../store.js";
 import { navigate } from "../router.js";
 
+// Carried from the register screen to the sign-in screen on the one path that
+// crosses between them: the account was created and the sign-in behind it
+// wasn't. Read once and cleared, so a later visit to #/login is a blank form
+// like any other.
+let carriedEmail = "";
+const rememberEmail = (value) => {
+  carriedEmail = value;
+};
+const takeCarriedEmail = () => {
+  const value = carriedEmail;
+  carriedEmail = "";
+  return value;
+};
+
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 // Mirrors schemas.USERNAME_RE in the backend. Case-insensitive here because
 // the server folds what it's given rather than refusing it.
@@ -135,9 +149,14 @@ function screen(mode) {
     const creds = { email: email.input.value.trim(), password: password.input.value };
     if (username) creds.username = username.input.value.trim();
     setPending(true);
+    // Registering is two requests, and the account is real after the first of
+    // them. If the second one fails, everything below has to stop talking
+    // about creating an account — it's been created.
+    let accountExists = false;
     try {
       if (isRegister) {
         await api.post("/users/", creds, { auth: false });
+        accountExists = true;
       }
 
       // Signing in by email — the username is the public identity, not a
@@ -156,6 +175,26 @@ function screen(mode) {
       navigate("/");
     } catch (err) {
       setPending(false);
+
+      // The account was made and the sign-in that follows it wasn't. Rare, but
+      // reachable: /users/ allows 10 an hour and /login only 5 a minute, so a
+      // handful of people registering from one office at once can land here.
+      //
+      // The old behaviour was the worst of both — "Too many tries" on a screen
+      // still headed "Make an account", and a second attempt answering "that
+      // username is taken", which is true and reads like the first attempt
+      // failed. Say what actually happened and move them to the door they now
+      // need, with their address already in it.
+      if (accountExists) {
+        rememberEmail(creds.email);
+        toast(
+          err.status === 429
+            ? "Your account is ready — signing in is rate limited, so try in a minute."
+            : "Your account is ready. Sign in to finish."
+        );
+        return navigate("/login");
+      }
+
       if (isRegister && err.status === 409) {
         // The backend says which of the two collided.
         const aboutUsername = /username/i.test(err.detail || "");
@@ -192,7 +231,14 @@ function screen(mode) {
       h("a", { href: isRegister ? "#/login" : "#/register" },
         isRegister ? "Sign in" : "Create an account")));
 
-  mountView(h("div", { class: "auth" }, card), { focus: email.input });
+  const carried = isRegister ? "" : takeCarriedEmail();
+  if (carried) email.input.value = carried;
+
+  // Land on the field that still needs filling in. Usually the email; on the
+  // way over from a half-finished registration, the password.
+  mountView(h("div", { class: "auth" }, card), {
+    focus: carried ? password.input : email.input,
+  });
 }
 
 export function renderLogin() {

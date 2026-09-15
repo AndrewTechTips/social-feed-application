@@ -52,6 +52,12 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 - **The committed OpenAPI spec**, [`docs/openapi.json`](docs/openapi.json),
   with worked examples, documented error responses, tag descriptions and a
   `servers` block. `backend/scripts/export_openapi.py --check` gates it in CI.
+- **`frontend/.nvmrc`**, read by CI, so the Node that writes the lockfile and
+  the Node that installs from it can't drift apart.
+- **A guard in the Playwright config** that refuses to run when something other
+  than `mock_api.py` is answering on the API port — usually a real backend left
+  running, which otherwise produces failures that point everywhere but at the
+  cause.
 - **Decision records** in [`docs/adr/`](docs/adr/), and this changelog.
 - **PWA and link-preview assets**: `manifest.webmanifest`, maskable icons, an
   `apple-touch-icon`, a real favicon set and a committed `og.png` — all
@@ -99,15 +105,45 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 - The router could render a screen twice, and could leave a signed-in view on
   screen after signing out.
 - Search wildcards (`%`, `_`) were live `LIKE` metacharacters.
+- **`npm ci` failed on CI while working locally.** `@lhci/cli` pins
+  `proxy-agent@6`; the `@puppeteer/browsers` reached through Lighthouse 13 wants
+  `proxy-agent >=8` as a peer. npm 11 resolved that by installing a second copy
+  and not recording it in the lockfile; npm 10 — what Node 22 ships, and what CI
+  runs — rebuilt the tree from the lockfile, found eleven packages missing from
+  it, and refused. Dropping `@lhci/cli` removed the conflict, and
+  `frontend/.nvmrc` stops the two npms drifting apart again.
+  [ADR 0006](docs/adr/0006-lighthouse-without-lhci.md).
+- **Registering could leave you stranded.** It is two requests, and the account
+  is real after the first; if the sign-in behind it failed, the screen still
+  said "Make an account" while reporting a failure, and a second attempt
+  answered "that username is taken". It now says the account is ready, carries
+  the address to the sign-in screen and puts the cursor on the password.
+- **`mock_api.py` corrupted its own connection** when `/__fail_next` matched a
+  request with a body. It answered before anything read the body, and HTTP/1.1
+  keep-alive meant the next request on that connection started mid-form — which
+  the browser reports as a CORS error, several steps from the cause.
 
 ### Security
 
 - Fixed broken access control on drafts (OWASP A01): the feed and
   `GET /posts/{id}` never checked `published`.
 - Closed a login timing oracle that revealed which emails had accounts.
-- Security headers on every response; `allow_credentials` dropped from CORS,
-  since nothing here uses cookies.
+- Security headers on every response. CORS is credentialed now that the
+  refresh cookie exists, against an explicit origin list and never a wildcard —
+  see `backend/tests/test_cors.py`, which exists to keep it that way.
 - `httpx2` pinned to 2.12 — six advisories against the 2.7 line.
+- **All ten `npm audit` findings**, seven of them high, every one a transitive
+  dependency of `@lhci/cli` — dev tooling, never shipped, but still ten
+  advisories in the thing that checks the build. Lighthouse now runs from
+  `frontend/tests/lighthouse.mjs`: same three runs, same median, same floors,
+  113 packages instead of 444.
+- **Signing out left the upvote mirror behind**, so the next person to sign in
+  on a shared browser saw filled carets on posts they had never touched — and a
+  piece of somebody else's history shown to a stranger.
+- **The refresh cookie's `Secure` flag follows `ENVIRONMENT`** rather than
+  defaulting to off. Neither fixed default is safe on its own: on breaks every
+  development machine silently, off keeps a security property in a deployment
+  checklist. `COOKIE_SECURE` still overrides it.
 
 ---
 

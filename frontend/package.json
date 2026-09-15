@@ -10,13 +10,16 @@
     "test:ui": "playwright test -c tests/playwright.config.js --ui",
     "test:report": "playwright show-report tests/.report",
     "typecheck": "tsc --noEmit",
-    "lighthouse": "lhci autorun --config=lighthouserc.json"
+    "lighthouse": "node tests/lighthouse.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.55.0",
+    "chrome-launcher": "^1.2.1",
     "lighthouse": "^13.4.1",
     "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

@@ -108,7 +108,11 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          # From the file rather than inline, so the version CI installs and the
+          # version a `nvm use` picks up locally cannot drift apart. They had:
+          # the lockfile was written by npm 11 (Node 24) and `npm ci` on npm 10
+          # (Node 22) refused it. See docs/adr/0006-lighthouse-without-lhci.md.
+          node-version-file: frontend/.nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -138,9 +142,10 @@ jobs:
 
       - name: Lighthouse
         # Against the demo build, which is what the published site serves. The
-        # assertions in lighthouserc.json are floors meant to catch a
-        # regression — a render-blocking script that crept in, a label that
-        # went missing — not a score to chase.
+        # floors in tests/lighthouse.mjs are there to catch a regression — a
+        # render-blocking script that crept in, a label that went missing — not
+        # a score to chase. Runs after the Playwright install above, because it
+        # drives that same pinned Chromium.
         working-directory: frontend
         run: npm run lighthouse
 

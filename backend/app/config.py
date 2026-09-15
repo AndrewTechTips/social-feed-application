@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     # The refresh cookie's life. Long enough that a browser you use weekly
     # stays signed in, short enough that an abandoned session goes away.
     refresh_token_expire_days: int = 14
-    # Sent on the refresh cookie in production only: a Secure cookie is
-    # dropped outright over plain http, which is every development machine.
-    cookie_secure: bool = False
+    # Whether to put `Secure` on the refresh cookie. Unset means "decide from
+    # the environment" — see secure_cookies below, which is what everything
+    # actually reads.
+    cookie_secure: bool | None = None
 
     # Operational knobs — all have safe defaults, so .env only needs the
     # environment-specific secrets above.
@@ -34,6 +35,28 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
+
+    @property
+    def secure_cookies(self) -> bool:
+        """Secure by default in production, off by default anywhere else.
+
+        The flag can't simply default to True: a Secure cookie is dropped
+        outright by the browser over plain http, and every development machine
+        is plain http — so a True default would make the refresh flow fail
+        locally with no error message anywhere, which is a bad afternoon.
+
+        It can't safely default to False either. That is the one setting where
+        forgetting it in production sends the credential this app can least
+        afford to lose over the wire in the clear, and a deployment checklist
+        is a poor place to keep a security property.
+
+        So it follows `environment`, and an explicit COOKIE_SECURE still wins —
+        for the case this doesn't cover, which is TLS terminated in front of a
+        service that doesn't call itself production.
+        """
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return self.environment == "production"
 
 
 settings = Settings()

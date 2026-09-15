@@ -41,7 +41,9 @@ def render() -> str:
     # sort_keys so the file is stable: dict ordering follows the order routes
     # happen to be registered in, and a reshuffle that changes nothing about
     # the API shouldn't produce a diff that looks like it did.
-    return json.dumps(app.openapi(), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    return (
+        json.dumps(app.openapi(), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    )
 
 
 def main() -> int:

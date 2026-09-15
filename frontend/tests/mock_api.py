@@ -459,8 +459,21 @@ class Handler(BaseHTTPRequestHandler):
         }
 
     def _body(self) -> bytes:
-        n = int(self.headers.get("Content-Length", 0) or 0)
-        return self.rfile.read(n) if n else b""
+        """The request body, read exactly once per request by ``_route``.
+
+        It has to be read *unconditionally*, even by handlers that don't want
+        it, and that is not a style preference. This server speaks HTTP/1.1, so
+        connections are reused: bytes left unread sit in the socket and the
+        next request parsed off that connection starts in the middle of them.
+
+        That is not hypothetical. ``/__fail_next`` used to answer before any
+        handler touched the body, so forcing a failure on a request that had
+        one — a login, a post, a comment — left the form data in the pipe and
+        the *following* request on that connection came back as a parse error
+        with no CORS headers on it. Which the browser reports as "blocked by
+        CORS policy", and which sends you looking in entirely the wrong place.
+        """
+        return self._read_body
 
     def _json(self) -> dict:
         raw = self._body()
@@ -534,6 +547,11 @@ class Handler(BaseHTTPRequestHandler):
     def _route(self, method: str) -> None:
         path = urlparse(self.path).path
         query = parse_qs(urlparse(self.path).query)
+
+        # Before anything can answer, and before anything can decline to. See
+        # the note on _body().
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        self._read_body = self.rfile.read(length) if length else b""
 
         if self._maybe_forced_failure(method, path):
             return

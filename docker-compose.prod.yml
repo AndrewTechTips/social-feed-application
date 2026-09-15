@@ -1,5 +1,12 @@
 # Production-like stack:  docker compose -f docker-compose.prod.yml up -d
 # Pulls the image built by CI. Override the tag with IMAGE in .env if needed.
+#
+# Two settings in .env decide whether this is production-*like* or production:
+# ENVIRONMENT=production turns on HSTS and puts `Secure` on the refresh cookie,
+# and COOKIE_SECURE overrides the latter on its own. Both are deliberately left
+# to .env rather than pinned here, because this file also gets run on a laptop
+# over plain http — where a Secure cookie is dropped by the browser without a
+# word and sign-in stops working for no visible reason.
 services:
   # One-shot: bring the schema up to date, then exit. `api` waits for it.
   migrate:

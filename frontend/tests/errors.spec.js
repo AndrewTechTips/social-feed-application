@@ -76,3 +76,64 @@ test("a dead backend shows a retry affordance, not a blank page", async ({
   await expect(page.getByText("The feed didn't load.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
+
+// ── the account exists and the sign-in behind it didn't ─────────────────────
+// Registering is two requests. `/users/` allows ten an hour and `/login` only
+// five a minute, so a handful of people registering from one office at once can
+// land between them — and that is exactly what happened during a live pass:
+// 201 on the account, 429 on the sign-in.
+//
+// What made it worth fixing wasn't the rate limit. It was that the screen still
+// said "Make an account" while reporting a failure for an account that had just
+// been made, and trying again answered "that username is taken" — which is true
+// and reads like the first attempt failed.
+test("a registration whose sign-in fails says so, and moves you to sign in", async ({
+  page,
+  api,
+}) => {
+  // Through the feed first: it's the screen that makes the demo adapter load,
+  // and `api.failNext` can only queue a rule inside an adapter that exists.
+  await page.goto("/");
+  await expect(page.locator(".feed")).toBeVisible();
+
+  await page.goto("/#/register");
+  await page.getByLabel("Username").fill("latecomer");
+  await page.getByLabel("Email").fill("latecomer@commons.test");
+  await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
+
+  // The account gets made; the sign-in behind it hits the limiter.
+  await api.failNext({ method: "POST", path: "^/login$", status: 429 });
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByText(/Your account is ready/)).toBeVisible();
+
+  // The address carries over, so the second attempt isn't a retype — and the
+  // cursor is on the half that's still empty.
+  await expect(page.getByLabel("Email")).toHaveValue("latecomer@commons.test");
+  await expect(page.getByLabel("Password", { exact: true })).toBeFocused();
+
+  // And it really was created, so signing in now works.
+  await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+});
+
+test("the carried-over address doesn't linger on a later visit", async ({ page, api }) => {
+  await page.goto("/");
+  await expect(page.locator(".feed")).toBeVisible();
+
+  await page.goto("/#/register");
+  await page.getByLabel("Username").fill("passerby");
+  await page.getByLabel("Email").fill("passerby@commons.test");
+  await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
+  await api.failNext({ method: "POST", path: "^/login$", status: 429 });
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByLabel("Email")).toHaveValue("passerby@commons.test");
+
+  // Read once and cleared: coming back to the sign-in screen later is a blank
+  // form like any other, not somebody else's address waiting in a shared browser.
+  await page.goto("/#/");
+  await page.goto("/#/login");
+  await expect(page.getByLabel("Email")).toHaveValue("");
+});
