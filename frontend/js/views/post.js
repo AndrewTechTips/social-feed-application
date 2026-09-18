@@ -10,7 +10,7 @@
 import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
 import { get, isMine, dropFeedCache } from "../store.js";
-import { nameForMorph, morphingBackTo } from "../transitions.js";
+import { nameForMorph, morphingBackTo, morphPending } from "../transitions.js";
 import { navigate, previousScreen } from "../router.js";
 
 // Mirrors schemas.COMMENT_MAX. The server is the one that decides; this is so
@@ -18,6 +18,31 @@ import { navigate, previousScreen } from "../router.js";
 const COMMENT_MAX = 2000;
 const COMMENTS_PER_PAGE = 20;
 const EMPTY = "Nothing said about this one yet.";
+
+// How long the post gets to arrive before the reader is shown a loading state.
+//
+// Under about a fifth of a second a screen change reads as instant, and a
+// skeleton that appears and is gone again inside that window isn't feedback —
+// it's a flinch. It also cost the app the one piece of choreography it has:
+// the title you tapped can only become the heading of the post if the heading
+// is what arrives. Mount a skeleton first and the morph is handed a screen
+// with no title in it, the tapped words hang over the placeholder with nowhere
+// to go, and the real post then needs a second transition to get in. Two
+// animations and a flash of the thing you tapped, to cover a wait that hadn't
+// happened yet.
+//
+// So the skeleton waits its turn. A local API — or the in-browser demo backend
+// — answers long before this and the reader goes from card to post in one
+// movement, which is what the transition was written for. A slow connection
+// still gets its skeleton, a quarter of a second late, which is the point at
+// which it starts being reassuring rather than noisy.
+//
+// 250 rather than 200 for headroom: the published demo answers in a deliberate
+// 150ms (LATENCY_MS in js/demo/backend.js) and a threshold thirty milliseconds
+// above that is a coin toss on a slow phone, not a threshold. The tap itself
+// is acknowledged immediately either way — see .card--opening in
+// components.css — so nothing about this window is silent.
+const SKELETON_AFTER = 250;
 
 // "Back" should name the place it goes back to.
 //
@@ -56,7 +81,29 @@ function loadingSkeleton() {
 
 export async function renderPost({ params, isStale }) {
   const id = params.id;
-  mountView(loadingSkeleton());
+
+  const placeholder = () => {
+    if (!isStale()) mountView(loadingSkeleton(), { transition: false });
+  };
+
+  // Whether the screen the reader is leaving is worth leaving up for a moment.
+  //
+  // It is, when they got here by tapping a title: the list is still there,
+  // still readable, the card they tapped is holding its pressed state, and the
+  // post is about to grow out of it. Replacing all that with grey bars for a
+  // sixth of a second says the app threw the page away and started again.
+  //
+  // It is not, in any other case — and the difference matters more than it
+  // looks. Arrive from a pasted link and there is no screen to hold, only an
+  // empty page, which is worse company than a skeleton. Arrive from the
+  // compose form, having just pressed Post, and the screen being held is the
+  // form itself: it sits there full of the words you just sent, looking for
+  // all the world like the button didn't take. So the wait is spent only where
+  // waiting reads as continuity, and everywhere else the skeleton is immediate,
+  // exactly as it was.
+  const holdTheOldScreen = morphPending();
+  if (!holdTheOldScreen) placeholder();
+  const pending = holdTheOldScreen ? setTimeout(placeholder, SKELETON_AFTER) : null;
 
   let post;
   try {
@@ -70,6 +117,11 @@ export async function renderPost({ params, isStale }) {
       h("p", { style: { color: "var(--text-dim)" } },
         gone ? "It may have been deleted." : "Try again in a moment.")));
     return;
+  } finally {
+    // Whichever way the request went, the loading state has missed its moment.
+    // Cleared in `finally` so the error path above can't leave a timer behind
+    // that redraws a skeleton over the message it just wrote.
+    if (pending) clearTimeout(pending);
   }
   if (isStale()) return;
 
@@ -98,8 +150,10 @@ export async function renderPost({ params, isStale }) {
   const actions = h("div", { class: "detail__actions" });
 
   // The other end of the morph: whatever title the reader tapped arrives here.
+  // Held, so the name is still on it when the reader leaves and the card on
+  // the other side comes looking for something to travel from.
   const title = h("h1", { class: "detail__title" }, post.title);
-  nameForMorph(title);
+  nameForMorph(title, { hold: true });
   // And on the way back out, the card for this post takes the name so the
   // journey reverses rather than fading.
   morphingBackTo(post.id);

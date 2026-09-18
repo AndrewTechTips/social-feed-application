@@ -151,9 +151,15 @@ export function renderCompose() {
 export async function renderEdit({ params, isStale }) {
   if (!get("session")) return navigate("/login");
 
+  // No transition into the placeholder. Nobody tapped a title to get here, so
+  // there is no journey to narrate — and animating into grey bars only to have
+  // to animate out of them again the moment the post lands is two pieces of
+  // choreography spent on the gap between one screen and the same screen with
+  // the words in it. The cross-fade mountView falls back to is enough.
   mountView(h("section", { class: "compose" },
     h("span", { class: "sk", style: { display: "block", width: "40%", height: "24px", marginBottom: "20px" } }),
-    h("span", { class: "sk", style: { display: "block", height: "220px", borderRadius: "18px" } })));
+    h("span", { class: "sk", style: { display: "block", height: "220px", borderRadius: "18px" } })),
+    { transition: false });
 
   let post;
   try {

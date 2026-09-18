@@ -439,9 +439,29 @@
     box-shadow: var(--shadow-hover);
   }
 }
-.card:has(.card__link:active) {
+/* .card.card--opening, not .card--opening: .card:hover above is two
+   compound selectors and would otherwise outweigh it, so on a mouse the
+   pressed state was invisible for exactly the people most likely to see it. */
+.card:has(.card__link:active),
+.card.card--opening {
   border-color: var(--border-strong);
   background: color-mix(in srgb, var(--text) 5%, var(--card-bg));
+}
+
+/* The card you just tapped, held pressed until its post is on screen.
+   :active stops at the moment the finger lifts, which is precisely when the
+   waiting begins — so the one frame that needs to say "heard you" is the one
+   frame :active can't reach. js/ui.js adds this on the way out and nothing
+   takes it off: the view swap takes the card instead. Hover is suppressed
+   underneath it so a mouse doesn't lift the card it is busy opening. */
+@media (hover: hover) {
+  .card.card--opening:hover {
+    transform: none;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--text) 5%, var(--card-bg));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 .card__body {
   min-width: 0;

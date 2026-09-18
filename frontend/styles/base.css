@@ -263,14 +263,43 @@ h3 {
   animation-timing-function: var(--ease);
   z-index: 2;
 }
-/* The two snapshots of the title differ in size and weight rather than
-   content, so cross-fading them just blurs the text. Hold both fully opaque
-   and let the group's own transform do the moving. */
+/* The two snapshots are the same words at two different sizes, anchored to the
+   same corner. object-fit:none keeps each at its natural size rather than
+   letting the group stretch it, which is what stops the letters distorting as
+   the group grows.
+   
+   What they must never do is both be solid at once. Holding both fully opaque
+   — which is what `animation: none` here used to do — doesn't read as one
+   title travelling; it reads as two copies of the title stacked on top of each
+   other, a small one and a large one, for the whole 240ms. Going back it was
+   the post's heading sitting opaque over an already-drawn feed.
+   
+   An even cross-fade doesn't fix it either: at the midpoint that's the same
+   two copies at half strength, which is the same ghost with less contrast. So
+   they hand over instead — the old one is most of the way out before the new
+   one is meaningfully in, and the group's transform carries the position
+   across underneath. The overlap is short enough to read as motion rather than
+   as two things. */
 ::view-transition-old(post-title),
 ::view-transition-new(post-title) {
-  animation: none;
   mix-blend-mode: normal;
   height: 100%;
   object-fit: none;
   object-position: top left;
+}
+::view-transition-old(post-title) {
+  animation: title-hand-off-out 120ms var(--ease) both;
+}
+::view-transition-new(post-title) {
+  animation: title-hand-off-in 180ms var(--ease) 60ms both;
+}
+@keyframes title-hand-off-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes title-hand-off-in {
+  from {
+    opacity: 0;
+  }
 }

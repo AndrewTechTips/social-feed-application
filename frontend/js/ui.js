@@ -65,11 +65,18 @@ const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view")
 
 /**
  * @param {Element | DocumentFragment} node
- * @param {{ restoreScroll?: number, focus?: HTMLElement }} [options]
+ * @param {{ restoreScroll?: number, focus?: HTMLElement, transition?: boolean }} [options]
  *   `focus` is where the cursor should land — a form's first field, say.
  *   Defaults to #view, which is what a reading screen wants.
+ *
+ *   `transition` is the opt-out. A view transition is a sentence about a
+ *   journey — this screen became that one — and a loading state is not a
+ *   screen, it's the absence of one. Animating into a skeleton says something
+ *   untrue, costs the app 160ms of not taking input, and then has to be
+ *   animated out of again the moment the real thing lands. Callers that are
+ *   putting up a placeholder pass false and get the quiet cross-fade instead.
  */
-export function mountView(node, { restoreScroll, focus } = {}) {
+export function mountView(node, { restoreScroll, focus, transition = true } = {}) {
   const view = viewEl();
 
   const swap = () => {
@@ -99,7 +106,7 @@ export function mountView(node, { restoreScroll, focus } = {}) {
 
   // A transition and the cross-fade at the same time reads as a stutter, so
   // exactly one of them runs.
-  if (!(replacingAView && tryTransition(swap))) {
+  if (!(transition && replacingAView && tryTransition(swap, node))) {
     swap();
     const el = /** @type {Element} */ (node);
     el.classList.add("route-enter");
@@ -230,7 +237,19 @@ export function postCard(post) {
   // Hand this title to the transition on the way out, so it becomes the
   // heading of the post screen rather than being replaced by it. Set at the
   // moment of the click: only one element may carry the name at a time.
-  link.addEventListener("click", () => nameForMorph(title));
+  //
+  // The card also stays visibly pressed from here until the post lands. The
+  // post screen deliberately holds the feed on screen for a quarter of a
+  // second rather than flashing a skeleton at a wait that usually isn't one
+  // (SKELETON_AFTER in views/post.js) — and a screen that holds still after a
+  // tap has to say that it heard the tap, or holding still reads as ignoring
+  // it. :active can't do this: it ends when the finger lifts, which is the
+  // instant the waiting starts. Nothing removes the class, because the swap
+  // removes the card.
+  link.addEventListener("click", () => {
+    nameForMorph(title);
+    link.closest(".card")?.classList.add("card--opening");
+  });
 
   // Coming back the other way, the card the reader left from takes the name
   // so the journey reverses instead of just fading.
