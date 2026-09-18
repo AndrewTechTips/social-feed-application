@@ -94,6 +94,38 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 
 ### Fixed
 
+- **A screen change showed a third screen in between.** Three unrelated faults
+  reading as one:
+  - The chrome — the search row, the demo band, the document title — was
+    rebuilt on `hashchange`, which fires when the link is followed rather than
+    when the screen it belongs to arrives. On a phone that left the feed
+    wearing the post's one-row header, forty pixels out of place, for as long
+    as the post took to load. It now changes inside the swap, so it moves with
+    the page and is captured by the same transition.
+  - The page cross-fade was the browser's default, which is symmetric and
+    composited in `plus-lighter`: both screens at half strength, added
+    together, for the full duration. On a dark palette that is not a dissolve,
+    it is a glowing double exposure. The blend is now `normal`, the outgoing
+    screen holds still underneath rather than fading (so the background is
+    never uncovered), and the incoming one is opaque inside seventy
+    milliseconds.
+  - The glass header needed the opposite treatment for the opposite reason —
+    a 55%-alpha snapshot hides nothing painted over it — so both of its ends
+    move.
+- **The scrollbar jumped about on every navigation.** Nothing reserved the
+  track, so a post shorter than the window took the scrollbar away with it and
+  every line on the page re-wrapped, twice per visit. `html` now keeps the
+  gutter (`overflow-y: scroll`, and `overflow-x` moved up from `body`, which is
+  what the sticky header needs), and the thumb is styled to belong to the page
+  rather than to the operating system. It is also hidden for the length of a
+  view transition: the page is two still images at that point and a scrollbar
+  teleporting to the top is the only thing still moving.
+- **Comments looked slow on posts that had three of them.** The list asked for
+  them only after the post had been drawn — a second round trip that could not
+  start until the first finished — and put up grey bars the moment it did. The
+  request now leaves with the post's, and the placeholder waits 250ms it
+  almost never needs, so the conversation arrives with the post instead of
+  flinching in after it.
 - The composer and the sign-in form never actually autofocused their first
   field: a view transition defers the DOM swap, and focusing a detached
   element is a silent no-op.

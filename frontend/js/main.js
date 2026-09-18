@@ -205,7 +205,10 @@ subscribe(forgetCurrentScreen);
 // Signing in or out moves the notice between the masthead and the band, and a
 // same-route navigate() fires no hashchange — so the store drives this too.
 subscribe(syncDemoStrip);
-addEventListener("hashchange", syncChrome);
+// Not `hashchange`. The chrome is part of the screen it belongs to, so it
+// changes when that screen is put on the page — which is what mountView
+// announces, from inside the swap. See the note there.
+addEventListener("commons:screen", syncChrome);
 
 renderAccount();
 wireSearch();

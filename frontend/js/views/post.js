@@ -3,9 +3,10 @@
 // ("edited" when it's been changed), the vote control, and Edit / Delete when
 // the post is yours. Delete asks first, inline — never window.confirm.
 //
-// Below the post: the conversation. Comments load after the post rather than
-// with it, because the post is what the reader came for and a comment list is
-// a second request that shouldn't hold it up.
+// Below the post: the conversation. Comments are asked for at the same moment
+// as the post and drawn independently of it — the post never waits on them,
+// and by the time it has been laid out its comments are usually already in
+// hand. See commentsFor() below.
 
 import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
@@ -18,6 +19,21 @@ import { navigate, previousScreen } from "../router.js";
 const COMMENT_MAX = 2000;
 const COMMENTS_PER_PAGE = 20;
 const EMPTY = "Nothing said about this one yet.";
+
+// Same reasoning as SKELETON_AFTER below, applied to the thread: a placeholder
+// that is on screen for a hundred and fifty milliseconds and gone is not
+// feedback, it's a flinch — and this one flinched on every single post, because
+// the request was only started once the post had been drawn and the grey bars
+// went up in the same breath. Two of them, taller than the two real comments
+// that replaced them, so the page grew and shrank underneath the reader's eye
+// as well.
+//
+// Both halves are fixed: the request now leaves with the post's (see
+// commentsFor), and the skeleton is not drawn at all unless the answer is
+// genuinely slow to come back. On anything local — the demo backend included —
+// the comments are simply there with the post, in one movement, which is what
+// it always looked like it was trying to be.
+const COMMENTS_SKELETON_AFTER = 250;
 
 // How long the post gets to arrive before the reader is shown a loading state.
 //
@@ -79,8 +95,31 @@ function loadingSkeleton() {
     h("span", { class: "sk sk--line sk--short" }));
 }
 
+/**
+ * The first page of a post's comments, asked for now and settled later.
+ *
+ * Started before the post has even arrived, let alone been laid out. Two
+ * requests to the same host go out together and come back together, so the
+ * thread costs nothing beyond what the post was already waiting for — where
+ * before it cost a second round trip that could only begin once the first had
+ * finished and the screen had been drawn. That gap is the whole of the
+ * "why is it loading, there are three comments" in the recording.
+ *
+ * Neither rejection nor a slow answer can hurt the post: the outcome is folded
+ * into a value rather than left as a rejection (an unhandled one is still
+ * unhandled even when nobody ends up needing it — the post may 404 before this
+ * is ever read), and the post screen never awaits it.
+ */
+function prefetchComments(id) {
+  const qs = new URLSearchParams({ page: "1", page_size: String(COMMENTS_PER_PAGE) });
+  return api
+    .get(`/posts/${encodeURIComponent(id)}/comments?${qs}`)
+    .then((data) => ({ data }), (error) => ({ error }));
+}
+
 export async function renderPost({ params, isStale }) {
   const id = params.id;
+  const firstComments = prefetchComments(id);
 
   const placeholder = () => {
     if (!isStale()) mountView(loadingSkeleton(), { transition: false });
@@ -158,7 +197,7 @@ export async function renderPost({ params, isStale }) {
   // journey reverses rather than fading.
   morphingBackTo(post.id);
 
-  const conversation = comments(post, isStale);
+  const conversation = comments(post, isStale, firstComments);
 
   const root = h("section", { class: "detail" },
     backLink(),
@@ -228,7 +267,7 @@ export async function renderPost({ params, isStale }) {
 // Built as its own closure rather than more branches inside renderPost: it has
 // a list, a pending state, an error state, its own pagination and its own
 // optimistic write, and none of that is the post's business.
-function comments(post, isStale) {
+function comments(post, isStale, firstComments) {
   // role="list" because the CSS removes the markers, and Safari drops the list
   // semantics along with them — so a screen reader stops announcing how many
   // comments there are, which is most of what the element was for.
@@ -267,18 +306,50 @@ function comments(post, isStale) {
     setStatus(total === 0 ? EMPTY : "");
   }
 
+  // The prefetched first page, claimed once. A retry after a failure, or a
+  // second mount, has to go back to the network — replaying a settled promise
+  // would hand the reader the same error twice and call it a retry.
+  let pending = firstComments;
+  function firstPage() {
+    if (!pending) {
+      const qs = new URLSearchParams({ page: "1", page_size: String(COMMENTS_PER_PAGE) });
+      return api.get(`/posts/${post.id}/comments?${qs}`);
+    }
+    const claimed = pending;
+    pending = null;
+    return claimed.then(({ data, error }) => {
+      if (error) throw error;
+      return data;
+    });
+  }
+
   async function load() {
     if (loading) return;
     loading = true;
     const wantPage = page + 1;
-    if (wantPage === 1) list.replaceChildren(skeletonComments(2));
+
+    // Armed rather than drawn. If the answer is already in hand — which is the
+    // usual case now that the request left with the post's — this timer is
+    // cleared in `finally` a microtask later and the reader never sees a
+    // placeholder for something that wasn't a wait.
+    let skeleton = null;
+    if (wantPage === 1) {
+      skeleton = setTimeout(() => {
+        if (!isStale()) list.replaceChildren(skeletonComments(2));
+      }, COMMENTS_SKELETON_AFTER);
+    }
 
     try {
-      const qs = new URLSearchParams({
-        page: String(wantPage),
-        page_size: String(COMMENTS_PER_PAGE),
-      });
-      const data = await api.get(`/posts/${post.id}/comments?${qs}`);
+      let data;
+      if (wantPage === 1) {
+        data = await firstPage();
+      } else {
+        const qs = new URLSearchParams({
+          page: String(wantPage),
+          page_size: String(COMMENTS_PER_PAGE),
+        });
+        data = await api.get(`/posts/${post.id}/comments?${qs}`);
+      }
       if (isStale()) return;
 
       if (wantPage === 1) list.replaceChildren();
@@ -306,6 +377,7 @@ function comments(post, isStale) {
           h("button", { class: "btn btn--ghost", type: "button", onclick: load },
             "Try again")));
     } finally {
+      if (skeleton) clearTimeout(skeleton);
       loading = false;
     }
   }

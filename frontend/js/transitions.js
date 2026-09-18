@@ -140,6 +140,35 @@ function pairOrStrip(incoming) {
   [...leaving, ...arriving].forEach(clearMorph);
 }
 
+// How many transitions are in flight. Navigating again before one finishes is
+// normal, and the flag below has to survive the overlap: a single boolean would
+// be cleared by the first one's `finished` while the second was still running,
+// and the scrollbar would flicker back into a page that is still moving.
+let running = 0;
+
+// The scrollbar is real browser chrome. It is not captured by the transition
+// and it does not animate, so while the page is held still by its snapshots the
+// thumb jumps — to the top, because the swap scrolls there, and to a new size,
+// because the new screen is a different height. Two hundred milliseconds of the
+// content standing still and the scrollbar bolting is what reads as the page
+// twitching. Hidden for the length of the transition and back at the far end,
+// already the right size, it reads as the page simply having changed.
+//
+// Costs no reflow: html reserves the gutter with `overflow-y: scroll`, so the
+// track stays exactly as wide whether or not the thumb is painted in it. See
+// the scrollbar block in base.css.
+const TRANSITION_CLASS = "is-transitioning";
+
+function transitionStarted() {
+  running += 1;
+  document.documentElement.classList.add(TRANSITION_CLASS);
+}
+
+function transitionEnded() {
+  running = Math.max(0, running - 1);
+  if (running === 0) document.documentElement.classList.remove(TRANSITION_CLASS);
+}
+
 /**
  * Run a DOM swap inside a view transition, if one is possible and wanted.
  *
@@ -156,6 +185,7 @@ export function tryTransition(swap, incoming) {
 
   pairOrStrip(incoming);
 
+  transitionStarted();
   const transition = document.startViewTransition(swap);
 
   // Navigating again before a transition finishes is normal — a quick tap on
@@ -172,6 +202,7 @@ export function tryTransition(swap, incoming) {
   transition.finished
     .catch(() => {})
     .then(() => {
+      transitionEnded();
       document
         .querySelectorAll(`${MORPH_SEL}, [style*="view-transition-name"]`)
         .forEach((el) => {

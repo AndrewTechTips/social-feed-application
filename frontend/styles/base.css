@@ -27,6 +27,76 @@ html {
   -webkit-tap-highlight-color: transparent;
   /* No 300ms click delay, and no double-tap-to-zoom swallowing taps. */
   touch-action: manipulation;
+
+  /* — the scrollbar ---------------------------------------------------------
+     Three separate problems, one block.
+
+     `overflow-y: scroll` is the load-bearing one. Screens here are wildly
+     different heights — a fourteen-card feed, then one short post — and a
+     scrollbar that comes and goes takes fifteen pixels of page width with it
+     every time. Every line of every card re-wraps and the whole layout slides
+     sideways and back, twice per visit to a post. Reserving the track always
+     costs those fifteen pixels once and never moves them again.
+
+     `scrollbar-gutter: stable` says the same thing to browsers that would
+     rather hear it that way; where both apply they agree.
+
+     `overflow-x` moved up here from body, and it had to. With overflow on html
+     left at `visible`, the body's value propagates to the viewport — which is
+     what used to make this work at all. Set overflow on html and that
+     propagation stops, body becomes a scroll container of its own, and
+     `position: sticky` on the header starts measuring itself against *that*
+     instead of the page: the header scrolls straight off the top and never
+     comes back. Both properties belong to whichever element is the scroller,
+     and now that's this one.
+
+     Then the looks. `thin` + a neutral thumb from the same family as --border,
+     on a track that isn't drawn at all. A scrollbar is not part of what anyone
+     came here to read. */
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* While a view transition runs the page is a pair of still images, and the
+   scrollbar — which is browser chrome, outside the transition — is the one
+   thing still moving: it snaps to the top because the swap scrolled there, and
+   changes size because the next screen is a different height. Taking the thumb
+   out for those two hundred milliseconds and putting it back, already correct,
+   is the whole fix. It reflows nothing: the track above is reserved either
+   way. Set by tryTransition() in js/transitions.js. */
+html.is-transitioning {
+  scrollbar-color: transparent transparent;
+}
+
+/* Safari only learned `scrollbar-color` in 18.2, and older WebKit needs the
+   pseudo-elements instead. Behind @supports because Chrome honours whichever
+   it is given and would otherwise take the wide legacy scrollbar over the thin
+   modern one. The transparent border plus background-clip is what insets the
+   thumb from the edge of the track without drawing the track. */
+@supports not (scrollbar-color: transparent transparent) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    background-clip: padding-box;
+    border: 4px solid transparent;
+    border-radius: var(--r-pill);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+  html.is-transitioning ::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
 }
 
 body {
@@ -38,7 +108,9 @@ body {
   line-height: var(--lh-ui);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+  /* overflow-x lives on html now — see the scrollbar note above. Leaving a
+     copy here would hand body its own scroll container and break the sticky
+     header. */
 }
 
 img {
@@ -252,7 +324,105 @@ h3 {
    to swallow one. These are the shortest values that still read as movement
    rather than a cut. */
 ::view-transition-group(root) {
-  animation-duration: 160ms;
+  animation-duration: 180ms;
+  animation-timing-function: var(--ease);
+}
+
+/* The default page change was the browser's own, and the browser's own is a
+   symmetric cross-fade in `plus-lighter`: both screens at half strength, added
+   together, for the whole duration. On a dark page that does not read as one
+   screen becoming another. It reads as a third screen — the post's heading and
+   byline glowing through a feed full of cards, brighter than either, for a
+   tenth of a second. That ghost is the "something else in between" the
+   recording catches on the way back to the feed, and it was never a bug in
+   this app's code so much as a default nobody had overruled.
+
+   Overruled here, in two parts.
+
+   `mix-blend-mode: normal` stops the addition. Two half-strength images
+   blended normally are still two images, but they no longer light each other
+   up, which is most of what made the ghost legible.
+
+   Then only one of them moves. The outgoing screen holds still at full
+   opacity for the whole transition and the incoming one is painted over it —
+   so the page background is never uncovered (a gap between the two would flash
+   the bare canvas, which on this palette is a black frame), and the blend is
+   always new-over-solid rather than half-over-half. The fade is front-loaded:
+   --ease puts the incoming screen past three quarters opaque inside the first
+   sixty milliseconds, so the window where both are readable is short enough to
+   be movement rather than an image. The rise is four pixels — enough that the
+   eye reads a direction and follows it, small enough that the sliver of the
+   old screen it uncovers at the top is a hairline for two frames. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  animation: none;
+  opacity: 1;
+}
+::view-transition-new(root) {
+  animation: screen-arrive 180ms var(--ease) both;
+}
+@keyframes screen-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  /* Opaque at two fifths of the way through — seventy milliseconds — while the
+     rise carries on to the end. Splitting the two is what keeps the window
+     where both screens are legible down to something the eye reads as a change
+     of state rather than as a picture of two pages at once. The remaining
+     travel happens against a screen that is already solid. */
+  40% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The header is its own group, so it is not in the root snapshot above, and it
+   changes between screens: the search belongs to the feed and to nothing else.
+   On a phone that costs it a whole row — two rows on the feed, one everywhere
+   else — and the group animates the forty pixels.
+
+   It does *not* get the recipe above, and the reason is worth writing down. Up
+   there the outgoing screen can be left where it is because the incoming one
+   is opaque and covers it. This bar is glass: --glass-bg is 55% alpha, so its
+   snapshot is mostly transparent, and an opaque new image painted over a held
+   old one hides nothing at all. The search pill sat there through the whole
+   transition and the account cluster printed twice, half a word apart.
+
+   So both ends move, which is the one honest way to dissolve something
+   see-through. The blend stays normal — `plus-lighter` on a blurred bar
+   mid-resize was a white flare across the top of the screen — and --ease
+   front-loads it hard enough that the old bar is under two percent by seventy
+   milliseconds. Its opacity and the new one's add back up to about the alpha
+   the bar is supposed to have, so the glass never visibly thins. */
+::view-transition-old(site-header),
+::view-transition-new(site-header) {
+  mix-blend-mode: normal;
+}
+::view-transition-old(site-header) {
+  animation: chrome-leave 180ms var(--ease) both;
+}
+::view-transition-new(site-header) {
+  animation: chrome-arrive 180ms var(--ease) both;
+}
+@keyframes chrome-leave {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes chrome-arrive {
+  from {
+    opacity: 0;
+  }
+}
+::view-transition-group(site-header) {
+  animation-duration: 180ms;
   animation-timing-function: var(--ease);
 }
 

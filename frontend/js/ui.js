@@ -81,6 +81,24 @@ export function mountView(node, { restoreScroll, focus, transition = true } = {}
 
   const swap = () => {
     view.replaceChildren(node);
+
+    // The chrome belongs to the screen, so it changes when the screen does.
+    //
+    // It used to change on `hashchange`, which fires the moment the link is
+    // followed — a good hundred and fifty milliseconds before the screen it
+    // belongs to has finished loading. So tapping a card on a phone collapsed
+    // the header's search row instantly, the *feed* jumped forty pixels up the
+    // page, and it sat there like that until the post arrived. Going back did
+    // the same in reverse. That flash of a screen wearing the next screen's
+    // chrome is the "something else in between" you can see in the recording,
+    // and no amount of transition polish could cover it, because it happened
+    // before the transition started.
+    //
+    // Dispatched inside the swap, so it is captured by the same view
+    // transition as the content: the header now folds *with* the page instead
+    // of ahead of it. See syncChrome in main.js.
+    dispatchEvent(new CustomEvent("commons:screen"));
+
     if (typeof restoreScroll === "number") window.scrollTo(0, restoreScroll);
     else window.scrollTo(0, 0);
 
