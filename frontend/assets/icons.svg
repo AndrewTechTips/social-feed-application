@@ -39,4 +39,19 @@
     <path d="M1 10 C3 5 6.5 3 10 3 C13.5 3 17 5 19 10 C17 15 13.5 17 10 17 C6.5 17 3 15 1 10 Z" />
     <circle cx="10" cy="10" r="3" />
   </symbol>
+
+  <!-- The shelf. Two symbols rather than one whose fill CSS toggles: a <use>
+       reference is a shadow tree, and `fill` set on the symbol wins over
+       anything reachable from outside it. The theme toggle already swaps sun
+       for moon the same way. -->
+  <symbol id="i-bookmark" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M5.7 3.6 H14.3 V16.4 L10 13 L5.7 16.4 Z" />
+  </symbol>
+
+  <symbol id="i-bookmark-filled" viewBox="0 0 20 20" fill="currentColor"
+          stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"
+          stroke-linecap="round">
+    <path d="M5.7 3.6 H14.3 V16.4 L10 13 L5.7 16.4 Z" />
+  </symbol>
 </svg>

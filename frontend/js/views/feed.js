@@ -78,6 +78,9 @@ export function renderFeed({ query, isStale }) {
   // statement about the feed, and a set of search results is not the feed.
   const since = h("p", { class: "feed__since", hidden: true });
   const tellsYouWhatsNew = !search && lastVisit() !== null;
+  // What the post screen calls this list when it offers the next one in it.
+  // Named as a place, the same way the Back link names one.
+  const listName = search ? "these results" : "the feed";
 
   const root = h(
     "section",
@@ -223,7 +226,7 @@ export function renderFeed({ query, isStale }) {
       const frag = document.createDocumentFragment();
       appendPosts(frag, data.items);
       list.append(frag);
-      setKnownPosts(items);
+      setKnownPosts(items, listName);
       renderTail();
       landed = true;
     } catch (err) {
@@ -299,7 +302,7 @@ export function renderFeed({ query, isStale }) {
   if (cached) {
     ({ page, pages, hasNext, total, viewer } = cached);
     appendPosts(list, cached.items);
-    setKnownPosts(items);
+    setKnownPosts(items, listName);
     renderTail();
     mountView(root, { restoreScroll: cached.scrollY });
     setupObserver();

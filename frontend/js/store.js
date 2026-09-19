@@ -72,7 +72,8 @@ const state = {
   // written to storage, never persisted, gone on reload — see the note above.
   access: null,
   feedCache: null,
-  knownPosts: [], // what's on screen now, for the command palette to search
+  knownPosts: [], // the list last drawn — see setKnownPosts
+  knownFrom: null,
   voted: loadVotes(), // post ids this browser has upvoted (best-effort mirror)
 };
 
@@ -113,6 +114,12 @@ export function setSession(session) {
 
 export function clearSession() {
   clearAccess();
+  // The list the palette searches and the post screen reads on from is
+  // whichever one was drawn last, and a list drawn for a signed-in reader can
+  // hold that reader's own drafts. The feed comes back without them a moment
+  // later, but "a moment later" is long enough to open the palette in — so the
+  // list goes when the session does, the same way the vote mirror does.
+  setKnownPosts([]);
   setSession(null);
 }
 
@@ -247,15 +254,29 @@ export function dropFeedCache() {
   state.feedCache = null;
 }
 
-// — what the palette can search -----------------------------------------------
-// The posts currently on screen, so the command palette can filter them without
-// going near the network. Like the feed cache this is read, never rendered
-// from, so it doesn't go through set()/subscribe.
-/** @param {import("./types.js").Post[]} posts */
-export function setKnownPosts(posts) {
+// — the list you were last looking at ------------------------------------------
+// The posts on screen, so the command palette can filter them without going
+// near the network — and, since the post screen learned to offer what's next,
+// so a reader can carry on down the list they arrived from. Like the feed cache
+// this is read, never rendered from, so it doesn't go through set()/subscribe.
+//
+// It outlives the screen that set it on purpose: that is what lets the post
+// screen know there was a list at all, and what lets two onward steps in a row
+// keep working.
+/**
+ * @param {import("./types.js").Post[]} posts
+ * @param {string} [from] the list, named as a place — "the feed", "these
+ *   results", a username. The post screen draws it; the palette ignores it.
+ */
+export function setKnownPosts(posts, from) {
   state.knownPosts = posts.slice();
+  state.knownFrom = from || null;
 }
 
 export function knownPosts() {
   return state.knownPosts || [];
+}
+
+export function knownFrom() {
+  return state.knownFrom || null;
 }

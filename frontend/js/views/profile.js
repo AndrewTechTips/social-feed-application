@@ -135,7 +135,7 @@ export function renderProfile({ params, isStale }) {
         frag.append(postCard(post));
       });
       list.append(frag);
-      setKnownPosts(items);
+      setKnownPosts(items, username);
       paintCount();
       renderTail();
       landed = true;

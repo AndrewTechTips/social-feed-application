@@ -16,10 +16,34 @@ here on: one concern per commit, written by hand.
 
 ## Unreleased
 
-Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
+Everything since `v0.2.0`: the pass described in [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md),
+and — from *The feed remembers you* down to *A shelf* — the first group of
+[`UPGRADE_PLAN_V2.md`](UPGRADE_PLAN_V2.md), which is about what the app remembers
+about the reader.
 
 ### Added
 
+- **A shelf.** Save a post from its own screen and it goes on `#/shelf` —
+  the feed's column and cards with your saves in it, newest save first. A way
+  in appears in the header with the first save and goes with the last, so the
+  chrome only exists while there is somewhere for it to lead. What's stored is
+  ids, not copies: a snapshot would render instantly and then be wrong in every
+  way a post can change, so the screen asks for each one and a post that has
+  been deleted drops off the shelf instead of pointing at nothing.
+- **Read on.** A post ends with two links into the list you arrived from — the
+  feed, a set of results, somebody's page or your shelf — named after that list
+  rather than assuming the feed. `j` and `k` follow them, which is the same
+  thing those keys already meant one screen out. Two steps in a row keep
+  working, because it reads the list the store holds rather than the screen
+  behind it.
+- **It works offline, and it installs.** A network-first service worker
+  precaches the shell and answers from it when there's no network; on the
+  published build that is the entire app, since the data was already in
+  `localStorage` and the API is a module. Network-first on purpose — see
+  [ADR 0007](docs/adr/0007-a-network-first-service-worker.md) — because a
+  project with no build step has no content-hashed filenames, and cache-first
+  would leave a version constant standing between a reader and every change
+  after it.
 - **The feed remembers you.** Three things that are one idea, and none of
   them touches the server. A post you have opened draws its title dimmed, so
   what you haven't read is what stands forward — the same channel the warmth

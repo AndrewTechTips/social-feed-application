@@ -292,6 +292,27 @@
 .btn--danger:active:not([disabled]) {
   --btn-bg: color-mix(in srgb, var(--danger) 80%, black);
 }
+/* — save to the shelf ------------------------------------------------------------
+   A quiet button beside the vote control. Off it is a drawn outline in
+   --text-dim; on it is the same mark filled, in --text, with a firmer border.
+
+   No amber, and that's the rule rather than an oversight: the accent is spent
+   on a vote, on warmth, and on where you are. A saved post is none of those —
+   it is a fact about this browser, not about the room — so it is said in the
+   neutrals, and the filled shape is what carries it. */
+.shelved {
+  --btn-fg: var(--text-dim);
+}
+@media (hover: hover) {
+  .shelved:hover:not([disabled]) {
+    --btn-fg: var(--text);
+  }
+}
+.shelved--on {
+  --btn-fg: var(--text);
+  --btn-bd: var(--border-strong);
+}
+
 .btn--icon {
   min-width: 44px;
   padding: 0;

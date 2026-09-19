@@ -19,7 +19,7 @@ import { h, toast } from "../ui.js";
 import { get, knownPosts } from "../store.js";
 import { otherTheme, toggleTheme, signOut } from "../actions.js";
 import { navigate, currentPath } from "../router.js";
-import { focusCursor, hasCards, typing } from "./feedkeys.js";
+import { focusCursor, hasCards, hasOnward, readOn, typing } from "./feedkeys.js";
 
 const MAX_POSTS = 7; // a palette you scroll is a list, not a palette
 
@@ -57,6 +57,15 @@ function commands() {
       key: "G",
       run: () => navigate("/"),
     },
+    // Always, not only when there is something on it. The header link appears
+    // with the first save, so without this row there is nowhere at all to
+    // learn that the shelf exists — and the empty state it leads to is an
+    // invitation rather than an apology.
+    {
+      id: "shelf",
+      label: "Open your shelf",
+      run: () => navigate("/shelf"),
+    },
     // Only where there's a list to move through, which is the feed and a
     // profile. j and k are a pair everyone who knows one knows the other, so
     // the chip shows both; Enter and u follow from having a card focused.
@@ -67,6 +76,20 @@ function commands() {
       owned: true,
       run: focusCursor,
     },
+    // The other end of the same pair. On a post there is no cursor to move, but
+    // there is a list to move along — so the keys keep their meaning and the
+    // palette keeps its promise that what it shows you works outside it.
+    // Enter takes the next one, and settles for the previous at the end of the
+    // list, which is the only place "next" has nowhere to go.
+    !hasCards() && hasOnward() && {
+      id: "onward",
+      label: "Move to the next or previous post",
+      key: "J K",
+      owned: true,
+      run: () => {
+        readOn("next") || readOn("prev");
+      },
+    },
     onPost && {
       id: "copy",
       label: "Copy a link to this post",
@@ -76,9 +99,9 @@ function commands() {
     signedIn
       ? { id: "signout", label: "Sign out", run: signOut }
       : { id: "signin", label: "Sign in", run: () => navigate("/login") },
-    // `onPost &&` and `hasCards() &&` leave a literal false in the list when
-    // they don't apply; filter(Boolean) drops it. The checker can't follow
-    // that on its own, so the cast says what the filter did.
+    // The `&&` guards leave a literal false in the list when they don't
+    // apply; filter(Boolean) drops it. The checker can't follow that on its
+    // own, so the cast says what the filter did.
   ];
   return /** @type {import("../types.js").Command[]} */ (rows.filter(Boolean));
 }

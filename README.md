@@ -189,9 +189,10 @@ One page, hash routes.
 | Route | Screen |
 | --- | --- |
 | `#/` | Feed (public). Opens with a masthead for anyone not signed in — a line of type saying what this is, and in demo mode the notice too. Debounced title search drives `?search=`; infinite scroll with a visible end state; skeletons while loading. A returning reader also gets a count of what arrived while they were away and a rule through the list marking where they left off; cards they have opened draw their title dimmed, and every card says how long it is. |
-| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Edit/Delete if it's yours with an inline confirm. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. |
+| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Save to the shelf, Edit/Delete if it's yours with an inline confirm. At the end, two links into the list you arrived from — `j` and `k` follow them. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. |
 | `#/u/:username` | Everything one person has written — the feed's cards and rules with a single author, including their drafts staying theirs. |
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
+| `#/shelf` | What you've put aside, newest save first. The feed's column and cards with your saves in it. Saved posts are ids in this browser — the screen asks the API for each one, so a post that has been deleted drops off the shelf rather than sitting there pointing at nothing. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, character count. `POST` to create; `PATCH` with only the changed fields to edit. |
 
 ### The API
@@ -261,6 +262,9 @@ cd frontend && npm install && npx playwright install chromium
 | `masthead.spec.js` | Shown to strangers, gone once signed in, out of the way while searching, and — in demo mode — carrying the notice so it's said once rather than twice. |
 | `comments.spec.js` | Saying something and seeing it before the server answers, getting your words back when the write fails, removing your own and only your own (not even as the author of the post), a draft having no conversation to read or join, and a deleted post taking its comments with it. |
 | `unread.spec.js` | What the app remembers: the count of posts since your last visit and where the rule lands, a refresh not counting as leaving, being away long enough that it does, a post read only after two seconds of being looked at, a mis-tap not counting, and the whole lot scanned by axe in both themes and measured at 320px. |
+| `onward.spec.js` | The two links at the end of a post: which list they mean, the first and last of it having only one, two steps in a row still working, `j`/`k` following them and staying out of a comment box, and the morph name being handed on rather than shared. |
+| `shelf.spec.js` | Saving and unsaving, the header link appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. |
+| `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
 | `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, opens the long post on a real thread, and survives a refresh — then forgets everything on **Reset the demo**. |
 | `mobile.spec.js` | The phone-only regressions: transparent tap highlight, ≥16px form controls at every width *and* in landscape, `:active` feedback under a real tap gesture, hover states behind `(hover: hover)`, no overflow at 320–414 while signed in, and source guards against bare `100vh` coming back. |
 | `search.spec.js` | A word that's only in the body, any form of a word finding every other form, a title match ranking above a body match, two words narrowing rather than widening, `%` as a character rather than a wildcard, and a draft never turning up in someone else's results. |
@@ -289,6 +293,7 @@ mind, which is the part that makes it a decision rather than a preference:
 | [0004](docs/adr/0004-demo-mode-for-a-static-host.md) | Demo mode is the answer to a static host | Three implementations of one contract, held together by running the same suite against all of them. |
 | [0005](docs/adr/0005-offset-pagination.md) | Offset pagination | It matches the UI and the index. Switch to keyset at ~50k posts, and here's the exact change. |
 | [0006](docs/adr/0006-lighthouse-without-lhci.md) | Lighthouse runs from a script, not `@lhci/cli` | Sixty lines replaced 331 packages and all ten `npm audit` findings — and fixed an `npm ci` that only failed on CI. |
+| [0007](docs/adr/0007-a-network-first-service-worker.md) | The service worker is network-first | Precaches the shell, then serves the network and falls back to the cache. Cache-first assumes content-hashed filenames, which a project with no build step doesn't have — so the version constant nobody remembers to bump would be the only thing between a reader and a permanently stale app. |
 
 And the smaller ones, in place:
 
@@ -388,6 +393,22 @@ control.
 **No "did I vote" flag in the API**, so the vote control keeps a best-effort mirror in
 `localStorage`. If it disagrees with the server, the vote call returns 409 or 404 and the
 control settles into the real state.
+
+**What you've saved never leaves your browser either**, for the same reasons —
+`commons.shelf` is a list of post ids, nothing more. Ids rather than copies of
+the posts: a saved snapshot would render instantly and would then be wrong in
+every way a post can change, whereas an id costs a request and is never
+describing something that isn't there. A post that has been deleted answers 404
+and comes off the shelf as it's discovered.
+
+**The app works offline, and installs.** A network-first service worker
+([ADR 0007](docs/adr/0007-a-network-first-service-worker.md)) precaches the
+shell and answers from it when there's no network. On the published build that
+means the whole app — the files from the cache, the data from `localStorage`,
+the API from a module that was itself served from the cache. Network-first
+rather than cache-first because there's no build step here and therefore no
+content-hashed filenames, so cache-first would put a version constant between
+readers and every future change.
 
 **What you've read never leaves your browser.** `commons.read` and `commons.visit` are two
 keys in `localStorage`, read once at boot by `frontend/js/reading.js`; there is no endpoint

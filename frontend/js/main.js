@@ -16,10 +16,12 @@ import { get, subscribe, dropFeedCache } from "./store.js";
 import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
 import { h, icon } from "./ui.js";
 import { mountPalette, openPalette } from "./components/palette.js";
+import { shelfCount } from "./shelf.js";
 import { wireFeedKeys } from "./components/feedkeys.js";
 import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
 import { renderProfile } from "./views/profile.js";
+import { renderShelf } from "./views/shelf.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
@@ -41,10 +43,37 @@ function themeButton() {
 // — header account cluster ---------------------------------------------------
 const accountEl = () => document.getElementById("account");
 
+// A way in, and only once there is somewhere to go.
+//
+// A shelf link on an empty shelf is a button that leads to a sentence
+// apologising for itself, and it would be taking 44 pixels off the narrowest
+// header in the app to do it. So it appears when the first post is saved and
+// goes again when the last one is taken off — which is also how somebody finds
+// out the shelf exists, without anything having to announce it.
+//
+// No count on it. A number in a corner of a header is a notification badge
+// whatever you call it, and this is a bookshelf, not an inbox. The count is on
+// the shelf, where it is a fact about what you are looking at.
+function shelfLink() {
+  const n = shelfCount();
+  return h(
+    "a",
+    {
+      class: "btn btn--quiet btn--action",
+      href: "#/shelf",
+      "aria-label": n === 1 ? "Your shelf, one post saved" : `Your shelf, ${n} posts saved`,
+      title: "Your shelf",
+    },
+    icon("bookmark"),
+    h("span", { class: "btn__label" }, "Shelf")
+  );
+}
+
 function renderAccount() {
   const box = accountEl();
   const session = get("session");
   const kids = [];
+  const shelf = shelfCount() > 0 ? shelfLink() : null;
 
   if (session) {
     // Both carry their name in aria-label, so the narrow-screen rule can hide
@@ -84,14 +113,15 @@ function renderAccount() {
       h("span", { class: "btn__label" }, "Sign out")
     );
     out.addEventListener("click", signOut);
-    kids.push(write, who, out, themeButton());
+    kids.push(write, shelf, who, out, themeButton());
   } else {
     kids.push(
+      shelf,
       h("a", { class: "btn btn--quiet", href: "#/login" }, "Sign in"),
       themeButton()
     );
   }
-  if (box) box.replaceChildren(...kids);
+  if (box) box.replaceChildren(...kids.filter(Boolean));
 }
 
 // — search (feed only) ------------------------------------------------------
@@ -180,6 +210,7 @@ function syncChrome() {
     "/login": "Sign in · Commons",
     "/register": "Create an account · Commons",
     "/compose": "New post · Commons",
+    "/shelf": "Your shelf · Commons",
   };
   document.title = titles[currentPath()] || "Commons";
 }
@@ -197,8 +228,13 @@ route("/compose", renderCompose);
 route("/posts/:id", renderPost);
 route("/posts/:id/edit", renderEdit);
 route("/u/:username", renderProfile);
+route("/shelf", renderShelf);
 
 subscribe(renderAccount);
+// Saving the first post puts a way into the shelf in the header, and taking the
+// last one off takes it away again. js/shelf.js says so rather than this
+// polling for it.
+addEventListener("commons:shelf", renderAccount);
 // Signing in or out changes what every screen shows, so the router mustn't
 // decide the one already on screen is still good enough.
 subscribe(forgetCurrentScreen);
@@ -218,3 +254,25 @@ paintPaletteHint();
 wireFeedKeys();
 
 startRouter();
+
+// — offline ---------------------------------------------------------------------
+// The published build has no server behind it, so there is nothing about this
+// app that actually needs the network once its files are in hand. sw.js is what
+// makes that true rather than nearly true; the reasoning, including why it is
+// network-first, is written down there.
+//
+// Resolved against import.meta.url rather than against the document, because
+// the document's URL carries a hash and a query and this one must not: the
+// worker's scope is the directory it is served from, and that has to be the
+// app's root or it can't see the app.
+//
+// After load, so registering never competes with the first paint for the
+// connection. A failure is not worth a word to the reader — there is no
+// feature here they asked for, only one they get.
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => {
+    navigator.serviceWorker
+      .register(new URL("../sw.js", import.meta.url).href)
+      .catch(() => {});
+  });
+}

@@ -96,6 +96,35 @@ function upvote() {
   if (btn) btn.click();
 }
 
+// — the same two keys, one screen further in ----------------------------------
+//
+// A post page has no list to move a cursor through, but it ends with two links
+// into the list the reader arrived from — so j and k go on meaning the one
+// thing they have meant all along: a step further down that list, or a step
+// back up it. On the feed that moves a cursor; here it moves the reader. Same
+// list, same direction, same key.
+//
+// Read out of the DOM at the moment the key lands, exactly as the cards are.
+// The post screen draws the links or doesn't, and this needs to be told
+// nothing.
+/** @param {"next" | "prev"} dir */
+const onwardLink = (dir) =>
+  /** @type {HTMLElement | null} */ (document.querySelector(`.onward__item--${dir}`));
+
+/** Is there somewhere to read on to? What the palette asks before offering it. */
+export const hasOnward = () => !!(onwardLink("next") || onwardLink("prev"));
+
+/**
+ * Follow one of them. Returns false if that direction is the end of the list,
+ * which is what lets the palette row settle for the other one.
+ * @param {"next" | "prev"} dir
+ */
+export function readOn(dir) {
+  const link = onwardLink(dir);
+  if (link) link.click();
+  return !!link;
+}
+
 export function wireFeedKeys() {
   addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
@@ -103,11 +132,21 @@ export function wireFeedKeys() {
 
     const key = e.key.toLowerCase();
     if (key !== "j" && key !== "k" && key !== "u") return;
-    // Only once there's a list. Otherwise the letters belong to the page.
-    if (!hasCards()) return;
 
-    e.preventDefault();
-    if (key === "u") upvote();
-    else move(key === "j" ? 1 : -1);
+    // A list on screen takes them first.
+    if (hasCards()) {
+      e.preventDefault();
+      if (key === "u") upvote();
+      else move(key === "j" ? 1 : -1);
+      return;
+    }
+
+    // u has nothing to act on without a cursor, and j/k only move if there is
+    // somewhere to go — pressing j at the end of the list does nothing rather
+    // than doubling back, which would be a keystroke that means one thing in
+    // the middle of a list and the opposite at the end of it. Otherwise the
+    // letters belong to the page.
+    if (key === "u") return;
+    if (readOn(key === "j" ? "next" : "prev")) e.preventDefault();
   });
 }

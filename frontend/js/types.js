@@ -120,7 +120,11 @@
  * @property {Session | null} session
  * @property {Access | null} access   never persisted; see the note in store.js
  * @property {FeedCache | null} feedCache
- * @property {Post[]} knownPosts   what's on screen now, for the palette
+ * @property {Post[]} knownPosts   the list last drawn — what the palette
+ *   searches, and what the post screen reads on from
+ * @property {string | null} knownFrom  where that list came from, named as a
+ *   place the way the Back link names one: "the feed", "these results", or a
+ *   username. Null when nothing has drawn a list yet.
  * @property {Set<number>} voted   post ids this browser has upvoted
  */
 

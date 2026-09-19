@@ -10,9 +10,15 @@
 
 import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
-import { get, isMine, dropFeedCache } from "../store.js";
+import { get, isMine, dropFeedCache, knownPosts, knownFrom } from "../store.js";
 import { markReadOnceSeen } from "../reading.js";
-import { nameForMorph, morphingBackTo, morphPending } from "../transitions.js";
+import { isShelved, toggleShelf } from "../shelf.js";
+import {
+  nameForMorph,
+  clearMorph,
+  morphingBackTo,
+  morphPending,
+} from "../transitions.js";
 import { navigate, previousScreen } from "../router.js";
 
 // Mirrors schemas.COMMENT_MAX. The server is the one that decides; this is so
@@ -82,6 +88,120 @@ const backLink = () => {
   const { href, label } = backTo();
   return h("a", { class: "back", href }, icon("chevron-left", 15), label);
 };
+
+/**
+ * What to read next, at the end of what you were reading.
+ *
+ * The list is whichever one was last drawn — the feed, a set of results, or
+ * somebody's page — which the store keeps for the palette anyway. Reading it
+ * from there rather than from `previousScreen()` is what makes two steps in a
+ * row work: after one onward link the screen you came from is another post,
+ * but the *list* hasn't changed and you can keep going down it.
+ *
+ * "Previous" and "Next" rather than "Newer" and "Older", because the list is
+ * not always in time order — a set of search results is ranked by relevance,
+ * and a pair of links promising newer and older would be quietly lying on
+ * every one of them. The heading says which list it means, so the direction
+ * words don't have to carry that too.
+ *
+ * Nothing is drawn when there is no list, which is the honest answer for a
+ * pasted link: this offers more of something you were already reading, and
+ * somebody who arrived cold wasn't.
+ *
+ * One limit worth knowing: the list is what has been *loaded*, so the last
+ * card of an un-scrolled feed has no next. Asking the API for a neighbour
+ * would need an endpoint that doesn't exist, and inventing one to paper over
+ * the end of a page the reader never reached is a poor trade.
+ *
+ * @param {import("../types.js").Post} post
+ * @param {HTMLElement} heldTitle the post's own heading, which is wearing the
+ *   morph name — see the note on the click handler
+ */
+function onward(post, heldTitle) {
+  const list = knownPosts();
+  const at = list.findIndex((p) => String(p.id) === String(post.id));
+  if (at === -1) return null;
+
+  const prev = at > 0 ? list[at - 1] : null;
+  const next = at < list.length - 1 ? list[at + 1] : null;
+  if (!prev && !next) return null;
+
+  /**
+   * @param {import("../types.js").Post} p
+   * @param {string} dir
+   * @param {string} variant
+   */
+  const item = (p, dir, variant) => {
+    const title = h("span", { class: "onward__title" }, p.title);
+    const link = h(
+      "a",
+      { class: `onward__item onward__item--${variant}`, href: `#/posts/${p.id}` },
+      h("span", { class: "onward__dir" }, dir),
+      title
+    );
+    // The same journey the feed's cards make, continued. The one thing that
+    // has to happen first is releasing the heading above: it is *held* (see
+    // nameForMorph's `hold`) so that going back can reverse, and two elements
+    // wearing one view-transition-name is an ambiguous name — which
+    // pairOrStrip would answer by dropping the morph altogether. So the
+    // heading hands the name on rather than sharing it.
+    link.addEventListener("click", () => {
+      clearMorph(heldTitle);
+      nameForMorph(title);
+    });
+    return link;
+  };
+
+  return h(
+    "nav",
+    { class: "onward", "aria-labelledby": "onward-head" },
+    h("p", { class: "onward__head", id: "onward-head" }, `More from ${knownFrom() || "the feed"}`),
+    h(
+      "div",
+      { class: "onward__pair" },
+      prev ? item(prev, "Previous", "prev") : null,
+      next ? item(next, "Next", "next") : null
+    )
+  );
+}
+
+/**
+ * Put this post aside, or take it back off.
+ *
+ * It lives beside the vote control rather than on every card, and that is a
+ * choice about what a card is. A card carries one control because a feed of
+ * toolbars is not a feed; the moment you know a post is worth coming back to
+ * is the moment you are looking at it, which is here.
+ *
+ * The visible word is the accessible name — no aria-label — because hiding the
+ * label the way the header's buttons do would leave a control named after
+ * nothing, and a name that didn't contain the visible word would fail the rule
+ * that says it has to. `aria-pressed` carries the state on top of it.
+ *
+ * @param {import("../types.js").Post} post
+ */
+function saveControl(post) {
+  const btn = h("button", { class: "btn btn--quiet shelved", type: "button" });
+
+  const paint = () => {
+    const on = isShelved(post.id);
+    btn.classList.toggle("shelved--on", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.replaceChildren(
+      icon(on ? "bookmark-filled" : "bookmark"),
+      h("span", {}, on ? "Saved" : "Save")
+    );
+  };
+
+  btn.addEventListener("click", () => {
+    const on = toggleShelf(post.id);
+    paint();
+    toast(on ? "Saved to your shelf." : "Removed from your shelf.");
+  });
+
+  paint();
+  return btn;
+}
 
 const sk = (style) => h("span", { class: "sk", style: { display: "block", ...style } });
 
@@ -204,10 +324,14 @@ export async function renderPost({ params, isStale }) {
     backLink(),
     title,
     byline,
-    h("div", { class: "detail__row" }, voteControl(post, { inline: true })),
+    h("div", { class: "detail__row" }, voteControl(post, { inline: true }), saveControl(post)),
     h("div", { class: "detail__content" }, post.content),
     mine ? actions : null,
-    conversation.root);
+    conversation.root,
+    // Last, after the conversation, because that is where the page actually
+    // ends — and because slipping it between the post and its comments would
+    // interrupt the one sequence this screen is built around.
+    onward(post, title));
 
   if (mine) mountActions();
   mountView(root);
