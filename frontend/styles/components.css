@@ -79,6 +79,9 @@
 }
 
 .site-header__inner {
+  /* The positioning context for .focus-out, which takes the place of the brand,
+     the search and the account cluster while focus mode is on — see views.css. */
+  position: relative;
   max-width: var(--page-max);
   margin-inline: auto;
   min-height: var(--header-h);

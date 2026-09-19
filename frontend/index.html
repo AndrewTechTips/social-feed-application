@@ -8,7 +8,15 @@
       var t = localStorage.getItem('commons.theme');
       document.documentElement.dataset.theme =
         t || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-    } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+      // Same reasoning for the reading size: a post that arrives at one size
+      // and resets to another a frame later is worse than not offering the
+      // choice. js/reading.js owns the key; this only has to be early.
+      var s = localStorage.getItem('commons.textsize');
+      document.documentElement.dataset.textSize = (s === 's' || s === 'l') ? s : 'm';
+    } catch (e) {
+      document.documentElement.dataset.theme = 'dark';
+      document.documentElement.dataset.textSize = 'm';
+    }
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -49,6 +57,10 @@
   <link rel="stylesheet" href="./styles/base.css" />
   <link rel="stylesheet" href="./styles/components.css" />
   <link rel="stylesheet" href="./styles/views.css" />
+  <!-- media="print" so it never blocks a render and costs nothing to anybody
+       who isn't printing. It redefines the colour tokens rather than chasing
+       rules; see the note at the top of the file. -->
+  <link rel="stylesheet" href="./styles/print.css" media="print" />
 
   <script type="module" src="./js/main.js"></script>
 </head>

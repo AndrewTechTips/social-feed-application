@@ -23,6 +23,27 @@ about the reader.
 
 ### Added
 
+- **The reading room has a light switch.** A panel on the post screen with
+  three text sizes and focus mode in it. The size is a preference and is kept —
+  it moves `--fs-read` and nothing else, because this is a setting about a
+  paragraph rather than a zoom control the browser already has a better version
+  of — and it is applied by the same pre-paint inline script that sets the
+  theme, so a post never arrives at one size and resets to another. Focus mode
+  is not kept: it takes the back link, the toolbar, the owner's actions, the
+  conversation, what to read next and the demo band off the page, narrows the
+  measure to 58ch, and lasts exactly as long as the post is on screen. `f`
+  toggles it, Escape leaves it, and the header holds the only other way out.
+- **Select a passage and take it with you.** On a mouse, a selection inside a
+  post offers to copy itself with the title and the address attached, in curly
+  quotes and behind an em dash. Not on a touch screen: the operating system
+  already puts Copy, Look Up and Share over a selection, with a handle at each
+  end, and ours would be competing for the same forty pixels and doing less.
+- **A printed post is a page from a book.** `styles/print.css`, linked with
+  `media="print"` so it costs nothing to anyone who isn't printing. It works by
+  redefining eleven colour tokens rather than by hunting down every rule that
+  draws dark text — which is the argument for a token system, made concretely —
+  and then taking the chrome off and setting the body at 11pt. The dark theme
+  used to print `#e7edec` on white, which is to say print nothing at all.
 - **A shelf.** Save a post from its own screen and it goes on `#/shelf` —
   the feed's column and cards with your saves in it, newest save first. A way
   in appears in the header with the first save and goes with the last, so the
@@ -129,6 +150,13 @@ about the reader.
 
 ### Fixed
 
+- **The reading panel switched off the shortcuts that advertise it.** The
+  guard that stops a keystroke being stolen from someone typing asked only
+  whether the target was an `<input>`, which was true of every input the app had
+  until the panel arrived with a radio group in it. Touching the text size meant
+  `f`, `j`, `k`, `n`, `t` and `g` all stopped working until focus moved
+  somewhere else. A radio, a checkbox or a button has no letter to steal, so
+  they no longer count as typing.
 - **`js/demo/backend.js` was a binary file.** The key a vote is stored under
   puts a NUL between the voter and the post, and the separator had been written
   as the character rather than as the escape. The module ran correctly and

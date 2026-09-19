@@ -1,0 +1,165 @@
+/* ============================================================================
+   print.css — what a post looks like on paper.
+
+   Linked with media="print", so it never blocks a render and never costs a
+   reader who isn't printing anything.
+
+   The whole file rests on one thing the design system already did right:
+   nothing in this app names a colour directly, it names a token. So printing
+   is not a matter of hunting down every rule that draws dark text — it is a
+   matter of redefining eleven values and letting everything downstream follow.
+   That is the argument for a token system, made concretely.
+
+   Deliberately no synthesised footer with the URL on it. Every browser's print
+   dialogue already offers to put the address and the date in the page margins,
+   it does it better than a ::after can, and it is the reader's choice rather
+   than ours.
+   ========================================================================== */
+
+@media print {
+  /* Wider at the sides than at the head and foot, which is what sets the
+     measure on paper: A4 is 210mm, so 22mm margins leave a 166mm column, and
+     166mm of 11pt type is about seventy-five characters — the same range the
+     screen's 66ch is aiming at, arrived at from the other direction. */
+  @page {
+    margin: 18mm 22mm;
+  }
+
+  /* Both themes, and the media-query fallback, all answer to the same values
+     here. Without this a dark-theme reader prints #e7edec on white, which is
+     to say prints nothing at all. */
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    --bg: #fff;
+    --bg-2: #fff;
+    --surface-solid: #fff;
+    --card-bg: #fff;
+    --glass-bg: #fff;
+    --panel-bg: #fff;
+
+    --text: #000;
+    --text-dim: #333;
+    --text-faint: #555;
+
+    --border: #bbb;
+    --border-strong: #888;
+    --hairline: none;
+
+    /* Amber is a screen colour. On paper it is a pale grey smudge that costs
+       ink and says nothing, so the accent prints as ink like everything else. */
+    --accent: #000;
+    --accent-soft: transparent;
+    --accent-text: #000;
+    --link: #000;
+
+    --shadow-card: none;
+    --shadow-hover: none;
+    --shadow-panel: none;
+
+    --aurora-warm: transparent;
+    --aurora-cool: transparent;
+
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* Everything that is the app rather than the writing. */
+  .aurora,
+  .site-header,
+  .toasts,
+  .palette,
+  .demo,
+  .back,
+  .detail__row,
+  .typeset,
+  .detail__actions,
+  .onward,
+  .comments,
+  .feed__sentinel,
+  .feed__error,
+  .quote-copy,
+  .confirm {
+    display: none !important;
+  }
+
+  main {
+    padding: 0;
+  }
+
+  /* The measure is a screen idea — it exists because a browser window is wider
+     than a line should be. A page is already the right width, and @page's
+     margins are what decide it. */
+  .detail,
+  .detail__content,
+  .column,
+  .feed {
+    max-width: none;
+    width: auto;
+  }
+
+  .detail__title {
+    font-size: 20pt;
+    line-height: 1.2;
+    margin-bottom: 6pt;
+  }
+  .detail__byline {
+    margin-bottom: 14pt;
+    font-size: 9pt;
+  }
+  /* The byline's avatar is a coloured disc with two letters in it — furniture
+     on screen, and on paper a grey circle. The name beside it is the fact. */
+  .detail__byline .avatar {
+    display: none;
+  }
+  .detail__content {
+    font-size: 11pt;
+    line-height: 1.5;
+    /* On screen the body is --text at 94%, which takes the hard edge off a
+       near-white face on a near-black page. On paper that same 6% is a printer
+       screening a tint instead of laying down solid ink, which is softer in
+       exactly the wrong way. Full black. */
+    color: #000;
+  }
+
+  /* A card is a surface, and a surface is a screen idea too. On paper the feed
+     is a list of things somebody wrote, so the boxes come off and the rule
+     between them does the separating. */
+  .card {
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: 0 0 8pt;
+    background: none;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  .card--warm::before,
+  .card .vote {
+    display: none;
+  }
+  .card__title {
+    font-size: 13pt;
+  }
+  .card__preview,
+  .card__meta {
+    font-size: 9pt;
+  }
+
+  /* Nothing should be cut in half by a page break if it doesn't have to be. */
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  p,
+  blockquote {
+    orphans: 3;
+    widows: 3;
+  }
+}

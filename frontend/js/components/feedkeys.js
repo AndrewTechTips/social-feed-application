@@ -25,6 +25,28 @@ const cards = () => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(
 /** Is there a list to move through on this screen? */
 export const hasCards = () => cards().length > 0;
 
+// Inputs you cannot type a letter into. The first version of this guard asked
+// only whether the target was an <input>, which was right for every input the
+// app had at the time and wrong the moment the reading panel arrived: its text
+// size is a radio group, so touching it quietly switched off every single-key
+// shortcut until focus moved somewhere else. `f` stopped working immediately
+// after the panel that advertises it.
+//
+// A radio, a checkbox or a button has no letters to steal — the keys that
+// operate them are arrows and space — so they are not typing, and the shortcuts
+// stay live over them.
+const NOT_TYPING = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "file",
+  "range",
+  "color",
+  "image",
+]);
+
 /**
  * Don't steal a letter someone is typing. palette.js needs the same guard for
  * the same reason and imports this one — and it doubles as the "is the palette
@@ -32,12 +54,13 @@ export const hasCards = () => cards().length > 0;
  * @param {EventTarget | null} target
  */
 export function typing(target) {
-  return (
-    target instanceof HTMLElement &&
-    (target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.isContentEditable)
-  );
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  if (target.tagName === "TEXTAREA") return true;
+  if (target.tagName === "INPUT") {
+    return !NOT_TYPING.has(/** @type {HTMLInputElement} */ (target).type);
+  }
+  return false;
 }
 
 /** Where the cursor is now: the index of the card holding focus, or -1. */

@@ -71,6 +71,7 @@ const SHELL = [
   "./styles/base.css",
   "./styles/components.css",
   "./styles/views.css",
+  "./styles/print.css",
 
   "./js/main.js",
   "./js/config.js",
@@ -85,6 +86,8 @@ const SHELL = [
   "./js/shelf.js",
   "./js/components/palette.js",
   "./js/components/feedkeys.js",
+  "./js/components/reader.js",
+  "./js/components/quote.js",
   "./js/views/feed.js",
   "./js/views/post.js",
   "./js/views/profile.js",

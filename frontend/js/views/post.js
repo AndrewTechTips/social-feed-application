@@ -13,6 +13,7 @@ import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteCont
 import { get, isMine, dropFeedCache, knownPosts, knownFrom } from "../store.js";
 import { markReadOnceSeen } from "../reading.js";
 import { isShelved, toggleShelf } from "../shelf.js";
+import { readerControl } from "../components/reader.js";
 import {
   nameForMorph,
   clearMorph,
@@ -319,12 +320,21 @@ export async function renderPost({ params, isStale }) {
   morphingBackTo(post.id);
 
   const conversation = comments(post, isStale, firstComments);
+  // Two halves: a button for the toolbar row, and the row it opens under it.
+  const reading = readerControl();
 
   const root = h("section", { class: "detail" },
     backLink(),
     title,
     byline,
-    h("div", { class: "detail__row" }, voteControl(post, { inline: true }), saveControl(post)),
+    h(
+      "div",
+      { class: "detail__row" },
+      voteControl(post, { inline: true }),
+      saveControl(post),
+      reading.button
+    ),
+    reading.panel,
     h("div", { class: "detail__content" }, post.content),
     mine ? actions : null,
     conversation.root,

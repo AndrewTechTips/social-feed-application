@@ -209,6 +209,43 @@
   }
 }
 
+/* — the reading size --------------------------------------------------------
+   Three steps on --fs-read, and nothing else. The chrome, the byline and the
+   thread keep their sizes: this is a setting about the long serif paragraph,
+   not a zoom control — the browser already has one of those and it is better.
+
+   The steps are the type scale either side of the default rather than a
+   percentage of it: 16px is where the body face stops being comfortable for
+   long prose and 21px is where a 66ch measure starts needing a wider column.
+   `m` is written out even though it matches the default, so that the attribute
+   is always the thing that decides and there is no state where it is absent
+   and meaningful. */
+:root[data-text-size="s"] {
+  --fs-read: 1rem; /* 16px */
+}
+:root[data-text-size="m"] {
+  --fs-read: 1.125rem; /* 18px — the default */
+}
+:root[data-text-size="l"] {
+  --fs-read: 1.3125rem; /* 21px */
+}
+
+/* — focus mode ---------------------------------------------------------------
+   Not a theme and not a preference: a mode, held on <html> for as long as the
+   post is on screen. What it changes here is the two things that are values
+   rather than layout — the measure tightens, and the cool half of the aurora
+   goes, leaving one warm bloom behind the column. Everything else it does is
+   a matter of what is on the page, and lives in views.css.
+
+   58ch rather than 66: the measure the type system uses is the right one for a
+   page that also has a header, a byline and a conversation on it. With all of
+   that gone the line can afford to be shorter, which is the whole point of
+   having moved the lamp. */
+:root[data-focus] {
+  --measure: 58ch;
+  --aurora-cool: transparent;
+}
+
 /* iOS Safari zooms the whole page in whenever a focused form control renders
    below 16px, and never zooms back out — the classic "tap the search box and
    the layout jumps" bug. 16px is the threshold, so form controls get their own

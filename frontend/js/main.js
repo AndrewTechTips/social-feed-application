@@ -18,6 +18,8 @@ import { h, icon } from "./ui.js";
 import { mountPalette, openPalette } from "./components/palette.js";
 import { shelfCount } from "./shelf.js";
 import { wireFeedKeys } from "./components/feedkeys.js";
+import { wireReader } from "./components/reader.js";
+import { wireQuote } from "./components/quote.js";
 import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
 import { renderProfile } from "./views/profile.js";
@@ -252,6 +254,8 @@ syncChrome();
 mountPalette();
 paintPaletteHint();
 wireFeedKeys();
+wireReader();
+wireQuote();
 
 startRouter();
 

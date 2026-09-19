@@ -3,7 +3,7 @@
 //
 // This is the first thing in the app that is about the *reader* rather than
 // about the posts, and it is deliberately the smallest possible version of
-// that: two keys in localStorage, read at boot, sent nowhere. There is no
+// that: three keys in localStorage, read at boot, sent nowhere. There is no
 // endpoint behind it, no column in the database and nothing for the demo
 // adapter to implement — which is also why it works identically on the
 // published site and against a real backend.
@@ -145,6 +145,59 @@ export function markReadOnceSeen(id, isStale) {
   addEventListener("visibilitychange", sync);
   sync();
 }
+
+// — how big the reader wants it -------------------------------------------------
+//
+// Three steps, not a slider. A slider over a range this narrow gives somebody a
+// decision to make where a preference would do, and it produces values like
+// 19.4px that nothing in the type scale was drawn against.
+//
+// It changes `--fs-read`, which is exactly one thing: the post's own body. The
+// chrome, the byline and the thread keep their sizes, because what this is for
+// is the long serif paragraph the whole type system was built around, and a
+// setting that resized the interface too would be a zoom control the browser
+// already has a better version of.
+//
+// Applied as an attribute on <html>, the same way the theme is, and read by the
+// inline bootstrap in index.html before first paint — a post that arrives at
+// one size and resets to another a frame later is worse than not offering the
+// choice.
+const SIZE_KEY = "commons.textsize";
+const SIZES = ["s", "m", "l"];
+const DEFAULT_SIZE = "m";
+
+/** @returns {string} */
+export function textSize() {
+  try {
+    const raw = localStorage.getItem(SIZE_KEY);
+    return SIZES.includes(String(raw)) ? String(raw) : DEFAULT_SIZE;
+  } catch (e) {
+    return DEFAULT_SIZE;
+  }
+}
+
+/** @param {string} next */
+export function setTextSize(next) {
+  const size = SIZES.includes(next) ? next : DEFAULT_SIZE;
+  document.documentElement.dataset.textSize = size;
+  try {
+    localStorage.setItem(SIZE_KEY, size);
+  } catch (e) {
+    /* storage disabled — the choice holds for this page and no longer */
+  }
+  // Whoever changed it isn't necessarily the only control showing it.
+  dispatchEvent(new CustomEvent("commons:textsize", { detail: size }));
+  return size;
+}
+
+/** The names, in order, for a control that steps through them. */
+export const textSizes = () => SIZES.slice();
+
+// The bootstrap in index.html normally does this before first paint; this is
+// what covers a browser that ran it with storage disabled, and it costs one
+// attribute write.
+document.documentElement.dataset.textSize =
+  document.documentElement.dataset.textSize || textSize();
 
 // — when you were last here ---------------------------------------------------
 //

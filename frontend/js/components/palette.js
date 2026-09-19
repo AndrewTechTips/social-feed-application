@@ -20,6 +20,7 @@ import { get, knownPosts } from "../store.js";
 import { otherTheme, toggleTheme, signOut } from "../actions.js";
 import { navigate, currentPath } from "../router.js";
 import { focusCursor, hasCards, hasOnward, readOn, typing } from "./feedkeys.js";
+import { focusIsOn, toggleFocus } from "./reader.js";
 
 const MAX_POSTS = 7; // a palette you scroll is a list, not a palette
 
@@ -89,6 +90,15 @@ function commands() {
       run: () => {
         readOn("next") || readOn("prev");
       },
+    },
+    // Only where there is a post to focus on. The label names what pressing it
+    // will do rather than what is currently true, which is the difference
+    // between a command and a status line.
+    onPost && {
+      id: "focus",
+      label: focusIsOn() ? "Leave focus mode" : "Read it in focus mode",
+      key: "F",
+      run: toggleFocus,
     },
     onPost && {
       id: "copy",

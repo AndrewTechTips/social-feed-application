@@ -184,6 +184,9 @@
 
 /* — post detail --------------------------------------------------------------- */
 .detail {
+  /* The positioning context for the quote control, which sits above whatever
+     passage is selected and travels with the page rather than the viewport. */
+  position: relative;
   width: 100%;
   max-width: var(--col-max);
   margin-inline: auto;
@@ -221,7 +224,12 @@
 .detail__row {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  flex-wrap: wrap;
+  /* Three controls now — the vote, the shelf and the reading panel — and at
+     320px they come to within a few pixels of the column. Wrapping is what
+     makes that a second row rather than a horizontal scrollbar, and it costs
+     nothing on any screen where they fit. */
+  gap: var(--s-2) var(--s-3);
   margin-bottom: var(--s-5);
 }
 .detail__content {
@@ -243,6 +251,195 @@
 }
 .detail__actions .grow {
   flex: 1;
+}
+
+/* — copy a quote ----------------------------------------------------------------
+   Appears above a selected passage, on a mouse and nowhere else.
+
+   A touch screen already puts Copy, Look Up and Share over a selection, with a
+   drag handle at each end, and a button of ours would be fighting all of it for
+   the same forty pixels — and losing, because theirs does more. The media query
+   *is* the decision; js/components/quote.js builds the control either way and
+   has no idea which kind of pointer it's dealing with.
+   -------------------------------------------------------------------------- */
+.quote-copy {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .quote-copy {
+    display: inline-flex;
+    position: absolute;
+    z-index: 5;
+    transform: translate(-50%, -100%);
+    margin-top: calc(var(--s-2) * -1);
+    align-items: center;
+    min-height: 32px;
+    padding: 0 var(--s-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-pill);
+    background: var(--panel-bg);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+    backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+    box-shadow: var(--shadow-panel);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--fs-meta);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .quote-copy:hover {
+    border-color: var(--text-faint);
+  }
+  /* The attribute has to win over the class above it, or hiding it wouldn't. */
+  .quote-copy[hidden] {
+    display: none;
+  }
+}
+
+/* — the reading panel -----------------------------------------------------------
+   Opened by the "Aa" button in the toolbar row, and inline rather than floating:
+   the delete confirm on this same screen expands in place, and a popover would
+   have meant positioning, a focus trap and an outside-click rule to avoid
+   pushing four lines of type down the page.
+
+   The checked step borrows the switch's appearance rather than inventing a
+   second way of saying "this one" — amber fill, amber border, text left in
+   --text so nothing depends on the accent carrying small type.
+   -------------------------------------------------------------------------- */
+/* The same weight as the shelf control beside it: three buttons in one row
+   that are all optional and none of them the action, so none of them should be
+   drawn as if it were. */
+.typeset__open {
+  --btn-fg: var(--text-dim);
+}
+@media (hover: hover) {
+  .typeset__open:hover:not([disabled]) {
+    --btn-fg: var(--text);
+  }
+}
+.typeset__open[aria-expanded="true"] {
+  --btn-fg: var(--text);
+  --btn-bd: var(--border-strong);
+}
+.typeset__mark {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.typeset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4) var(--s-6);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card-bg);
+}
+.typeset__group {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.typeset__legend {
+  /* A legend is out of flow by default, which in a flex row leaves it stacked
+     above everything instead of beside it. float:none puts it back in. */
+  float: none;
+  padding: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+.typeset__steps {
+  display: inline-flex;
+  gap: var(--s-1);
+}
+.typeset__step {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition: border-color var(--t-mid) var(--ease),
+    background-color var(--t-mid) var(--ease), color var(--t-mid) var(--ease);
+}
+.typeset__step input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+@media (hover: hover) {
+  .typeset__step:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+}
+.typeset__step:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.typeset__step:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.typeset__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-micro);
+}
+
+/* — focus mode ------------------------------------------------------------------
+   Everything that isn't the post, gone: the way back, the toolbar, this panel,
+   the owner's actions, the conversation, what to read next, and the demo band.
+   The header stays — it is what holds the way out, and a transparent one would
+   let the post scroll visibly underneath the only control that gets you out.
+   What changes is what it holds.
+
+   visibility rather than display on the three header children, so the grid
+   keeps its shape and nothing moves sideways as the mode comes on. */
+:root[data-focus] .brand,
+:root[data-focus] .search,
+:root[data-focus] .account {
+  visibility: hidden;
+}
+:root[data-focus] .back,
+:root[data-focus] .detail__row,
+:root[data-focus] .typeset,
+:root[data-focus] .detail__actions,
+:root[data-focus] .comments,
+:root[data-focus] .onward,
+:root[data-focus] .demo {
+  display: none;
+}
+.focus-out {
+  display: none;
+}
+:root[data-focus] .focus-out {
+  display: inline-flex;
+  position: absolute;
+  top: 50%;
+  right: max(var(--s-4), env(safe-area-inset-right));
+  transform: translateY(-50%);
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-meta);
+}
+/* The column narrows rather than jumping. Under reduced motion base.css
+   collapses every transition to 0.01ms, which is exactly right here: the
+   measure still changes, it just stops travelling. */
+.detail__content {
+  transition: max-width var(--t-slow) var(--ease);
 }
 
 /* — comments ------------------------------------------------------------------
