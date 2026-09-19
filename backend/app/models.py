@@ -88,6 +88,12 @@ class Post(Base):
     # documented compromise sitting in two files.
     voted: Mapped[bool] = query_expression()
 
+    # The sentence a search matched on, with the matching words marked. Only
+    # ever attached when somebody searched — see ts_headline in routers/post.py
+    # — because it is an answer to a question, and without a question there is
+    # nothing to answer.
+    excerpt: Mapped[str | None] = query_expression()
+
 
 class User(Base):
 

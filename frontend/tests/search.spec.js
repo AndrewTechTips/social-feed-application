@@ -149,3 +149,93 @@ test("searching never turns up somebody else's draft", async ({ page, api }) => 
   await search(page, "beekeeping");
   await expect(page.locator(".feed__status")).toContainText("Nothing matches");
 });
+
+
+// ── the sentence it matched on ─────────────────────────────────────────────
+//
+// A result that shows *why* it is a result is worth more than the first 280
+// characters of it. The API answers with `excerpt`, marked up in two control
+// characters; ui.js splits on them and builds real <mark> elements, and the
+// last test here is the reason that distinction is not decoration.
+
+const EXCERPT = ".card__preview--excerpt";
+
+test("a result shows the sentence it matched on, with the word marked", async ({
+  page,
+  api,
+}) => {
+  const email = uniqueEmail("excerpt");
+  await register(page, email);
+  await write(
+    page,
+    "Notes on a repair",
+    "The handle came away in my hand on a Tuesday. I took the kettle apart " +
+      "on the kitchen table and found one screw doing the work of three."
+  );
+
+  await page.goto("/#/?search=kettle");
+  await expect(page.locator(CARD)).toHaveCount(1);
+
+  const excerpt = page.locator(EXCERPT);
+  await expect(excerpt).toBeVisible();
+  await expect(excerpt.locator("mark")).toHaveText("kettle");
+  // The part of the post that answers the question, not its opening words.
+  await expect(excerpt).toContainText("kitchen table");
+});
+
+test("the mark follows the stem, not the letters", async ({ page, api }) => {
+  const email = uniqueEmail("stemmark");
+  await register(page, email);
+  await write(page, "A repair", "I took the kettle apart and put it back together.");
+
+  await page.goto("/#/?search=kettles");
+  await expect(page.locator(CARD)).toHaveCount(1);
+  await expect(page.locator(`${EXCERPT} mark`)).toHaveText("kettle");
+});
+
+test("no question, no excerpt — the card shows the post's opening", async ({
+  page,
+  api,
+}) => {
+  const email = uniqueEmail("noexcerpt");
+  await register(page, email);
+  await write(page, "A repair", "I took the kettle apart and put it back together.");
+
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(1);
+  await expect(page.locator(EXCERPT)).toHaveCount(0);
+  await expect(page.locator(".card__preview")).toContainText("I took the kettle");
+  await expect(page.locator(".card mark")).toHaveCount(0);
+});
+
+test("the excerpt is text, and is never parsed as markup", async ({ page, api }) => {
+  // The one that matters. `excerpt` is somebody's post passed through a
+  // Postgres function that is not a sanitiser and never claimed to be — it
+  // drops part of a tag and leaves the rest, closing bracket and all. What
+  // stops that being a stored-XSS hole with a search box in front of it is
+  // that ui.js splits the string and appends text nodes, and that the markers
+  // are control characters so nothing is tempted to parse them.
+  const email = uniqueEmail("inert");
+  await register(page, email);
+  await write(
+    page,
+    "Nasty",
+    'Before this. <img src=x onerror=alert(1)> A kettle, after this.'
+  );
+
+  await page.goto("/#/?search=kettle");
+  await expect(page.locator(CARD)).toHaveCount(1);
+  await expect(page.locator(`${EXCERPT} mark`)).toHaveText("kettle");
+
+  // The precise statement: the only element an excerpt may contain is a mark.
+  // Anything else in there was parsed out of somebody's post, whatever tag it
+  // happens to be.
+  await expect(page.locator(`${EXCERPT} *:not(mark)`)).toHaveCount(0);
+  // And nothing landed elsewhere in the document either. Deliberately not
+  // `svg` or `script`: the brand, the icons and the vote caret are all svg,
+  // and index.html carries two scripts of its own. These four the app never
+  // creates at all, so one appearing could only have been parsed out of text.
+  await expect(page.locator("img, iframe, object, embed")).toHaveCount(0);
+  // The payload did reach the page, as characters.
+  await expect(page.locator(EXCERPT)).toContainText("onerror");
+});

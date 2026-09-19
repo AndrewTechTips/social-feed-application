@@ -262,3 +262,138 @@ def test_the_search_index_exists_and_is_gin(session):
     ).scalar()
     assert definition is not None, "the search index is gone"
     assert "USING gin" in definition
+
+
+# ── the sentence a search matched on ───────────────────────────────────────
+#
+# ts_headline gives back the part of a post that answers the question, with the
+# matching words marked. The marks are two control characters rather than HTML,
+# and the test at the bottom of this block is the reason.
+
+STX = "\x02"
+ETX = "\x03"
+
+
+def _marked(excerpt: str) -> list[str]:
+    """The words between the markers."""
+    out, rest = [], excerpt
+    while STX in rest and ETX in rest:
+        _, rest = rest.split(STX, 1)
+        word, rest = rest.split(ETX, 1)
+        out.append(word)
+    return out
+
+
+def test_a_result_shows_why_it_is_a_result(authorized_client, session, test_user):
+    session.add(
+        models.Post(
+            title="Notes on a repair",
+            content=(
+                "The handle came away in my hand on a Tuesday. "
+                "I took the kettle apart on the kitchen table and found "
+                "one screw doing the work of three."
+            ),
+            user_id=test_user["id"],
+        )
+    )
+    session.commit()
+
+    page = authorized_client.get("/posts/?search=kettle").json()
+    assert page["total"] == 1
+    excerpt = page["items"][0]["excerpt"]
+
+    assert excerpt is not None
+    assert _marked(excerpt) == ["kettle"]
+    # The sentence around it, not the opening of the post.
+    assert "kitchen table" in excerpt
+
+
+def test_the_mark_follows_the_stem_not_the_letters(
+    authorized_client, session, test_user
+):
+    """Searching "kettles" marks "kettle". This is the whole reason the search
+    is a tsvector and not a LIKE, and it would be a strange thing for the
+    highlight to be unable to do."""
+    session.add(
+        models.Post(
+            title="A repair",
+            content="I took the kettle apart and put it back together.",
+            user_id=test_user["id"],
+        )
+    )
+    session.commit()
+
+    page = authorized_client.get("/posts/?search=kettles").json()
+    assert _marked(page["items"][0]["excerpt"]) == ["kettle"]
+
+
+def test_there_is_no_excerpt_when_nobody_asked_a_question(
+    authorized_client, test_posts
+):
+    """It is an answer, and without a question there is nothing to answer.
+    ts_headline re-parses the document for every row it is given, so a feed
+    that computed one anyway would be paying for it on every page."""
+    feed = authorized_client.get("/posts/").json()
+    assert feed["items"]
+    assert all(item["excerpt"] is None for item in feed["items"])
+
+    one = authorized_client.get(f"/posts/{test_posts[0].id}").json()
+    assert one["excerpt"] is None
+
+
+def test_ts_headline_is_not_a_sanitiser(authorized_client, session, test_user):
+    """The one that matters, and it is not the one you would guess.
+
+    A `<script>` tag comes back stripped, which looks like sanitisation and
+    isn't: the text-search parser classified it as a `tag` token and the
+    headline was reassembled without it. Hand it markup the parser only
+    half-recognises and a fragment survives, `>` and all — which is what this
+    asserts, because a test that only checked the script tag would be pinning
+    down the reassuring case and missing the honest one.
+
+    Nothing downstream may treat this string as markup. The markers are control
+    characters so that nothing is tempted to.
+    """
+    session.add(
+        models.Post(
+            title="Nasty",
+            content="Before. <img src=x onerror=alert(1)> A kettle, after.",
+            user_id=test_user["id"],
+        )
+    )
+    session.commit()
+
+    excerpt = authorized_client.get("/posts/?search=kettle").json()["items"][0][
+        "excerpt"
+    ]
+    # Not sanitised: a piece of the attribute list survives, closing angle
+    # bracket included.
+    assert "onerror=alert(1)>" in excerpt
+    # And the marking around the match is not markup, so nothing about this
+    # string invites being parsed as any.
+    assert "<b>" not in excerpt and "<mark>" not in excerpt
+    assert STX in excerpt and ETX in excerpt
+    assert _marked(excerpt) == ["kettle"]
+
+
+def test_an_excerpt_still_comes_back_when_only_the_title_matched(
+    authorized_client, session, test_user
+):
+    """The match was in the heading, so there is nothing in the body to mark.
+    ts_headline falls back to the opening of the post, which is what the card
+    would have shown anyway — no highlight, and no hole where the text was."""
+    session.add(
+        models.Post(
+            title="Kettle",
+            content="This body is about something else entirely, at length.",
+            user_id=test_user["id"],
+        )
+    )
+    session.commit()
+
+    excerpt = authorized_client.get("/posts/?search=kettle").json()["items"][0][
+        "excerpt"
+    ]
+    assert excerpt
+    assert _marked(excerpt) == []
+    assert "something else" in excerpt

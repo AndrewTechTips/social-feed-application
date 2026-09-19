@@ -34,6 +34,8 @@ def _attach_counts(
         )
         or 0
     )
+    # Nobody searched for this one, so there is no sentence to point at.
+    post.excerpt = None
     post.voted = (
         viewer is not None
         and (
@@ -113,6 +115,49 @@ SEARCH_CONFIG = "english"
 # See docs/adr/0008-a-ranking-with-two-gravities.md for the measurements.
 VOTE_GRAVITY = 0.5
 COMMENT_GRAVITY = 0.25
+
+# ── the sentence a search matched on ───────────────────────────────────────
+#
+# ts_headline finds the part of a post that answers the question and marks the
+# matching words — stemmed, so a search for "kettles" marks "kettle". It is the
+# reason for having a tsvector at all rather than a LIKE: a result that shows
+# *why* it is a result is worth more than the first 280 characters of it.
+#
+# **The markers are control characters, not HTML, and that is deliberate.**
+#
+# ts_headline is not a sanitiser and has never claimed to be one. What it does
+# with markup in a post is a side effect of the text-search parser recognising
+# a `tag` token and the headline being reassembled from tokens — so it is lossy
+# and partial rather than safe. Measured, on this database:
+#
+#     <script>alert(1)</script> kettle   ->   [kettle]
+#     <img src=x onerror=alert(1)> kettle ->  onerror=alert(1)> [kettle]
+#     "><svg onload=alert(1)> kettle      ->  onload=alert(1)> [kettle]
+#
+# The first looks like sanitisation. The other two are the same mechanism
+# leaving a fragment behind, `>` and all. Nothing here is escaping anything;
+# this is a parser dropping tokens it classified, and which tokens it
+# classifies is an implementation detail of a text-search parser.
+#
+# So the safety does not live here. The markers are STX and ETX — characters
+# that cannot be typed, do not survive a sane copy-paste, and above all mean
+# nothing to an HTML parser — and the client splits on them and builds real
+# <mark> elements rather than parsing anything. Marked up as `<b>...</b>`
+# instead, the only thing between this endpoint and stored XSS would be
+# everybody downstream remembering never to use innerHTML.
+#
+# A post that literally contains a STX could fake a highlight. It would render
+# a <mark>. That is the whole of the blast radius.
+HEADLINE_START = "\x02"
+HEADLINE_STOP = "\x03"
+
+# One fragment, about a sentence's worth. MinWords keeps it from being so short
+# it reads as a fragment; MaxWords keeps it to roughly what the card had room
+# for anyway.
+HEADLINE_OPTIONS = (
+    f'StartSel="{HEADLINE_START}", StopSel="{HEADLINE_STOP}", '
+    "MaxFragments=1, MaxWords=30, MinWords=15"
+)
 
 
 def search_query(search: str) -> ColumnElement[Any]:
@@ -231,8 +276,27 @@ def page_of_posts(
     else:
         mine = func.coalesce(func.bool_or(models.Vote.user_id == viewer.id), False)
 
+    # Only when somebody asked a question. ts_headline re-parses the document
+    # for every row it is given, which is why it is applied here — after LIMIT,
+    # to the ten rows actually being returned — and not at all otherwise.
+    headline: ColumnElement[Any] = (
+        func.ts_headline(
+            SEARCH_CONFIG,
+            models.Post.content,
+            search_query(search),
+            HEADLINE_OPTIONS,
+        )
+        if search
+        else literal(None)
+    )
+
     stmt = (
-        select(models.Post, vote_count.label("votes"), mine.label("voted"))
+        select(
+            models.Post,
+            vote_count.label("votes"),
+            mine.label("voted"),
+            headline.label("excerpt"),
+        )
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
         .options(selectinload(models.Post.user))
         .where(*filters)
@@ -250,9 +314,10 @@ def page_of_posts(
         )
 
     items = []
-    for post, votes, voted in db.execute(stmt).all():
+    for post, votes, voted, excerpt in db.execute(stmt).all():
         post.votes = votes
         post.voted = bool(voted)
+        post.excerpt = excerpt
         items.append(post)
 
     pages = math.ceil(total / page_size) if total else 0
@@ -349,6 +414,7 @@ def create_posts(
     db.refresh(new_post)
     new_post.votes = 0  # a brand new post has no votes,
     new_post.voted = False  # and its author has not voted for it
+    new_post.excerpt = None  # and nobody searched for it
     return new_post
 
 

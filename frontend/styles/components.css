@@ -535,6 +535,18 @@
   line-clamp: 2;
   overflow: hidden;
 }
+/* A search match. --accent-soft is already what ::selection uses, so this is
+   the app's existing way of saying "the bit you singled out" rather than a
+   fourth thing for the accent to mean — the search singled this out instead of
+   your cursor. The text stays --text: the wash carries the mark, not the
+   letters. */
+.card__preview--excerpt mark {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 .card__meta {
   margin-top: var(--s-3);
   display: flex;

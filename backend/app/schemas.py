@@ -84,6 +84,10 @@ class PostOut(PostBase):
     # anonymous reader has not voted on anything. Defaulted rather than
     # optional so a client never has to distinguish "no" from "not told".
     voted: bool = False
+    # Null unless the caller searched. The marks around the matching words are
+    # two control characters, not HTML — see HEADLINE_* in routers/post.py for
+    # why that distinction is the whole safety of the feature.
+    excerpt: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -155,6 +155,45 @@ def search_terms(search: str) -> list[str]:
     ]
 
 
+# The markers ts_headline is configured with in backend/app/routers/post.py.
+# Control characters rather than HTML, and the note there says why at length.
+HEADLINE_START = "\x02"
+HEADLINE_STOP = "\x03"
+HEADLINE_WORDS = 30
+HEADLINE_LEAD = 8  # words of run-up before the first match
+
+
+def headline(content: str, terms: list[str]) -> str:
+    """A stand-in for ts_headline: the part of a post that answers the search,
+    with the matching words marked.
+
+    An approximation like the rest of the search in this file — Postgres finds
+    the best *fragment* by a cover density it would take a day to reproduce,
+    and this centres a fixed window on the first match. What it gets right is
+    the two things a caller can see: the words marked are the stemmed matches,
+    and nothing about the result is markup.
+    """
+    tokens = (content or "").split()
+    hits = [
+        i
+        for i, tok in enumerate(tokens)
+        if (found := WORD_RE.findall(tok.lower())) and stem(found[0]) in terms
+    ]
+    # No match in the body — the search hit the title. Postgres falls back to
+    # the opening of the document, so this does too.
+    start = max(0, hits[0] - HEADLINE_LEAD) if hits else 0
+    window = tokens[start : start + HEADLINE_WORDS]
+
+    def mark(tok: str) -> str:
+        found = WORD_RE.search(tok.lower())
+        if not found or stem(found.group(0)) not in terms:
+            return tok
+        a, b = found.span()
+        return tok[:a] + HEADLINE_START + tok[a:b] + HEADLINE_STOP + tok[b:]
+
+    return " ".join(mark(t) for t in window)
+
+
 def search_rank(row: dict, terms: list[str]) -> float | None:
     """How well one post answers a search, or None if it doesn't.
 
@@ -320,12 +359,17 @@ class State:
             "created_at": u["created_at"],
         }
 
-    def post_out(self, row: dict, viewer: str | None = None) -> dict:
+    def post_out(
+        self, row: dict, viewer: str | None = None, terms: list[str] | None = None
+    ) -> dict:
         """One post in the shape PostOut describes.
 
         `viewer` decides `voted` and nothing else. The count is the room's and
         the flag is the reader's: the same row answers differently for two
         people, which is why neither is stored on it.
+
+        `terms` decides `excerpt`, and for the same reason: it is an answer to
+        a question, so without one there is nothing to answer.
         """
         author = row["author_email"]
         return {
@@ -341,6 +385,8 @@ class State:
             # False for a reader who isn't signed in, which is the truthful
             # answer rather than a missing one.
             "voted": viewer is not None and (viewer, row["id"]) in self.votes,
+            # Only when somebody asked a question; see headline() above.
+            "excerpt": headline(row["content"], terms) if terms else None,
         }
 
     def add_post(
@@ -913,7 +959,9 @@ class Handler(BaseHTTPRequestHandler):
         total = len(rows)
         pages = (total + page_size - 1) // page_size if total else 0
         start = (page - 1) * page_size
-        items = [ST.post_out(r, viewer) for r in rows[start : start + page_size]]
+        items = [
+            ST.post_out(r, viewer, terms) for r in rows[start : start + page_size]
+        ]
         self._send(
             200,
             {

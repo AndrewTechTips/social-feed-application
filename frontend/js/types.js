@@ -71,6 +71,10 @@
  * @property {number} votes  how many the room gave it
  * @property {boolean} voted whether *this* reader is one of them — a property
  *   of the pair rather than of the post, and false for anybody signed out
+ * @property {string | null} [excerpt] the sentence a search matched on, with
+ *   the matches wrapped in two control characters. Null unless the caller
+ *   searched. **Not HTML** — see highlighted() in ui.js, which is the only
+ *   thing allowed to read it.
  */
 
 /**

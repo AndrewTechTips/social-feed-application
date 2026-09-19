@@ -180,6 +180,46 @@ function words(value) {
   return String(value || "").toLowerCase().match(WORD_RE) || [];
 }
 
+// The markers ts_headline is configured with in backend/app/routers/post.py.
+// Control characters rather than HTML, and the note there says why at length.
+const HEADLINE_START = "\u0002";
+const HEADLINE_STOP = "\u0003";
+const HEADLINE_WORDS = 30;
+const HEADLINE_LEAD = 8; // words of run-up before the first match
+
+/**
+ * A stand-in for ts_headline: the part of a post that answers the search, with
+ * the matching words marked.
+ *
+ * An approximation like the rest of the search in this file — Postgres finds
+ * the best *fragment* by a cover density it would take a day to reproduce, and
+ * this centres a fixed window on the first match. What it gets right is the two
+ * things a caller can see: the words marked are the stemmed matches, and
+ * nothing about the result is markup.
+ */
+function headline(content, terms) {
+  const tokens = String(content || "").split(/\s+/).filter(Boolean);
+  const matches = (tok) => {
+    const found = tok.toLowerCase().match(WORD_RE);
+    return !!found && terms.includes(stem(found[0]));
+  };
+  const first = tokens.findIndex(matches);
+  // No match in the body — the search hit the title. Postgres falls back to
+  // the opening of the document, so this does too.
+  const start = first === -1 ? 0 : Math.max(0, first - HEADLINE_LEAD);
+  return tokens
+    .slice(start, start + HEADLINE_WORDS)
+    .map((tok) => {
+      if (!matches(tok)) return tok;
+      const found = /[a-z0-9]+/i.exec(tok);
+      if (!found) return tok;
+      const a = found.index;
+      const b = a + found[0].length;
+      return tok.slice(0, a) + HEADLINE_START + tok.slice(a, b) + HEADLINE_STOP + tok.slice(b);
+    })
+    .join(" ");
+}
+
 /** The words of a piece of text, as the index would keep them. */
 function lexemes(value) {
   return new Set(words(value).filter((w) => !STOP_WORDS.has(w)).map(stem));
@@ -417,7 +457,9 @@ export function createDemoBackend({
   // flag is the reader's — the same row answers differently for two people,
   // which is why neither is stored on it. Mirrors PostOut in
   // backend/app/schemas.py.
-  const postOut = (row, viewer) => ({
+  // `terms` decides `excerpt` the way `viewer` decides `voted`: it is an
+  // answer to a question, so without one there is nothing to answer.
+  const postOut = (row, viewer, terms) => ({
     id: row.id,
     title: row.title,
     content: row.content,
@@ -430,6 +472,7 @@ export function createDemoBackend({
     // False for a reader who isn't signed in, which is the truthful answer
     // rather than a missing one.
     voted: !!viewer && state.votes.includes(voteKey(viewer, row.id)),
+    excerpt: terms && terms.length ? headline(row.content, terms) : null,
   });
 
   // Published posts are public; a draft belongs to its author. Mirrors
@@ -736,7 +779,7 @@ export function createDemoBackend({
     return json(200, {
       // Not `.map(postOut)` — map passes the index as the second argument,
       // which would arrive here as the viewer.
-      items: rows.slice(start, start + pageSize).map((r) => postOut(r, viewer)),
+      items: rows.slice(start, start + pageSize).map((r) => postOut(r, viewer, terms)),
       total,
       page,
       page_size: pageSize,

@@ -233,6 +233,66 @@ function preview(text) {
   return t.length > 280 ? t.slice(0, 280).trimEnd() + "…" : t;
 }
 
+// The two markers ts_headline is configured with — see the long note beside
+// HEADLINE_START in backend/app/routers/post.py.
+const MARK_START = "\u0002";
+const MARK_STOP = "\u0003";
+
+/**
+ * The sentence a search matched on, with the matches drawn as <mark>.
+ *
+ * **Split, never parsed.** The excerpt is somebody's post, passed through a
+ * Postgres function whose handling of markup is a side effect of how the
+ * text-search parser classifies tokens — it drops some of a tag and leaves the
+ * rest, closing bracket and all. It is not escaped and was never trying to be.
+ *
+ * So this walks the string and appends text nodes and real elements. There is
+ * no innerHTML here and there must never be one: the markers are control
+ * characters precisely so that nothing downstream is tempted to treat any of
+ * this as HTML, and the one place that could is this function.
+ *
+ * @param {string} excerpt
+ * @param {string} content the post it was cut from, only so the ellipsis below
+ *   is added when it is true and not when it isn't
+ */
+function highlighted(excerpt, content) {
+  const p = h("p", { class: "card__preview card__preview--excerpt" });
+
+  // A fragment from the middle of a post starts mid-sentence, on a lowercase
+  // word, directly under a title — which reads like a rendering fault rather
+  // than like a quotation. One leading ellipsis says "this is from further in".
+  //
+  // Only when it is: a post whose match is in its opening sentence gets a
+  // fragment that *is* the opening, and an ellipsis in front of that would be
+  // saying something untrue. First word against first word rather than a
+  // prefix comparison, because ts_headline rejoins its tokens with single
+  // spaces and the original may not have been written with them.
+  const firstWord = (text) =>
+    (String(text || "").trim().match(/^\S+/) || [""])[0]
+      .split(MARK_START)
+      .join("")
+      .split(MARK_STOP)
+      .join("");
+  if (firstWord(excerpt) && firstWord(excerpt) !== firstWord(content)) {
+    p.append(document.createTextNode("…"));
+  }
+  // Everything before the first marker is ordinary text; after that each chunk
+  // is a match followed by the text up to the next one. An unbalanced marker —
+  // a start with no stop — falls through as text, which is the safe reading.
+  String(excerpt)
+    .split(MARK_START)
+    .forEach((chunk, i) => {
+      if (i === 0) return p.append(document.createTextNode(chunk));
+      const stop = chunk.indexOf(MARK_STOP);
+      if (stop === -1) return p.append(document.createTextNode(chunk));
+      p.append(
+        h("mark", {}, chunk.slice(0, stop)),
+        document.createTextNode(chunk.slice(stop + MARK_STOP.length))
+      );
+    });
+  return p;
+}
+
 // Where a post stops being one person's opinion and starts being the room's.
 // Three is a judgement, not a measurement, and it's written here rather than
 // computed from the page on purpose: a threshold that moved with whatever
@@ -250,7 +310,12 @@ export function postCard(post) {
     "a",
     { class: "card__link", href: `#/posts/${post.id}` },
     title,
-    h("p", { class: "card__preview" }, preview(post.content))
+    // The excerpt when there was a question, the opening of the post when
+    // there wasn't. A result that shows *why* it is a result is worth more
+    // than the first 280 characters of it.
+    post.excerpt
+      ? highlighted(post.excerpt, post.content)
+      : h("p", { class: "card__preview" }, preview(post.content))
   );
 
   // Hand this title to the transition on the way out, so it becomes the

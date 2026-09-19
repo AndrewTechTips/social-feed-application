@@ -23,6 +23,22 @@ about the reader.
 
 ### Added
 
+- **A search result shows the sentence it matched on**, with the matching
+  words marked — stemmed, so searching "kettles" marks "kettle". `ts_headline`
+  does it, which is the rest of the reason for having a `tsvector` rather than
+  a `LIKE`: a result that shows *why* it is a result is worth more than the
+  first 280 characters of it. Computed only when somebody searched, and only
+  for the rows actually being returned, because it re-parses each document.
+
+  **The marks are two control characters, not HTML.** `ts_headline` is not a
+  sanitiser and never claimed to be: what it does with markup falls out of how
+  the text-search parser classifies tokens, so a `<script>` disappears while
+  `<img src=x onerror=…>` leaves `onerror=…>` behind, closing bracket and all.
+  Marked up as `<b>…</b>` and handed to `innerHTML`, this would be stored XSS
+  with a search box in front of it. The client splits on the markers and
+  appends text nodes and real `<mark>` elements instead, and there is a test
+  that fails with an `<img>` on the page the moment anybody reaches for
+  `innerHTML`.
 - **Three ways to order the feed** — newest, warmest, discussed — and with them
   the first thing in this app that makes a vote *do* something rather than
   decorate a card. Both rankings decay, so neither becomes a museum of whatever

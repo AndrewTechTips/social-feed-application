@@ -253,6 +253,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
