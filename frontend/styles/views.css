@@ -54,6 +54,13 @@
   font-size: var(--fs-ui);
   max-width: 46ch;
 }
+/* One line, and the last thing in the block — an offer rather than a call to
+   action. Somebody who wants to know how this was built will follow it; the
+   reader who came to read scrolls past it in one movement. */
+.masthead__more {
+  margin-top: var(--s-4);
+  font-size: var(--fs-meta);
+}
 
 /* — feed ----------------------------------------------------------------------- */
 .feed {
@@ -160,6 +167,138 @@
   color: var(--text-faint);
   font-size: var(--fs-meta);
   min-height: 1em;
+}
+
+/* — the colophon ---------------------------------------------------------------
+   The page at the back of the book. The one screen in the app where the
+   typography is the whole design, so: no cards, no panels, no rules except the
+   two that separate a page from its end. Everything is type and space.
+
+   It is set in --fs-read, which means the reading size the panel on a post sets
+   applies here too. That is deliberate — this is the app's other long-form
+   prose, and a reader who needs 21px needs it on both.
+   -------------------------------------------------------------------------- */
+.colophon {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+.colophon__head {
+  margin-bottom: var(--s-8);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+}
+.colophon__title {
+  font-size: var(--fs-h1);
+  margin-bottom: var(--s-3);
+}
+.colophon__standfirst {
+  max-width: var(--measure);
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.colophon__section {
+  margin-bottom: var(--s-8);
+}
+.colophon__section h2 {
+  font-size: var(--fs-h2);
+  margin-bottom: var(--s-4);
+}
+/* A class rather than `.colophon__section p`. The descendant selector would
+   have out-weighed every one of the smaller paragraphs nested inside a section
+   — the footnote under the figures, the line under each decision — and the fix
+   for that is a class, not six !importants. */
+.colophon__prose {
+  max-width: var(--measure);
+  margin-bottom: var(--s-4);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  color: color-mix(in srgb, var(--text) 94%, transparent);
+}
+.colophon__prose:last-child {
+  margin-bottom: 0;
+}
+.colophon__section code {
+  font-size: 0.9em;
+  color: var(--text-dim);
+}
+
+/* A specification table, the way a book's is: the figure in a column of its
+   own, right-aligned on tabular numerals so the digits line up, and what it
+   counts beside it rather than under it. The alternative — a grid of big
+   numbers over small labels — is the default treatment for this and would have
+   made the one page about craft look like a dashboard. */
+.colophon__figures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-4);
+  max-width: var(--measure);
+}
+.colophon__figure {
+  /* So the two spans become cells of the grid above rather than one cell
+     holding both. */
+  display: contents;
+}
+.colophon__number {
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.colophon__label {
+  align-self: baseline;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.7;
+}
+.colophon__note {
+  color: var(--text-faint);
+  /* Not the reading face and not the reading size: it is a footnote about the
+     numbers, not part of the argument. */
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.colophon__decisions {
+  list-style: none;
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  max-width: var(--measure);
+}
+.colophon__decisions h3 {
+  font-size: 1.1rem;
+  margin-bottom: var(--s-1);
+}
+.colophon__decisions h3 a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-strong);
+}
+@media (hover: hover) {
+  .colophon__decisions h3 a:hover {
+    border-bottom-color: var(--accent);
+  }
+}
+.colophon__decisions p {
+  color: var(--text-dim);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+}
+
+.colophon__foot {
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--border);
+}
+.colophon__foot p {
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
 }
 
 /* — the shelf -------------------------------------------------------------------

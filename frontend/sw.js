@@ -66,6 +66,7 @@ const SHELL = [
   "./index.html",
   "./manifest.webmanifest",
   "./favicon.ico",
+  "./stats.json",
 
   "./styles/tokens.css",
   "./styles/base.css",
@@ -85,6 +86,7 @@ const SHELL = [
   "./js/reading.js",
   "./js/shelf.js",
   "./js/components/palette.js",
+  "./js/components/comments.js",
   "./js/components/feedkeys.js",
   "./js/components/reader.js",
   "./js/components/quote.js",
@@ -92,6 +94,7 @@ const SHELL = [
   "./js/views/post.js",
   "./js/views/profile.js",
   "./js/views/shelf.js",
+  "./js/views/colophon.js",
   "./js/views/auth.js",
   "./js/views/compose.js",
   "./js/demo/backend.js",

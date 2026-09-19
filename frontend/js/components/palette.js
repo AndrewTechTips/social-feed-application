@@ -67,6 +67,11 @@ function commands() {
       label: "Open your shelf",
       run: () => navigate("/shelf"),
     },
+    {
+      id: "colophon",
+      label: "How this was made",
+      run: () => navigate("/colophon"),
+    },
     // Only where there's a list to move through, which is the feed and a
     // profile. j and k are a pair everyone who knows one knows the other, so
     // the chip shows both; Enter and u follow from having a card focused.

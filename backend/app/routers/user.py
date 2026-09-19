@@ -172,4 +172,5 @@ def get_user_posts(
         filters=(models.Post.user_id == author.id, visible_to(current_user)),
         page=page,
         page_size=page_size,
+        viewer=current_user,
     )

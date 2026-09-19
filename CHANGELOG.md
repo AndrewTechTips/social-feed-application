@@ -23,6 +23,24 @@ about the reader.
 
 ### Added
 
+- **`PostOut.voted`** — whether the person asking has upvoted this post. It is a
+  property of the pair rather than of the post, so the same row answers
+  differently for two readers; `votes` is still the room's count. Free on the
+  feed, where the query already outer-joins every vote in order to count them,
+  so the flag is a second aggregate (`bool_or`, coalesced — a post with no
+  votes comes back from the outer join as one NULL row) over rows that were
+  read anyway. A single post gets a second small lookup instead.
+- **A colophon**, at `#/colophon`. The page at the back of a book names the
+  type, the paper and the press; this one names what Commons is made of, and
+  what it is honest to say about the copy you are looking at — including the one
+  place demo mode had to compromise, volunteered rather than left to be found.
+  The figures are measured by `docs/stats.py` into `frontend/stats.json` and
+  re-checked in CI from both jobs, so a number that moved turns the build red
+  instead of leaving the page describing last month. It is set as a
+  specification table rather than a grid of stat cards, which is the default
+  treatment for numbers and would have made the one page about craft look like
+  a dashboard. There is no list of keyboard shortcuts on it on purpose: a second
+  copy is a copy that goes wrong, so it has a button that opens the palette.
 - **The reading room has a light switch.** A panel on the post screen with
   three text sizes and focus mode in it. The size is a preference and is kept —
   it moves `--fs-read` and nothing else, because this is a setting about a
@@ -128,6 +146,24 @@ about the reader.
 
 ### Changed
 
+- **The vote control stopped guessing.** It used to read the filled caret out
+  of a set of post ids in `localStorage`, because the API had no way of saying
+  — so your own votes were invisible on a second device, invisible in a private
+  window, and wrong after clearing site data. It reads `voted` off the post
+  now. The old `commons.votes` key is *removed* on boot rather than merely left
+  alone: a guess about somebody's voting is still a record of it.
+
+  What the mirror did do correctly is now done properly. The feed fetches one
+  copy of a post and the post screen fetches another, so voting on the second
+  left the first disagreeing when the cache put it back on screen; a vote is
+  written onto every copy this session holds, which patches real data instead
+  of keeping a parallel record of it.
+- **`views/post.js` is two files.** It had grown into the post, the owner's
+  actions, the comment list, one comment and the composer for writing one —
+  seven hundred lines in which the screen everybody actually reads was the
+  shortest section. The conversation moved to `js/components/comments.js`, which
+  is where the next thing done to it belongs. Nothing changed in the move, on
+  purpose: a refactor that also fixes things is a refactor nobody can review.
 - Drafts are private to their author, in the feed, by direct URL, through
   search, on a profile, and for voting and commenting.
 - Login spends the same time on an unknown email as on a wrong password.

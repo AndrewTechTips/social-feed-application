@@ -104,14 +104,15 @@ function installDemoState({ state, stamp }) {
     sessionStorage.setItem("commons.test.seed", stamp);
 
     if (state) localStorage.setItem("commons.demo.v1", JSON.stringify(state));
-    // every test starts signed out, with no leftover upvote mirror
+    // every test starts signed out
     localStorage.removeItem("commons.identity");
     localStorage.removeItem("commons.csrf");
     // The key the app used to keep a bearer token under. Gone from the app,
     // but a fixture that stopped clearing it would let one leak between tests
-    // on a machine that ran the suite before this landed.
+    // on a machine that ran the suite before this landed. (commons.votes, the
+    // old upvote mirror, used to be cleared here too — store.js removes that
+    // one on boot now, so a second copy of the rule would only ever drift.)
     localStorage.removeItem("commons.session");
-    localStorage.removeItem("commons.votes");
     sessionStorage.removeItem("commons.demo.strip-folded");
   } catch (e) {
     /* storage unavailable — the test will fail loudly enough on its own */

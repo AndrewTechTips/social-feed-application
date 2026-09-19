@@ -278,6 +278,11 @@
             "title": "User Id",
             "type": "integer"
           },
+          "voted": {
+            "default": false,
+            "title": "Voted",
+            "type": "boolean"
+          },
           "votes": {
             "default": 0,
             "title": "Votes",
@@ -846,6 +851,7 @@
                         "username": "marenholt"
                       },
                       "user_id": 7,
+                      "voted": false,
                       "votes": 4
                     }
                   ],
@@ -900,6 +906,7 @@
                     "username": "marenholt"
                   },
                   "user_id": 7,
+                  "voted": false,
                   "votes": 0
                 },
                 "schema": {
@@ -1035,6 +1042,7 @@
                     "username": "marenholt"
                   },
                   "user_id": 7,
+                  "voted": false,
                   "votes": 4
                 },
                 "schema": {
@@ -1111,6 +1119,7 @@
                     "username": "marenholt"
                   },
                   "user_id": 7,
+                  "voted": false,
                   "votes": 4
                 },
                 "schema": {
@@ -1215,6 +1224,7 @@
                     "username": "marenholt"
                   },
                   "user_id": 7,
+                  "voted": false,
                   "votes": 4
                 },
                 "schema": {
@@ -1661,6 +1671,7 @@
                         "username": "marenholt"
                       },
                       "user_id": 7,
+                      "voted": false,
                       "votes": 4
                     }
                   ],

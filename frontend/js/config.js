@@ -21,6 +21,12 @@
 
 export const API_BASE = "http://localhost:8000";
 
+// Where the source is. Named here rather than in the two places that link to
+// it — the demo strip and the colophon — because a repository that moved and
+// took one of them with it would be a broken link on the page whose whole job
+// is to be checkable.
+export const REPO_URL = "https://github.com/AndrewTechTips/social-feed-application";
+
 const params = new URLSearchParams(location.search);
 
 export const IS_DEMO =

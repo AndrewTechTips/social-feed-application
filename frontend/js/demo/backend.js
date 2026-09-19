@@ -402,7 +402,11 @@ export function createDemoBackend({
     return u ? { id: u.id, username: u.username, created_at: u.created_at } : null;
   };
 
-  const postOut = (row) => ({
+  // `viewer` decides `voted` and nothing else. The count is the room's and the
+  // flag is the reader's — the same row answers differently for two people,
+  // which is why neither is stored on it. Mirrors PostOut in
+  // backend/app/schemas.py.
+  const postOut = (row, viewer) => ({
     id: row.id,
     title: row.title,
     content: row.content,
@@ -412,6 +416,9 @@ export function createDemoBackend({
     user_id: userByEmail(row.author_email)?.id ?? 0,
     user: publicUser(row.author_email),
     votes: state.votes.filter((v) => v.endsWith(`\u0000${row.id}`)).length,
+    // False for a reader who isn't signed in, which is the truthful answer
+    // rather than a missing one.
+    voted: !!viewer && state.votes.includes(voteKey(viewer, row.id)),
   });
 
   // Published posts are public; a draft belongs to its author. Mirrors
@@ -673,7 +680,9 @@ export function createDemoBackend({
     const start = (page - 1) * pageSize;
 
     return json(200, {
-      items: rows.slice(start, start + pageSize).map(postOut),
+      // Not `.map(postOut)` — map passes the index as the second argument,
+      // which would arrive here as the viewer.
+      items: rows.slice(start, start + pageSize).map((r) => postOut(r, viewer)),
       total,
       page,
       page_size: pageSize,
@@ -689,7 +698,7 @@ export function createDemoBackend({
       // Someone else's draft is 404, not 403 — a 403 would confirm it exists.
       return detail(404, `Post with id: ${id} was not found`);
     }
-    return json(200, postOut(row));
+    return json(200, postOut(row, viewer));
   }
 
   function createPost(body, email) {
@@ -710,7 +719,7 @@ export function createDemoBackend({
     };
     state.posts.push(row);
     save();
-    return json(201, postOut(row));
+    return json(201, postOut(row, email));
   }
 
   function updatePost(id, body, email, { partial }) {
@@ -746,7 +755,7 @@ export function createDemoBackend({
 
     Object.assign(row, fields, { updated_at: nowIso() });
     save();
-    return json(200, postOut(row));
+    return json(200, postOut(row, email));
   }
 
   function deletePost(id, email) {

@@ -282,12 +282,16 @@ test("signing out looks immediate, even when the server is slow about it", async
 });
 
 // ── what signing out leaves behind ──────────────────────────────────────────
-test("signing out takes the upvote mirror with it", async ({ page, api }) => {
-  // The mirror exists because the API has no "did I vote on this" flag, so the
-  // vote control keeps a local record of what you pressed. Left behind on sign
-  // out, it paints filled carets for the *previous* person on a shared browser
-  // — somebody else's history, shown to a stranger, on posts they never
+test("signing out takes your votes off the screen with it", async ({ page, api }) => {
+  // This used to be a test about a local upvote mirror — a set of post ids the
+  // app kept because the API had no "did I vote on this" flag. Left behind on
+  // sign out it painted filled carets for the *previous* person on a shared
+  // browser: somebody else's history, shown to a stranger, on posts they never
   // touched. Found on a live pass, not by a test.
+  //
+  // The mirror is gone; `voted` arrives with the post now, per reader. The
+  // guarantee it was there to keep has not changed, so neither has this test —
+  // only what it asks about.
   await api.register("bob@commons.test", "seedpassword", "bob");
   await api.seed(1, "ada@commons.test");
   await api.signIn(page, "bob@commons.test", "seedpassword");
@@ -296,14 +300,14 @@ test("signing out takes the upvote mirror with it", async ({ page, api }) => {
   const vote = page.locator(`.feed__list ${CARD}`).first().locator(".vote");
   await vote.click();
   await expect(vote).toHaveAttribute("aria-pressed", "true");
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("commons.votes")))
-    .not.toBe(null);
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(signedOut(page)).toBeVisible();
 
-  expect(await page.evaluate(() => localStorage.getItem("commons.votes"))).toBeNull();
-  // And the next person to open the page sees an unpressed control.
+  // The next person to look at this page sees an unpressed control.
   await expect(vote).toHaveAttribute("aria-pressed", "false");
+  // And the key the old mirror lived under is removed rather than merely
+  // unused — it is still in the browser of everybody who used the app before
+  // this landed, and it is still a record of what they voted on.
+  expect(await page.evaluate(() => localStorage.getItem("commons.votes"))).toBeNull();
 });

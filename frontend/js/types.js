@@ -68,7 +68,9 @@
  * @property {string} updated_at  ISO 8601; equal to created_at until edited
  * @property {number} user_id
  * @property {User} user
- * @property {number} votes
+ * @property {number} votes  how many the room gave it
+ * @property {boolean} voted whether *this* reader is one of them — a property
+ *   of the pair rather than of the post, and false for anybody signed out
  */
 
 /**
@@ -125,7 +127,6 @@
  * @property {string | null} knownFrom  where that list came from, named as a
  *   place the way the Back link names one: "the feed", "these results", or a
  *   username. Null when nothing has drawn a list yet.
- * @property {Set<number>} voted   post ids this browser has upvoted
  */
 
 /**

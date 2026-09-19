@@ -306,7 +306,13 @@ class State:
             "created_at": u["created_at"],
         }
 
-    def post_out(self, row: dict) -> dict:
+    def post_out(self, row: dict, viewer: str | None = None) -> dict:
+        """One post in the shape PostOut describes.
+
+        `viewer` decides `voted` and nothing else. The count is the room's and
+        the flag is the reader's: the same row answers differently for two
+        people, which is why neither is stored on it.
+        """
         author = row["author_email"]
         return {
             "id": row["id"],
@@ -318,6 +324,9 @@ class State:
             "user_id": self.users[author]["id"],
             "user": self.public_user(author),
             "votes": sum(1 for (_e, pid) in self.votes if pid == row["id"]),
+            # False for a reader who isn't signed in, which is the truthful
+            # answer rather than a missing one.
+            "voted": viewer is not None and (viewer, row["id"]) in self.votes,
         }
 
     def add_post(
@@ -826,7 +835,7 @@ class Handler(BaseHTTPRequestHandler):
         total = len(rows)
         pages = (total + page_size - 1) // page_size if total else 0
         start = (page - 1) * page_size
-        items = [ST.post_out(r) for r in rows[start : start + page_size]]
+        items = [ST.post_out(r, viewer) for r in rows[start : start + page_size]]
         self._send(
             200,
             {
@@ -841,11 +850,12 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _get_post(self, pid: int) -> None:
+        viewer = ST.email_for(self._token())
         row = ST.posts.get(pid)
-        if not row or not self._may_see(row, ST.email_for(self._token())):
+        if not row or not self._may_see(row, viewer):
             # Someone else's draft is 404, not 403 — a 403 would confirm it exists.
             return self._send(404, {"detail": f"Post with id: {pid} was not found"})
-        self._send(200, ST.post_out(row))
+        self._send(200, ST.post_out(row, viewer))
 
     def _create_post(self, data: dict) -> None:
         email = self._require_auth()
@@ -868,7 +878,7 @@ class Handler(BaseHTTPRequestHandler):
             )
         published = data.get("published", True)
         row = ST.add_post(email, title, content, bool(published))
-        self._send(201, ST.post_out(row))
+        self._send(201, ST.post_out(row, email))
 
     def _update_post(self, pid: int, data: dict, partial: bool) -> None:
         email = self._require_auth()
@@ -910,7 +920,7 @@ class Handler(BaseHTTPRequestHandler):
             }
         row.update(fields)
         row["updated_at"] = now_iso()
-        self._send(200, ST.post_out(row))
+        self._send(200, ST.post_out(row, email))
 
     def _delete_post(self, pid: int) -> None:
         email = self._require_auth()

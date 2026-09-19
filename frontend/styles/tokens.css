@@ -210,9 +210,10 @@
 }
 
 /* — the reading size --------------------------------------------------------
-   Three steps on --fs-read, and nothing else. The chrome, the byline and the
-   thread keep their sizes: this is a setting about the long serif paragraph,
-   not a zoom control — the browser already has one of those and it is better.
+   Three steps on --fs-read, which is the app's long-form prose and nothing
+   else: a post's body and the colophon. The chrome, the byline and the thread
+   keep their sizes — this is a setting about the long serif paragraph, not a
+   zoom control, and the browser already has one of those and it is better.
 
    The steps are the type scale either side of the default rather than a
    percentage of it: 16px is where the body face stops being comfortable for

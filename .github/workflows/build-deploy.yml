@@ -100,6 +100,15 @@ jobs:
         # advertise a stale number.
         run: python backend/scripts/coverage_badge.py --check
 
+      - name: Repo measurements are up to date
+        # frontend/stats.json is what the colophon at #/colophon prints, and a
+        # page about craft whose figures describe last month is worse than a
+        # page with no figures. This job can take the pytest count; the
+        # frontend job below takes the Playwright one, and the script says
+        # which measurements it managed. Between the two, every number is
+        # checked by somebody.
+        run: python docs/stats.py --check
+
   frontend:
     name: frontend (playwright)
     runs-on: ubuntu-latest
@@ -131,6 +140,13 @@ jobs:
         # docs/adr/0001-vanilla-js-with-jsdoc-types.md.
         working-directory: frontend
         run: npm run typecheck
+
+      - name: Repo measurements are up to date
+        # The other half of the check in the backend job: this one has the
+        # Playwright install and so can count the end-to-end tests, and has no
+        # pytest and so skips the API count. No working-directory — the script
+        # measures the repository, not the frontend.
+        run: python docs/stats.py --check
 
       - name: Install Chromium
         working-directory: frontend

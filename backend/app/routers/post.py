@@ -4,7 +4,7 @@ from typing import Optional
 from typing import Any
 
 from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
-from sqlalchemy import ColumnElement, UnaryExpression, select, func, or_
+from sqlalchemy import ColumnElement, UnaryExpression, literal, select, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2, docs
@@ -13,9 +13,18 @@ from ..database import get_db
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
-def _attach_votes(db: Session, post: models.Post) -> models.Post:
-    """Count votes for one post and stash the number on a transient attribute
-    so the ``PostOut`` schema (from_attributes) can read ``post.votes``."""
+def _attach_counts(
+    db: Session, post: models.Post, viewer: Optional[models.User] = None
+) -> models.Post:
+    """Stash the two facts that aren't columns onto one post, so the
+    ``PostOut`` schema (from_attributes) can read them back.
+
+    ``votes`` is how many the room gave it. ``voted`` is whether *this* reader
+    is one of them — a property of the pair rather than of the post, which is
+    why neither is stored on the row. For a single post two small lookups are
+    cheaper and clearer than the aggregate ``page_of_posts`` needs; see the
+    note there.
+    """
     post.votes = (
         db.scalar(
             select(func.count(models.Vote.post_id)).where(
@@ -23,6 +32,21 @@ def _attach_votes(db: Session, post: models.Post) -> models.Post:
             )
         )
         or 0
+    )
+    post.voted = (
+        viewer is not None
+        and (
+            db.scalar(
+                select(func.count())
+                .select_from(models.Vote)
+                .where(
+                    models.Vote.post_id == post.id,
+                    models.Vote.user_id == viewer.id,
+                )
+            )
+            or 0
+        )
+        > 0
     )
     return post
 
@@ -99,6 +123,7 @@ def page_of_posts(
     page: int,
     page_size: int,
     search: str = "",
+    viewer: Optional[models.User] = None,
 ) -> dict[str, Any]:
     """One page of posts with their vote counts — in the shape ``PostPage``
     describes.
@@ -112,6 +137,11 @@ def page_of_posts(
     With one, relevance leads and recency breaks the ties — a good match from
     last year should outrank a poor one from this morning, but two equally good
     matches should come back newest first.
+
+    ``viewer`` decides one field and costs nothing to answer. The query already
+    outer-joins every vote in order to count them, so "did this reader vote"
+    is a second aggregate over rows that have been read anyway — no extra join,
+    no correlated subquery, no second round trip per post.
     """
     offset = (page - 1) * page_size
 
@@ -124,8 +154,23 @@ def page_of_posts(
     else:
         order = (models.Post.created_at.desc(),)
 
+    # bool_or over the same joined rows: true if any of this post's votes is
+    # this reader's. A post with no votes at all comes back from the outer join
+    # as a single NULL row, over which bool_or is NULL rather than false, so it
+    # is coalesced — the honest answer to "have you voted on this" is never
+    # "unknown".
+    mine: ColumnElement[bool]
+    if viewer is None:
+        mine = literal(False)
+    else:
+        mine = func.coalesce(func.bool_or(models.Vote.user_id == viewer.id), False)
+
     stmt = (
-        select(models.Post, func.count(models.Vote.post_id).label("votes"))
+        select(
+            models.Post,
+            func.count(models.Vote.post_id).label("votes"),
+            mine.label("voted"),
+        )
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
         .options(selectinload(models.Post.user))
         .where(*filters)
@@ -136,8 +181,9 @@ def page_of_posts(
     )
 
     items = []
-    for post, votes in db.execute(stmt).all():
+    for post, votes, voted in db.execute(stmt).all():
         post.votes = votes
+        post.voted = bool(voted)
         items.append(post)
 
     pages = math.ceil(total / page_size) if total else 0
@@ -181,6 +227,7 @@ def get_posts(
         page=page,
         page_size=page_size,
         search=search,
+        viewer=current_user,
     )
 
 
@@ -208,7 +255,8 @@ def create_posts(
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    new_post.votes = 0  # a brand new post has no votes
+    new_post.votes = 0  # a brand new post has no votes,
+    new_post.voted = False  # and its author has not voted for it
     return new_post
 
 
@@ -241,7 +289,7 @@ def get_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Post with id: {id} was not found",
         )
-    return _attach_votes(db, post)
+    return _attach_counts(db, post, current_user)
 
 
 @router.delete(
@@ -277,18 +325,24 @@ def update_post(
     updated_post: schemas.PostCreate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
 ) -> models.Post:
     """Replace a post of yours, in full.
 
     Every field of the body is applied, so anything you leave out goes back to
     its default. `PATCH` is the one that changes only what you send.
     """
+    # get_owned_post already resolved the caller in order to check ownership,
+    # and FastAPI caches a dependency for the life of a request — so naming it
+    # here is a second reference to one lookup, not a second lookup. It is
+    # named because `voted` is about the reader, and the owner of a post is a
+    # reader like any other.
     # PUT = full replacement: every field of PostCreate is applied.
     for key, value in updated_post.model_dump().items():
         setattr(post, key, value)
     db.commit()
     db.refresh(post)
-    return _attach_votes(db, post)
+    return _attach_counts(db, post, current_user)
 
 
 @router.patch(
@@ -304,6 +358,7 @@ def patch_post(
     payload: schemas.PostUpdate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
 ) -> models.Post:
     """Change part of a post of yours.
 
@@ -322,4 +377,4 @@ def patch_post(
         setattr(post, key, value)
     db.commit()
     db.refresh(post)
-    return _attach_votes(db, post)
+    return _attach_counts(db, post, current_user)

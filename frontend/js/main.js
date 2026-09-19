@@ -24,6 +24,7 @@ import { renderFeed } from "./views/feed.js";
 import { renderPost } from "./views/post.js";
 import { renderProfile } from "./views/profile.js";
 import { renderShelf } from "./views/shelf.js";
+import { renderColophon } from "./views/colophon.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
@@ -213,6 +214,7 @@ function syncChrome() {
     "/register": "Create an account · Commons",
     "/compose": "New post · Commons",
     "/shelf": "Your shelf · Commons",
+    "/colophon": "Colophon · Commons",
   };
   document.title = titles[currentPath()] || "Commons";
 }
@@ -231,6 +233,7 @@ route("/posts/:id", renderPost);
 route("/posts/:id/edit", renderEdit);
 route("/u/:username", renderProfile);
 route("/shelf", renderShelf);
+route("/colophon", renderColophon);
 
 subscribe(renderAccount);
 // Saving the first post puts a way into the shelf in the header, and taking the

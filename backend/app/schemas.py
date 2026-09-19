@@ -65,6 +65,10 @@ class PostOut(PostBase):
     user_id: int
     user: UserOut
     votes: int = 0
+    # False for anybody who isn't signed in, which is the truthful answer: an
+    # anonymous reader has not voted on anything. Defaulted rather than
+    # optional so a client never has to distinguish "no" from "not told".
+    voted: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 

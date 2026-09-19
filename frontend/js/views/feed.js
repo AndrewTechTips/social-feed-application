@@ -49,7 +49,14 @@ function masthead() {
       { class: "masthead__line" },
       "Anyone can read what's here. You need an account to post or to upvote."
     ),
-    IS_DEMO ? demoNote() : null
+    IS_DEMO ? demoNote() : null,
+    // The one place a first-time visitor is already reading a block of type
+    // about what this is, so it is the one place to offer the longer answer.
+    h(
+      "p",
+      { class: "masthead__more" },
+      h("a", { href: "#/colophon" }, "How this was made")
+    )
   );
 }
 

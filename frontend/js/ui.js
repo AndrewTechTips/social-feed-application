@@ -4,7 +4,7 @@
 // (shared by the feed and the post page).
 
 import { api } from "./api.js";
-import { get, hasVoted, setVoted } from "./store.js";
+import { get, notePostVote } from "./store.js";
 import { hasRead, readingMinutes } from "./reading.js";
 import { tryTransition, nameForMorph, claimReturn } from "./transitions.js";
 
@@ -324,6 +324,15 @@ export function postCard(post) {
 }
 
 // — skeletons ---------------------------------------------------------------
+/**
+ * One grey bar. Trivial, and shared rather than written twice: the post screen
+ * draws its loading state out of these and so does the comment thread, and the
+ * two stopped being in the same file when the thread moved out.
+ * @param {Partial<CSSStyleDeclaration>} [style]
+ */
+export const skeletonBar = (style) =>
+  h("span", { class: "sk", style: { display: "block", ...style } });
+
 export function skeletonCards(n) {
   const tpl = /** @type {HTMLTemplateElement} */ (
     document.getElementById("tpl-skeleton-card")
@@ -336,7 +345,11 @@ export function skeletonCards(n) {
 // — vote control (optimistic) ---------------------------------------------
 export function voteControl(post, { inline = false } = {}) {
   let count = Math.max(0, post.votes || 0);
-  let on = hasVoted(post.id);
+  // Straight off the post. This used to be a lookup in a set of ids kept in
+  // localStorage, because the API had no way of saying — so your own votes
+  // were invisible on a second device, invisible in a private window, and
+  // wrong after clearing site data. PostOut carries `voted` now.
+  let on = post.voted === true;
   let busy = false;
 
   const label = (o, n) =>
@@ -373,6 +386,13 @@ export function voteControl(post, { inline = false } = {}) {
     // than in the click handler. Null off a card (the post screen draws the
     // same control inline), where there is no edge to warm.
     btn.closest(".card")?.classList.toggle("card--warm", count >= WARM_AT);
+    // And onto the data, not just the pixels. The feed's copy of this post and
+    // the post screen's are two different objects fetched at two different
+    // moments; without this, voting on one leaves the other saying otherwise
+    // when the cache puts it back on screen.
+    post.votes = count;
+    post.voted = on;
+    notePostVote(post.id, count, on);
   };
 
   btn.addEventListener("click", async () => {
@@ -384,7 +404,6 @@ export function voteControl(post, { inline = false } = {}) {
     const next = !on;
     on = next;
     count = Math.max(0, count + (next ? 1 : -1));
-    setVoted(post.id, next);
     paint();
     btn.classList.remove("vote--pulse");
     void btn.offsetWidth; // restart the pop animation
@@ -405,7 +424,6 @@ export function voteControl(post, { inline = false } = {}) {
       if (!benign) {
         on = !next;
         count = Math.max(0, count + (next ? -1 : 1));
-        setVoted(post.id, on);
         paint();
         if (err.status !== 401) toast("That vote didn't take. Try again?");
       }

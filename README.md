@@ -192,6 +192,7 @@ One page, hash routes.
 | `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Save to the shelf, a reading panel (three text sizes and focus mode, `f`), Edit/Delete if it's yours with an inline confirm. Select a passage with a mouse and it offers to copy it with a link back. `Ctrl+P` prints it as a page from a book. At the end, two links into the list you arrived from — `j` and `k` follow them. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. |
 | `#/u/:username` | Everything one person has written — the feed's cards and rules with a single author, including their drafts staying theirs. |
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
+| `#/colophon` | How this was made, inside the thing it describes: the stack in prose, the repository's own measurements, four decisions linked to their records, what's honest about the demo, and a button that opens the palette rather than printing a list of shortcuts that could go wrong. Offered from the masthead and from ⌘K. |
 | `#/shelf` | What you've put aside, newest save first. The feed's column and cards with your saves in it. Saved posts are ids in this browser — the screen asks the API for each one, so a post that has been deleted drops off the shelf rather than sitting there pointing at nothing. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, character count. `POST` to create; `PATCH` with only the changed fields to edit. |
 
@@ -262,9 +263,11 @@ cd frontend && npm install && npx playwright install chromium
 | `masthead.spec.js` | Shown to strangers, gone once signed in, out of the way while searching, and — in demo mode — carrying the notice so it's said once rather than twice. |
 | `comments.spec.js` | Saying something and seeing it before the server answers, getting your words back when the write fails, removing your own and only your own (not even as the author of the post), a draft having no conversation to read or join, and a deleted post taking its comments with it. |
 | `unread.spec.js` | What the app remembers: the count of posts since your last visit and where the rule lands, a refresh not counting as leaving, being away long enough that it does, a post read only after two seconds of being looked at, a mis-tap not counting, and the whole lot scanned by axe in both themes and measured at 320px. |
+| `votes.spec.js` | That a vote survives a reload with nothing in storage to remember it, that a signed-out visitor sees the count without a pressed caret, that somebody else's vote isn't yours, that a vote cast on a post is still there when you go back to the cached feed, and that a refused vote puts every copy back. |
 | `onward.spec.js` | The two links at the end of a post: which list they mean, the first and last of it having only one, two steps in a row still working, `j`/`k` following them and staying out of a comment box, and the morph name being handed on rather than shared. |
 | `shelf.spec.js` | Saving and unsaving, the header link appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. |
 | `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
+| `colophon.spec.js` | That every figure on the page is one from the committed measurement and nothing was typed in, that every decision it names links to a record that is actually on disk, that it still reads as a page when the measurement can't be fetched, and that the outward links carry `rel=noopener`. |
 | `reader.spec.js` | The panel opening, the text size changing the post and nothing else and surviving a reload, focus mode clearing the page and leaving one way out and not following you off it, the panel's own radios not switching the single-key shortcuts off, and a printed post being ink on paper rather than white on white. |
 | `quote.spec.js` | A selected passage offering to be copied with its title and address, where the control sits, what is too short to be a quote, and the control not existing at all on a touch screen. |
 | `demo-seed.spec.js` | Demo mode only: the published site opens on the seeded feed, paginates to the end, says what it is on every visit, keeps a seeded draft private to its author, opens the long post on a real thread, and survives a refresh — then forgets everything on **Reset the demo**. |
@@ -392,9 +395,16 @@ usual fix is to answer 201 either way and send the "you already have an account"
 email, which needs mail this project doesn't have; the 10/hour limit is the compensating
 control.
 
-**No "did I vote" flag in the API**, so the vote control keeps a best-effort mirror in
-`localStorage`. If it disagrees with the server, the vote call returns 409 or 404 and the
-control settles into the real state.
+**The vote control used to guess.** The API had no way of saying whether *you* had
+voted, so the frontend kept a set of post ids in `localStorage` and read the caret off
+that — which meant your own votes were invisible on a second device, invisible in a
+private window, and wrong after clearing site data. `PostOut` carries `voted` now,
+answered per reader: the count is the room's and the flag is yours, so the same row
+comes back differently for two people. On the feed it costs nothing — the query already
+outer-joins every vote in order to count them, so "did this reader vote" is a second
+aggregate (`bool_or`) over rows that were read anyway. The old `commons.votes` key is
+removed on boot rather than merely unused: a guess about somebody's voting, left in
+their browser, is still a record of it.
 
 **What you've saved never leaves your browser either**, for the same reasons —
 `commons.shelf` is a list of post ids, nothing more. Ids rather than copies of
@@ -402,6 +412,19 @@ the posts: a saved snapshot would render instantly and would then be wrong in
 every way a post can change, whereas an id costs a request and is never
 describing something that isn't there. A post that has been deleted answers 404
 and comes off the shelf as it's discovered.
+
+**The numbers on the colophon are measured, not typed.** `docs/stats.py` counts
+the repository into [`frontend/stats.json`](frontend/stats.json) — lines, modules,
+runtime dependencies, both test counts, coverage read back off the committed
+badge, decision records — and CI re-checks it. It has to be checked from two
+jobs, because the backend test count needs pytest and the end-to-end count needs
+a Playwright install and no runner has both; each job verifies what it can
+measure and says which those were, so between them every field is covered.
+
+```bash
+python docs/stats.py            # re-measure
+python docs/stats.py --check    # what CI runs
+```
 
 **The app works offline, and installs.** A network-first service worker
 ([ADR 0007](docs/adr/0007-a-network-first-service-worker.md)) precaches the

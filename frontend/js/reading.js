@@ -152,11 +152,11 @@ export function markReadOnceSeen(id, isStale) {
 // decision to make where a preference would do, and it produces values like
 // 19.4px that nothing in the type scale was drawn against.
 //
-// It changes `--fs-read`, which is exactly one thing: the post's own body. The
-// chrome, the byline and the thread keep their sizes, because what this is for
-// is the long serif paragraph the whole type system was built around, and a
-// setting that resized the interface too would be a zoom control the browser
-// already has a better version of.
+// It changes `--fs-read`, which is the app's long-form prose and nothing else:
+// the post's own body, and the colophon. The chrome, the byline and the thread
+// keep their sizes, because what this is for is the long serif paragraph the
+// whole type system was built around, and a setting that resized the interface
+// too would be a zoom control the browser already has a better version of.
 //
 // Applied as an attribute on <html>, the same way the theme is, and read by the
 // inline bootstrap in index.html before first paint — a post that arrives at

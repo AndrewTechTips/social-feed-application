@@ -75,6 +75,19 @@ class Post(Base):
     # place people look for it.
     votes: Mapped[int] = query_expression()
 
+    # Whether *the person asking* has voted on this one. Declared the same way
+    # and for the same reason as ``votes`` above: it is attached per query,
+    # because it is not a property of the post at all — it is a property of the
+    # pair (post, reader), and the same row answers differently for two people.
+    #
+    # It exists because the client used to guess. The API had no way to say
+    # "you voted on this", so the frontend kept a set of post ids in
+    # localStorage and hoped — which meant your own votes were invisible on a
+    # second device, invisible in a private window, and wrong after clearing
+    # site data. Answering the question is a left join; guessing at it was a
+    # documented compromise sitting in two files.
+    voted: Mapped[bool] = query_expression()
+
 
 class User(Base):
 

@@ -30,7 +30,11 @@ const IDENTITY_KEY = "commons.identity";
 // credential is in a cookie this code cannot see.
 const CSRF_KEY = "commons.csrf";
 const LEGACY_SESSION_KEY = "commons.session";
-const VOTES_KEY = "commons.votes";
+// The API had no "did I vote on this" flag, so this held a set of post ids and
+// the app guessed from it. PostOut carries `voted` now, so the guess is gone —
+// and so is the key, actively rather than by being left alone. A guess about
+// somebody's voting left in their browser is still a record of it.
+const LEGACY_VOTES_KEY = "commons.votes";
 
 /** @returns {import("./types.js").Session | null} */
 function loadIdentity() {
@@ -40,6 +44,7 @@ function loadIdentity() {
     // would be the change in name only, and it's the browsers of people who
     // used the app *before* this landed that would keep it.
     localStorage.removeItem(LEGACY_SESSION_KEY);
+    localStorage.removeItem(LEGACY_VOTES_KEY);
 
     const raw = localStorage.getItem(IDENTITY_KEY);
     if (!raw) return null;
@@ -47,15 +52,6 @@ function loadIdentity() {
     return s && s.username && s.id ? { id: s.id, username: s.username } : null;
   } catch (e) {
     return null;
-  }
-}
-
-/** @returns {Set<number>} */
-function loadVotes() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(VOTES_KEY) || "[]"));
-  } catch (e) {
-    return new Set();
   }
 }
 
@@ -74,7 +70,6 @@ const state = {
   feedCache: null,
   knownPosts: [], // the list last drawn — see setKnownPosts
   knownFrom: null,
-  voted: loadVotes(), // post ids this browser has upvoted (best-effort mirror)
 };
 
 /** @type {Set<(state: import("./types.js").State) => void>} */
@@ -187,31 +182,34 @@ export function isMine(post) {
   return !!(s && post && post.user && post.user.id === s.id);
 }
 
-// — vote mirror -----------------------------------------------------------------
-// The API has no "did I vote on this" flag, so we keep a local best-effort set.
-// If it ever disagrees with the server the vote call returns 409/404 and the
-// caller just settles into the real state.
-export function hasVoted(id) {
-  return state.voted.has(id);
-}
-
-export function clearVotes() {
-  state.voted = new Set();
-  try {
-    localStorage.removeItem(VOTES_KEY);
-  } catch (e) {
-    /* nothing to clear */
-  }
-}
-
-export function setVoted(id, on) {
-  if (on) state.voted.add(id);
-  else state.voted.delete(id);
-  try {
-    localStorage.setItem(VOTES_KEY, JSON.stringify([...state.voted]));
-  } catch (e) {
-    /* not persisted — fine */
-  }
+// — a vote, remembered on the copies of a post in hand ------------------------
+//
+// What this replaces: a set of post ids in localStorage, kept because the API
+// could not say whether you had voted. It can now, so the answer arrives with
+// the post — but a post arrives more than once. The feed fetches one copy, the
+// post screen fetches another, and voting on the second used to leave the
+// first saying something different when the cache put it back on screen.
+//
+// So a vote is written onto every copy this session is holding. It patches
+// real data rather than keeping a parallel record of it, which is the
+// difference between this and the thing it replaces.
+/**
+ * @param {number | string} id
+ * @param {number} votes
+ * @param {boolean} voted
+ */
+export function notePostVote(id, votes, voted) {
+  /** @param {import("./types.js").Post} p */
+  const patch = (p) => {
+    if (p && String(p.id) === String(id)) {
+      p.votes = votes;
+      p.voted = voted;
+    }
+  };
+  state.knownPosts.forEach(patch);
+  // The same objects, usually — both are built from the feed's `items` — but
+  // not always, and patching twice costs nothing.
+  if (state.feedCache) state.feedCache.items.forEach(patch);
 }
 
 // — feed cache ----------------------------------------------------------------

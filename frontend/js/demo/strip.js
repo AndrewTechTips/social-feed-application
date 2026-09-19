@@ -20,10 +20,10 @@
 // dismiss is a notice that stops being true.
 
 import { h, icon } from "../ui.js";
-import { resetDemo } from "../config.js";
-import { clearSession, clearVotes, dropFeedCache } from "../store.js";
+import { resetDemo, REPO_URL } from "../config.js";
+import { clearSession, dropFeedCache } from "../store.js";
 
-const REPO = "https://github.com/AndrewTechTips/social-feed-application";
+const REPO = REPO_URL;
 const FOLDED_KEY = "commons.demo.strip-folded";
 
 const folded = () => {
@@ -79,12 +79,13 @@ export function resetButton() {
     await resetDemo();
 
     // The demo's accounts and tokens went with the data, so anything the app
-    // still believes about being signed in is now false — including the local
-    // upvote mirror, which would otherwise show posts as upvoted by a session
-    // that no longer exists. Clear them here rather than leaving the next write
-    // to discover it with a 401.
+    // still believes about being signed in is now false. Clear it here rather
+    // than leaving the next write to discover it with a 401.
+    //
+    // There is no upvote mirror to clear any more: `voted` arrives with the
+    // post, per reader, so dropping the session and the cached page is the
+    // whole of it.
     clearSession();
-    clearVotes();
     dropFeedCache();
 
     location.replace(location.pathname + location.search + "#/");
