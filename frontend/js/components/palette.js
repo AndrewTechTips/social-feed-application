@@ -72,6 +72,14 @@ function commands() {
       label: "How this was made",
       run: () => navigate("/colophon"),
     },
+    // Only when there is an account to change. Signed out, the row would lead
+    // to a screen that immediately sends you to sign in, which is a promise
+    // the palette shouldn't make.
+    signedIn && {
+      id: "settings",
+      label: "Your account",
+      run: () => navigate("/settings"),
+    },
     // Only where there's a list to move through, which is the feed and a
     // profile. j and k are a pair everyone who knows one knows the other, so
     // the chip shows both; Enter and u follow from having a card focused.

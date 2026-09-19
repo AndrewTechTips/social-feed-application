@@ -17,7 +17,11 @@
     "further into the past the longer this file sits in git.",
     "",
     "votes[].post and comments[].post are both 1-based indexes into posts[],",
-    "not post ids."
+    "not post ids.",
+    "",
+    "comments[].reply_to is likewise a 1-based index into comments[] — a reply may",
+    "only point at one listed before it, which is the only ordering that makes",
+    "sense on a thread read top to bottom. Absent means it was said to the post."
   ],
 
   "users": [
@@ -134,6 +138,8 @@
       "author": "del.arriaga@example.com",
       "minutes_ago": 18600,
       "content": "It was tempting, believe me. I had the string line out and everything."
+    ,
+      "reply_to": 2
     },
     {
       "post": 2,
@@ -158,6 +164,8 @@
       "author": "del.arriaga@example.com",
       "minutes_ago": 13000,
       "content": "Counterpoint: the bottom of a feed is where I discover it's half past one."
+    ,
+      "reply_to": 6
     },
     {
       "post": 13,

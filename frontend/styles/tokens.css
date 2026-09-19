@@ -156,8 +156,16 @@
   --accent-text: #895613;
   --link: #9a5f12;
 
-  --danger: #c0492f;
-  --danger-soft: rgba(192, 73, 47, 0.12);
+  /* Darkened from #c0492f, which measured 4.37:1 against --bg — under 4.5:1,
+     and so a real AA failure everywhere a quiet danger button sits on the
+     page. It had gone unnoticed because the two screens carrying one (a post
+     you wrote, and your account) were not being axe-scanned until the second
+     of them was built. #a63a22 is the same hue walked down until small text
+     clears AA on every light surface: 5.69:1 on --bg, 6.29:1 on --card-bg,
+     and 6.46:1 against white, which is also what --danger-ink gets back on the
+     filled button. */
+  --danger: #a63a22;
+  --danger-soft: rgba(166, 58, 34, 0.12);
   --danger-ink: #fff;
 
   --focus: #1f8a76;
@@ -196,7 +204,7 @@
     --accent-soft: rgba(176, 112, 26, 0.13);
     --accent-text: #895613;
     --link: #9a5f12;
-    --danger: #c0492f;
+    --danger: #a63a22;
     --danger-ink: #fff;
     --focus: #1f8a76;
     --shadow-hover: 0 14px 30px -16px rgba(18, 40, 37, 0.26);

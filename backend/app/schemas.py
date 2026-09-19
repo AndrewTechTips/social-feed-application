@@ -112,6 +112,9 @@ COMMENT_MAX = 2000
 
 class CommentCreate(BaseModel):
     content: str
+    # What this answers, or nothing for something said to the post itself.
+    # A reply to a reply is refused — see create_comment.
+    parent_id: Optional[int] = None
 
     @field_validator("content")
     @classmethod
@@ -124,7 +127,7 @@ class CommentCreate(BaseModel):
         return trimmed
 
 
-class CommentOut(BaseModel):
+class CommentBase(BaseModel):
     id: int
     content: str
     created_at: datetime
@@ -134,18 +137,79 @@ class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReplyOut(CommentBase):
+    """An answer to a comment.
+
+    **Note what it hasn't got: replies of its own.** That is the one-level rule,
+    written where a reader of the contract will see it rather than buried in a
+    handler — the shape of the response is the specification, and this shape
+    cannot express a third level.
+    """
+
+    parent_id: int
+
+
+class CommentOut(CommentBase):
+    """Something said about a post, with whatever was said back.
+
+    Replies are not paged. A conversation arrives whole or the page boundary
+    would fall through the middle of one, and a thread on this app is a handful
+    of lines rather than a hundred.
+    """
+
+    parent_id: Optional[int] = None
+    replies: list[ReplyOut] = []
+
+
 class CommentPage(BaseModel):
     """A page of comments. Deliberately the same shape as ``PostPage`` — a
     client that can page through one can page through the other without
     learning a second set of field names."""
 
     items: list[CommentOut]
+    # Conversations, not messages: `total` is what the pages are counted in, so
+    # it counts the things being paged. The replies hanging off them are not
+    # paged and would make the arithmetic lie.
     total: int
+    # And how many messages hang off them, across the whole post — so a heading
+    # can say how big the conversation is without walking every page of it.
+    total_replies: int = 0
     page: int
     page_size: int
     pages: int
     has_next: bool
     has_prev: bool
+
+
+def usable_username(value: str) -> str:
+    """Folded, checked, and the same check wherever a username is offered.
+
+    Two schemas take one now — making an account and changing the name on one —
+    and a second copy of this is how the two would come to disagree about what
+    a name may be."""
+    folded = value.strip().lower()
+    if not USERNAME_RE.match(folded):
+        raise ValueError(USERNAME_RULE)
+    if folded in RESERVED_USERNAMES:
+        raise ValueError("that username is reserved")
+    return folded
+
+
+class MeUpdate(BaseModel):
+    """What you may change about yourself. One field, on purpose.
+
+    Not the email: it is the credential half of an account, and changing one is
+    a flow with a confirmation link in it rather than a text box. Not the
+    password either, for the same reason. The username is the public half —
+    what everybody else sees — and the one that is nobody's business but yours.
+    """
+
+    username: str
+
+    @field_validator("username")
+    @classmethod
+    def username_is_usable(cls, value: str) -> str:
+        return usable_username(value)
 
 
 class UserCreate(BaseModel):
@@ -156,12 +220,7 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def username_is_usable(cls, value: str) -> str:
-        folded = value.strip().lower()
-        if not USERNAME_RE.match(folded):
-            raise ValueError(USERNAME_RULE)
-        if folded in RESERVED_USERNAMES:
-            raise ValueError("that username is reserved")
-        return folded
+        return usable_username(value)
 
     @field_validator("password")
     @classmethod

@@ -4,7 +4,7 @@
 // post restores the list and scroll position from a short-lived cache.
 
 import { api } from "../api.js";
-import { h, mountView, skeletonCards, postCard } from "../ui.js";
+import { h, mountView, skeletonCards, postCard, toast } from "../ui.js";
 import {
   get,
   isMine,
@@ -19,6 +19,24 @@ import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
 
 const PAGE_SIZE = 10;
+
+// How often the feed asks whether anything has arrived, while it is on screen
+// and the tab is being looked at.
+//
+// **Not a WebSocket, and the arithmetic is the argument.** This feed receives a
+// few posts a day. A socket would hold a connection open per reader for hours
+// in order to deliver a handful of messages, push async concerns into an
+// otherwise synchronous SQLAlchemy codebase, and — the part that settles it —
+// could only ever be demonstrated on somebody's own machine, because the
+// published build has no server at all. Forty-five seconds of a request that
+// answers with one number is the right shape for the load, and being able to
+// say why is worth more than being able to say "real-time".
+//
+// The request is one page of one post with `?since=`, so the envelope's
+// `total` is the whole answer; the item is only there because a page has to
+// have a shape. Paused while the tab is hidden, because a feed nobody is
+// looking at is not waiting for news.
+const POLL_MS = 45000;
 const FIRST_SKELETONS = 5;
 // How far below the fold the sentinel still counts as "coming up" — the feed
 // starts fetching the next page this far before you reach the end of this one.
@@ -122,6 +140,15 @@ export function renderFeed({ query, isStale }) {
   // Same rule, same reason — plus a second one. "New since Tuesday" is a
   // statement about the feed, and a set of search results is not the feed.
   const since = h("p", { class: "feed__since", hidden: true });
+  // A button, because pressing it does something to this page rather than
+  // going somewhere. aria-live so a reader who is not looking at the top of
+  // the feed is told rather than expected to notice.
+  const pill = h("button", {
+    class: "feed__new",
+    type: "button",
+    hidden: true,
+    "aria-live": "polite",
+  });
   // Only on the chronological feed. The count and the rule below it say "what
   // arrived while you were away, and where that run ends" — and the run only
   // *is* a run if the list is in time order. On a ranking the boundary would
@@ -139,6 +166,7 @@ export function renderFeed({ query, isStale }) {
     // Directly above the list it orders, and gone while searching: relevance
     // leads there, so all three would be the same list under different names.
     search ? null : sortbar(sort),
+    pill,
     list,
     status,
     sentinel
@@ -172,6 +200,18 @@ export function renderFeed({ query, isStale }) {
   // rows into a feed only ever inserts into the newest one.
   let anchor = null;
   const anchored = !search && sort === "new";
+  // What the poll compares against. It starts at the anchor and moves as new
+  // posts are pulled in — while `anchor` never moves, because it is the window
+  // the *pages below* are counted in. Letting one value do both jobs would mean
+  // that taking the new posts renumbered every page after it, which is the
+  // thing the window exists to prevent.
+  let newestSeen = null;
+  /** @type {ReturnType<typeof setInterval> | null} */
+  let poller = null;
+  // How many have arrived while the reader has been here, waiting to be asked
+  // for. Not the same as `newCount` below, which is about the visit before
+  // this one.
+  let arrived = 0;
   let page = 0, pages = 1, hasNext = true, total = null;
   let loading = false, controller = null, observer = null, errorBox = null;
   // Who these items were fetched for. Recorded here rather than read back at
@@ -296,6 +336,7 @@ export function renderFeed({ query, isStale }) {
         // Page one *is* the window, so it is asked for unanchored and then
         // defines the anchor for everything after it.
         anchor = anchored && data.items.length ? data.items[0].created_at : null;
+        newestSeen = anchor;
         list.replaceChildren();
         items.length = 0;
         // The walk starts over with the list, or a refetch would go on
@@ -310,6 +351,8 @@ export function renderFeed({ query, isStale }) {
       list.append(frag);
       setKnownPosts(items, listName);
       renderTail();
+      // Only once there is something to compare against.
+      if (initial) startPolling();
       landed = true;
     } catch (err) {
       if (err.name === "AbortError" || isStale()) return;
@@ -321,6 +364,88 @@ export function renderFeed({ query, isStale }) {
       // button nobody pressed.
       if (landed && hasNext && !isStale()) rearm();
     }
+  }
+
+  // — what has arrived since you got here ------------------------------------
+
+  function paintPill() {
+    pill.hidden = arrived === 0;
+    if (arrived === 0) return;
+    pill.textContent =
+      arrived === 1 ? "One new post" : `${spellCount(arrived)} new posts`;
+  }
+
+  /** One page of one, for the number in the envelope. */
+  async function askWhatsNew() {
+    if (!newestSeen || loading || isStale()) return;
+    if (document.visibilityState !== "visible") return;
+    try {
+      const qs = new URLSearchParams({
+        page: "1",
+        page_size: "1",
+        since: newestSeen,
+      });
+      const data = await api.get(`/posts/?${qs}`);
+      if (isStale()) return;
+      arrived = data.total || 0;
+      paintPill();
+    } catch (err) {
+      // A poll that fails is a poll. The reader asked for nothing and is owed
+      // no explanation; the next one is forty-five seconds away.
+    }
+  }
+
+  /**
+   * Put what arrived at the top, where it belongs, and leave the window alone.
+   *
+   * The new rows go *above* the paginated set rather than into it: the pages
+   * below were counted in a feed that stops at `anchor`, and moving that would
+   * renumber every one of them. So `anchor` stays where it is and only
+   * `newestSeen` moves — see the note where they are declared.
+   */
+  async function takeWhatsNew() {
+    if (!newestSeen) return;
+    pill.disabled = true;
+    try {
+      const qs = new URLSearchParams({
+        page: "1",
+        page_size: String(Math.min(arrived, 50)),
+        since: newestSeen,
+      });
+      const data = await api.get(`/posts/?${qs}`);
+      if (isStale()) return;
+      if (data.items.length) {
+        const frag = document.createDocumentFragment();
+        // Newest first from the API, and they go above a list that is also
+        // newest first — so they are prepended in the order they arrived in.
+        data.items.forEach((post) => frag.append(postCard(post)));
+        list.prepend(frag);
+        // In front of the run this visit already had, so the palette and the
+        // post screen's "read on" see the list the reader is looking at.
+        items.unshift(...data.items);
+        setKnownPosts(items, listName);
+        newestSeen = data.items[0].created_at;
+      }
+      arrived = 0;
+      paintPill();
+      // The reader pressed a control at the top of the feed; taking them to
+      // what they pressed it for is the whole of what they asked for.
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      if (!isStale()) toast("Couldn't fetch those. Try again?");
+    } finally {
+      pill.disabled = false;
+    }
+  }
+
+  pill.addEventListener("click", takeWhatsNew);
+
+  function startPolling() {
+    if (poller || !anchored) return;
+    poller = setInterval(askWhatsNew, POLL_MS);
+    // A tab coming back to the front is the moment a reader most wants to know,
+    // and the one time waiting out the rest of an interval would be silly.
+    addEventListener("visibilitychange", askWhatsNew);
   }
 
   function setupObserver() {
@@ -369,6 +494,9 @@ export function renderFeed({ query, isStale }) {
     torn = true;
     if (activeTeardown === teardown) activeTeardown = null;
     removeEventListener("hashchange", teardown);
+    removeEventListener("visibilitychange", askWhatsNew);
+    if (poller) clearInterval(poller);
+    poller = null;
     if (observer) observer.disconnect();
     if (controller) controller.abort();
     if (items.length) {

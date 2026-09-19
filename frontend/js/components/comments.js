@@ -81,7 +81,11 @@ export function commentsFor(post, isStale, firstComments) {
     tail);
 
   let page = 0;
+  // Conversations, which is what the pages are counted in — and separately the
+  // replies hanging off them, which are not paged. The heading adds them up,
+  // because a reader counting a conversation counts all of it.
   let total = 0;
+  let replies = 0;
   let loading = false;
 
   function setStatus(text) {
@@ -90,15 +94,21 @@ export function commentsFor(post, isStale, firstComments) {
   }
 
   function paintCount() {
-    count.textContent = total ? String(total) : "";
+    const messages = total + replies;
+    count.textContent = messages ? String(messages) : "";
   }
 
   // The list is server-ordered oldest-first, so a new comment belongs at the
   // end and nothing above it moves. That's the whole reason the optimistic
   // append is safe to do here and wouldn't be on the feed.
-  function shift(by) {
-    total = Math.max(0, total + by);
+  /** @param {{ reply?: boolean }} [what] */
+  function shift(by, what = {}) {
+    if (what.reply) replies = Math.max(0, replies + by);
+    else total = Math.max(0, total + by);
     paintCount();
+    // The empty state is about whether anybody has said anything, and a reply
+    // cannot exist without something to reply to — so it is the conversations
+    // that decide it.
     setStatus(total === 0 ? EMPTY : "");
   }
 
@@ -151,6 +161,10 @@ export function commentsFor(post, isStale, firstComments) {
       if (wantPage === 1) list.replaceChildren();
       page = data.page;
       total = data.total;
+      // total_replies is the whole post's, not this page's, so it is assigned
+      // rather than accumulated — otherwise "More comments" would count them
+      // again on every page.
+      replies = data.total_replies || 0;
       paintCount();
       list.append(...data.items.map((c) => commentRow(c)));
       // Oldest first, so the next page is the *newer* half — "more", not
@@ -179,7 +193,14 @@ export function commentsFor(post, isStale, firstComments) {
   }
 
   // — one comment -------------------------------------------------------------
-  function commentRow(comment, { pending = false } = {}) {
+  /**
+   * @param {object} comment
+   * @param {{ pending?: boolean, reply?: boolean }} [options]
+   *   `reply` draws it as an answer: indented under what it answers, and
+   *   without a Reply control of its own. That is the one-level rule as the
+   *   reader meets it, and the API refuses a third level whatever this does.
+   */
+  function commentRow(comment, { pending = false, reply = false } = {}) {
     const session = get("session");
     const mine = !!(session && comment.user && comment.user.id === session.id);
 
@@ -192,15 +213,89 @@ export function commentsFor(post, isStale, firstComments) {
       h("time", { datetime: comment.created_at, title: fullTime(comment.created_at) },
         relativeTime(comment.created_at)));
 
-    const row = h("li", { class: "comment" + (pending ? " comment--pending" : "") },
+    const body = h("div", { class: "comment__body" }, meta,
+      h("p", { class: "comment__text" }, comment.content));
+
+    const row = h("li",
+      {
+        class:
+          "comment" +
+          (pending ? " comment--pending" : "") +
+          (reply ? " comment--reply" : ""),
+      },
       avatar(comment.user.username, "sm"),
-      h("div", { class: "comment__body" }, meta,
-        h("p", { class: "comment__text" }, comment.content)));
+      body);
 
     // Nothing to remove until the server has given it an id, so a pending
     // comment doesn't offer the control at all.
     if (mine && !pending) meta.append(removeControl(comment, row));
+
+    // A reply has nowhere to put replies of its own, which is the point.
+    if (reply) return row;
+
+    // Inside the body rather than beside it, so the thread lines up with the
+    // words it is answering instead of with the avatar.
+    const sublist = h("ol", { class: "comment__replies", role: "list" });
+    body.append(sublist);
+    (comment.replies || []).forEach((r) =>
+      sublist.append(commentRow(r, { reply: true }))
+    );
+
+    // Nothing to reply to until it exists, and nobody to attribute it to until
+    // you are signed in.
+    if (!pending && get("session")) body.append(replyControl(comment, sublist));
     return row;
+  }
+
+  /**
+   * "Reply", and the box it opens.
+   *
+   * Inline and one at a time, the way the delete confirm on this screen works:
+   * a form that appears under the thing it answers needs no positioning, no
+   * focus trap and no way of being left open somewhere off screen. Opening one
+   * closes any other, because two open boxes is a question about which one you
+   * are typing in.
+   */
+  function replyControl(comment, sublist) {
+    const slot = h("div", { class: "comment__replyform" });
+    const btn = h("button",
+      {
+        class: "comment__reply",
+        type: "button",
+        "aria-expanded": "false",
+        "aria-label": `Reply to ${comment.user.username}`,
+      },
+      "Reply");
+
+    const close = () => {
+      slot.replaceChildren();
+      btn.setAttribute("aria-expanded", "false");
+      btn.hidden = false;
+    };
+
+    btn.addEventListener("click", () => {
+      root.querySelectorAll(".comment__replyform").forEach((el) => {
+        if (el !== slot) el.replaceChildren();
+      });
+      root.querySelectorAll(".comment__reply").forEach((el) => {
+        if (el !== btn) {
+          el.hidden = false;
+          el.setAttribute("aria-expanded", "false");
+        }
+      });
+      const form = composer({
+        parentId: comment.id,
+        to: comment.user.username,
+        into: sublist,
+        onDone: close,
+      });
+      slot.replaceChildren(form);
+      btn.setAttribute("aria-expanded", "true");
+      btn.hidden = true;
+      form.querySelector("textarea")?.focus();
+    });
+
+    return h("div", { class: "comment__replywrap" }, btn, slot);
   }
 
   // Two taps, not a dialog. A modal for one line of text is heavier than the
@@ -233,9 +328,13 @@ export function commentsFor(post, isStale, firstComments) {
       btn.textContent = "Just a sec…";
       try {
         await api.del(`/comments/${comment.id}`);
+        // A conversation takes its replies with it, at the database and here.
+        const withIt = row.querySelectorAll(".comment--reply").length;
+        const wasReply = row.classList.contains("comment--reply");
         row.remove();
-        shift(-1);
-        toast("Comment removed.");
+        shift(-1, { reply: wasReply });
+        if (withIt) shift(-withIt, { reply: true });
+        toast(wasReply ? "Reply removed." : "Comment removed.");
       } catch (err) {
         btn.disabled = false;
         relax();
@@ -249,16 +348,28 @@ export function commentsFor(post, isStale, firstComments) {
   }
 
   // — writing one -------------------------------------------------------------
-  function composer() {
+  /**
+   * @param {{ parentId?: number | null, to?: string, into?: Element | null,
+   *           onDone?: (() => void) | null }} [options]
+   *   With `parentId` this writes a reply: it says who it is answering, lands
+   *   in `into` rather than at the end of the thread, and closes itself
+   *   afterwards. Without, it is the box at the top of the conversation.
+   */
+  function composer({ parentId = null, to = "", into = null, onDone = null } = {}) {
+    const answering = parentId !== null;
+    const label = answering ? `Reply to ${to}` : "Add a comment";
     const box = h("textarea", {
-      id: "comment-body",
+      // Only the one box at the top of the thread takes the id: there can be
+      // several of these on screen and an id is a promise that there is one.
+      id: answering ? null : "comment-body",
       class: "textarea",
-      placeholder: "Add a comment",
-      "aria-label": "Add a comment",
+      placeholder: label,
+      "aria-label": label,
       maxlength: String(COMMENT_MAX + 200),
     });
     const counter = h("span", { class: "counter", "aria-live": "off" });
-    const submit = h("button", { class: "btn btn--primary", type: "submit" }, "Comment");
+    const submit = h("button", { class: "btn btn--primary", type: "submit" },
+      answering ? "Reply" : "Comment");
 
     const paint = () => {
       const n = box.value.trim().length;
@@ -271,9 +382,18 @@ export function commentsFor(post, isStale, firstComments) {
     };
     box.addEventListener("input", paint);
 
-    const form = h("form", { class: "composer", novalidate: true },
+    const row = h("div", { class: "composer__row" }, counter, submit);
+    if (answering) {
+      // A way out that isn't "delete what you typed and click elsewhere".
+      const cancel = h("button",
+        { class: "btn btn--quiet", type: "button", onclick: () => onDone && onDone() },
+        "Cancel");
+      row.append(cancel);
+    }
+    const form = h("form",
+      { class: "composer" + (answering ? " composer--reply" : ""), novalidate: true },
       box,
-      h("div", { class: "composer__row" }, counter, submit));
+      row);
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -285,7 +405,8 @@ export function commentsFor(post, isStale, firstComments) {
       }
       box.value = "";
       paint();
-      send(content, box);
+      send(content, box, { parentId, into });
+      if (onDone) onDone();
     });
 
     return form;
@@ -302,7 +423,13 @@ export function commentsFor(post, isStale, firstComments) {
   // request catches up. If it doesn't, the row comes back out and the words go
   // back in the box, because losing what someone typed is the one failure
   // that isn't recoverable from their side.
-  async function send(content, box) {
+  /**
+   * @param {string} content
+   * @param {HTMLTextAreaElement} box
+   * @param {{ parentId?: number | null, into?: Element | null }} [where]
+   */
+  async function send(content, box, { parentId = null, into = null } = {}) {
+    const answering = parentId !== null;
     const session = get("session");
     // Signed out in another tab between opening the composer and pressing the
     // button: there's nobody to attribute the optimistic row to, so let the
@@ -314,20 +441,26 @@ export function commentsFor(post, isStale, firstComments) {
         content,
         created_at: new Date().toISOString(),
         user: { id: session.id, username: session.username },
+        replies: [],
       },
-      { pending: true }
+      { pending: true, reply: answering }
     );
-    list.append(ghost);
-    shift(1); // which also clears the empty state, if this is the first word
+    const where = into || list;
+    where.append(ghost);
+    shift(1, { reply: answering }); // which also clears the empty state, if
+    // this is the first word said about the post
 
     try {
-      const saved = await api.post(`/posts/${post.id}/comments`, { content });
+      const saved = await api.post(`/posts/${post.id}/comments`, {
+        content,
+        ...(answering ? { parent_id: parentId } : {}),
+      });
       if (isStale()) return;
-      ghost.replaceWith(commentRow(saved));
+      ghost.replaceWith(commentRow(saved, { reply: answering }));
     } catch (err) {
       if (isStale()) return;
       ghost.remove();
-      shift(-1);
+      shift(-1, { reply: answering });
       if (box.isConnected && !box.value.trim()) box.value = content;
       if (err.status === 404) toast("That post is gone.");
       else if (err.status !== 401) toast("That comment didn't post. Try again?");

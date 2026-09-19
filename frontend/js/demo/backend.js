@@ -274,6 +274,9 @@ function searchRank(row, terms) {
  * @property {string} author_email
  * @property {string} content
  * @property {string} created_at
+ * @property {number | null} [parent_id]  what it answers, or absent for
+ *   something said to the post itself. Rows written before replies existed
+ *   have no such key, which reads as null everywhere it is asked.
  */
 /**
  * @typedef {object} DemoState
@@ -359,14 +362,25 @@ function stateFromSeed(seed) {
   // Seeded comments carry an age rather than a timestamp, the same way posts
   // do, so a thread reads as a conversation that happened recently whenever
   // somebody opens it. `post` is a 1-based index into posts[], as with votes.
+  // `reply_to` is a 1-based index into seed.comments, not a comment id — the
+  // ids are handed out in this loop, so the file cannot know them. A reply may
+  // only point at a comment listed before it, which is also the only ordering
+  // that makes sense on a thread read top to bottom.
+  const commentIds = [];
   for (const comment of seed.comments || []) {
     const post = state.posts[comment.post - 1];
-    if (!post) continue;
+    if (!post) {
+      commentIds.push(null);
+      continue;
+    }
+    const id = state.nextCommentId++;
+    commentIds.push(id);
     state.comments.push({
-      id: state.nextCommentId++,
+      id,
       post_id: post.id,
       author_email: comment.author,
       content: comment.content,
+      parent_id: comment.reply_to ? commentIds[comment.reply_to - 1] ?? null : null,
       created_at: nowIso(-(comment.minutes_ago || 0) * 60),
     });
   }
@@ -414,6 +428,19 @@ export function createDemoBackend({
       /* private mode, disabled storage — fall through to the seed */
     }
     return stateFromSeed(seed);
+  }
+
+  // Another tab wrote to the same storage, so this one's copy is now the old
+  // one. The `storage` event only fires in the *other* tabs, so this can never
+  // be undoing something this tab just did — and every mutation in here calls
+  // save(), so there is never anything in memory that storage doesn't have.
+  //
+  // It is what makes the published demo coherent across two tabs, which is the
+  // only way the "new posts" control can be shown on a site with no server.
+  if (persist && typeof addEventListener === "function") {
+    addEventListener("storage", (event) => {
+      if (event.key === storageKey) state = load();
+    });
   }
 
   function save() {
@@ -479,13 +506,28 @@ export function createDemoBackend({
   // visible_to() in backend/app/routers/post.py.
   const maySee = (row, viewer) => row.published || row.author_email === viewer;
 
-  const commentOut = (row) => ({
+  const byOldest = (a, b) =>
+    a.created_at === b.created_at
+      ? a.id - b.id
+      : a.created_at < b.created_at
+        ? -1
+        : 1;
+
+  const repliesTo = (commentId) =>
+    state.comments.filter((c) => c.parent_id === commentId).sort(byOldest);
+
+  // `withReplies` is what makes it a conversation rather than a message —
+  // mirrors CommentOut vs ReplyOut in backend/app/schemas.py, where the
+  // one-level rule lives: a reply has no replies of its own.
+  const commentOut = (row, withReplies = false) => ({
     id: row.id,
     content: row.content,
     created_at: row.created_at,
     post_id: row.post_id,
     user_id: userByEmail(row.author_email)?.id ?? 0,
     user: publicUser(row.author_email),
+    parent_id: row.parent_id ?? null,
+    ...(withReplies ? { replies: repliesTo(row.id).map((r) => commentOut(r)) } : {}),
   });
 
   // — endpoints ----------------------------------------------------------------
@@ -554,6 +596,99 @@ export function createDemoBackend({
       email: u.email,
       created_at: u.created_at,
     });
+  }
+
+  // Change the name everybody else sees. Only the username — the email and the
+  // password are the credential half of an account and changing either is a
+  // flow with a confirmation in it. Mirrors PATCH /users/me.
+  function updateMe(body, viewer) {
+    const u = userByEmail(viewer);
+    if (!u) return detail(401, "Could not validate credentials");
+    const wanted = String(body.username || "").trim().toLowerCase();
+    if (!USERNAME_RE.test(wanted) || RESERVED_USERNAMES.has(wanted)) {
+      return json(422, {
+        detail: [
+          {
+            loc: ["body", "username"],
+            msg: "3–20 characters: letters, digits, - and _, starting with a letter",
+            type: "value_error",
+          },
+        ],
+      });
+    }
+    // Asking for the name you already have is the commonest thing done to a
+    // settings form, and it must not come back "that username is taken" — by
+    // you, from you.
+    if (wanted !== u.username) {
+      if (userByUsername(wanted)) return detail(409, "That username is taken");
+      u.username = wanted;
+      save();
+    }
+    return json(200, {
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      created_at: u.created_at,
+    });
+  }
+
+  // Everything attached to an account goes with it. In the real schema this is
+  // six ON DELETE CASCADEs and this function would not exist; here the rows
+  // are arrays in localStorage, so the cascade is written out — which is worth
+  // reading against models.py rather than against memory. The one that is easy
+  // to miss is the fourth: a comment that points *away* from you, left under
+  // somebody else's post.
+  function deleteMe(viewer) {
+    const u = userByEmail(viewer);
+    if (!u) return detail(401, "Could not validate credentials");
+
+    const mine = new Set(
+      state.posts.filter((p) => p.author_email === viewer).map((p) => p.id)
+    );
+    state.posts = state.posts.filter((p) => !mine.has(p.id));
+    state.comments = state.comments.filter(
+      (c) => c.author_email !== viewer && !mine.has(c.post_id)
+    );
+    // And the replies to the comments that just went, which is the second step
+    // of a cascade Postgres would have walked on its own.
+    for (;;) {
+      const alive = new Set(state.comments.map((c) => c.id));
+      const kept = state.comments.filter((c) => !c.parent_id || alive.has(c.parent_id));
+      if (kept.length === state.comments.length) break;
+      state.comments = kept;
+    }
+    state.votes = state.votes.filter((v) => {
+      const [email, postId] = v.split("\u0000");
+      return email !== viewer && !mine.has(Number(postId));
+    });
+    state.users = state.users.filter((row) => row.email !== viewer);
+    for (const [family, row] of Object.entries(state.sessions)) {
+      if (row.email === viewer) delete state.sessions[family];
+    }
+    for (const [token, row] of Object.entries(state.tokens)) {
+      if (row.email === viewer) delete state.tokens[token];
+    }
+    state.cookie = null;
+    save();
+    return json(204, null);
+  }
+
+  // Sign out everywhere. Authenticated with the access token rather than the
+  // cookie, which is the entire difference between this and logout(): holding
+  // a cookie is enough to end the session that cookie belongs to, and ending
+  // every other one should take more than having once been handed a cookie.
+  function logoutEverywhere(viewer) {
+    const u = userByEmail(viewer);
+    if (!u) return detail(401, "Could not validate credentials");
+    // Revoked rather than dropped, the same way a single sign-out is: a
+    // revoked family lets a cookie presented later be told the session is
+    // over, rather than that it never existed.
+    for (const row of Object.values(state.sessions)) {
+      if (row.email === viewer && !row.revoked) row.revoked = true;
+    }
+    state.cookie = null;
+    save();
+    return json(204, null);
   }
 
   function profile(username) {
@@ -719,18 +854,24 @@ export function createDemoBackend({
       );
     }
 
-    let asOf = null;
-    const rawAsOf = query.get("as_of");
-    if (rawAsOf !== null && onlyAuthor === undefined) {
-      asOf = Date.parse(rawAsOf);
-      if (!Number.isFinite(asOf)) {
+    // A window: `as_of` closes it at the top, `since` opens it at the bottom.
+    // Both feed-only, for the reason given above.
+    const bounds = { as_of: null, since: null };
+    for (const name of ["as_of", "since"]) {
+      const raw = query.get(name);
+      if (raw === null || onlyAuthor !== undefined) continue;
+      const at = Date.parse(raw);
+      if (!Number.isFinite(at)) {
         return invalid(
-          ["query", "as_of"],
+          ["query", name],
           "Input should be a valid datetime or date",
           "datetime_from_date_parsing"
         );
       }
+      bounds[name] = at;
     }
+    const asOf = bounds.as_of;
+    const since = bounds.since;
 
     const byNewest = (a, b) =>
       a.created_at === b.created_at
@@ -743,7 +884,9 @@ export function createDemoBackend({
       (r) =>
         maySee(r, viewer) &&
         (onlyAuthor === undefined || r.author_email === onlyAuthor) &&
-        (asOf === null || Date.parse(r.created_at) <= asOf)
+        (asOf === null || Date.parse(r.created_at) <= asOf) &&
+        // Exclusive: the anchor is a post the reader already has.
+        (since === null || Date.parse(r.created_at) > since)
     );
 
     const terms = searchTerms(search);
@@ -891,23 +1034,24 @@ export function createDemoBackend({
 
     // Oldest first — a thread is read top to bottom, where a feed is read
     // newest first. The id breaks ties, exactly as the real ORDER BY does.
+    //
+    // The page is over *conversations*; replies come with their parent. See the
+    // long note on get_comments in backend/app/routers/comment.py.
     const rows = state.comments
-      .filter((c) => c.post_id === postId)
-      .sort((a, b) =>
-        a.created_at === b.created_at
-          ? a.id - b.id
-          : a.created_at < b.created_at
-            ? -1
-            : 1
-      );
+      .filter((c) => c.post_id === postId && !c.parent_id)
+      .sort(byOldest);
 
     const total = rows.length;
+    const totalReplies = state.comments.filter(
+      (c) => c.post_id === postId && c.parent_id
+    ).length;
     const pages = total ? Math.ceil(total / pageSize) : 0;
     const start = (page - 1) * pageSize;
 
     return json(200, {
-      items: rows.slice(start, start + pageSize).map(commentOut),
+      items: rows.slice(start, start + pageSize).map((r) => commentOut(r, true)),
       total,
+      total_replies: totalReplies,
       page,
       page_size: pageSize,
       pages,
@@ -930,11 +1074,21 @@ export function createDemoBackend({
       );
     }
 
+    const parentId = body.parent_id ?? null;
+    if (parentId !== null) {
+      const parent = state.comments.find(
+        (c) => c.id === parentId && c.post_id === postId
+      );
+      if (!parent) return detail(404, `Comment with id: ${parentId} does not exist`);
+      if (parent.parent_id) return detail(400, "Replies go one level deep");
+    }
+
     const row = {
       id: state.nextCommentId++,
       post_id: postId,
       author_email: email,
       content,
+      parent_id: parentId,
       created_at: nowIso(),
     };
     state.comments.push(row);
@@ -950,7 +1104,9 @@ export function createDemoBackend({
     if (row.author_email !== email) {
       return detail(403, "Not authorized to perform requested action");
     }
-    state.comments = state.comments.filter((c) => c.id !== id);
+    // The cascade the database does for comments.parent_id, done here too.
+    const gone = new Set([id, ...repliesTo(id).map((r) => r.id)]);
+    state.comments = state.comments.filter((c) => !gone.has(c.id));
     save();
     return json(204, null);
   }
@@ -1066,6 +1222,15 @@ export function createDemoBackend({
     if (route === "/login" && method === "POST") return login(form());
     if (route === "/auth/refresh" && method === "POST") return refresh(csrfHeader);
     if (route === "/auth/logout" && method === "POST") return logout(csrfHeader);
+    if (route === "/auth/logout-all" && method === "POST") {
+      return requireAuth() || logoutEverywhere(viewer);
+    }
+    if (route === "/users/me" && method === "PATCH") {
+      return requireAuth() || updateMe(body(), viewer);
+    }
+    if (route === "/users/me" && method === "DELETE") {
+      return requireAuth() || deleteMe(viewer);
+    }
 
     const profilePosts = route.match(/^\/users\/([^/]+)\/posts$/);
     if (profilePosts && method === "GET") {

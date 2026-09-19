@@ -85,25 +85,47 @@ def get_comments(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
-    """One page of a post's comments, **oldest first**.
+    """One page of a post's conversations, **oldest first**, each with whatever
+    was said back to it.
 
     The feed runs newest-first because you arrive at it to see what's new. A
     comment thread is read top to bottom like a conversation, so it runs the
     other way — and the page size is larger, because twenty short lines is
     about one screen where ten posts is several.
+
+    **The page is over top-level comments, and replies come with their
+    parent.** Paging the two together would eventually put a page boundary
+    through the middle of an exchange, which is the one place a boundary must
+    not fall; and a reply can only ever belong to something on the same page as
+    itself, so the alternative buys nothing. `total` therefore counts
+    conversations — it is what `pages` is computed from — and `total_replies`
+    says how many messages hang off them, so a heading can report the size of
+    the conversation without walking it.
     """
     get_visible_post(db, post_id, current_user)
+
+    top_level = models.Comment.parent_id.is_(None)
 
     total = db.scalar(
         select(func.count())
         .select_from(models.Comment)
-        .where(models.Comment.post_id == post_id)
+        .where(models.Comment.post_id == post_id, top_level)
+    )
+    total_replies = db.scalar(
+        select(func.count())
+        .select_from(models.Comment)
+        .where(models.Comment.post_id == post_id, models.Comment.parent_id.is_not(None))
     )
 
     items = db.scalars(
         select(models.Comment)
-        .options(selectinload(models.Comment.user))
-        .where(models.Comment.post_id == post_id)
+        .options(
+            selectinload(models.Comment.user),
+            # selectin rather than joined: one extra query for the whole page
+            # rather than a join that repeats every parent once per reply.
+            selectinload(models.Comment.replies).selectinload(models.Comment.user),
+        )
+        .where(models.Comment.post_id == post_id, top_level)
         .order_by(models.Comment.created_at, models.Comment.id)
         .limit(page_size)
         .offset((page - 1) * page_size)
@@ -113,6 +135,7 @@ def get_comments(
     return {
         "items": items,
         "total": total,
+        "total_replies": total_replies,
         "page": page,
         "page_size": page_size,
         "pages": pages,
@@ -128,7 +151,7 @@ def get_comments(
     summary="Say something about a post",
     responses={
         201: docs.ok(docs.COMMENT_EXAMPLE),
-        **docs.errors(401, 404, 422),
+        **docs.errors(400, 401, 404, 422),
     },
 )
 def create_comment(
@@ -137,16 +160,44 @@ def create_comment(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ) -> models.Comment:
-    """Add a comment to a post you can see.
+    """Add a comment to a post you can see, or a reply to one of its comments.
 
     Whitespace is trimmed and an empty comment is a 422 — the cap is enforced
     here and not only in the form, because this is the field a script would
     point at first.
+
+    `parent_id` makes it a reply, and there are exactly two ways that can be
+    refused. A parent that isn't a comment on *this* post is a 404 rather than
+    a 400: from here it does not exist, and saying otherwise would confirm the
+    existence of comments on a draft somebody hasn't published. A parent that
+    is itself a reply is a 400, because the request is well-formed and simply
+    asks for something this app does not do.
     """
     get_visible_post(db, post_id, current_user)
 
+    if payload.parent_id is not None:
+        parent = db.scalar(
+            select(models.Comment).where(
+                models.Comment.id == payload.parent_id,
+                models.Comment.post_id == post_id,
+            )
+        )
+        if parent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Comment with id: {payload.parent_id} does not exist",
+            )
+        if parent.parent_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replies go one level deep",
+            )
+
     comment = models.Comment(
-        post_id=post_id, user_id=current_user.id, content=payload.content
+        post_id=post_id,
+        user_id=current_user.id,
+        content=payload.content,
+        parent_id=payload.parent_id,
     )
     db.add(comment)
     db.commit()

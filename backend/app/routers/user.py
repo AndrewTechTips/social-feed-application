@@ -1,6 +1,14 @@
 from typing import Any, Optional
 
-from fastapi import status, HTTPException, Depends, APIRouter, Query, Request
+from fastapi import (
+    status,
+    HTTPException,
+    Depends,
+    APIRouter,
+    Query,
+    Request,
+    Response,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -115,6 +123,82 @@ def get_me(current_user: models.User = Depends(oauth2.get_current_user)) -> mode
     posts are its own.
     """
     return current_user
+
+
+@router.patch(
+    "/me",
+    response_model=schemas.MeOut,
+    summary="Change your username",
+    responses={
+        200: docs.ok(docs.ME_EXAMPLE),
+        **docs.errors(401, 409, 422),
+    },
+)
+def update_me(
+    payload: schemas.MeUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+) -> models.User:
+    """Change the name everybody else sees.
+
+    Only the username. The email and the password are the credential half of an
+    account and changing either is a flow with a confirmation in it, not a text
+    box on a settings screen.
+
+    A name that is taken is a 409 with a sentence, the same answer registering
+    gives — and for the same reason it is caught from the database rather than
+    checked first: two people asking for the same free name in the same moment
+    both pass a lookup and one of them still has to lose.
+
+    Nothing else moves. Posts, comments and votes are joined by id, and the id
+    is the half of an identity that was always meant to be the durable one.
+    """
+    if payload.username == current_user.username:
+        return current_user
+
+    current_user.username = payload.username
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That username is taken",
+        )
+    db.refresh(current_user)
+    return current_user
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete your account",
+    responses={
+        204: {"description": "Gone, along with everything you wrote."},
+        **docs.errors(401),
+    },
+)
+def delete_me(
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+) -> None:
+    """Delete your account and everything attached to it.
+
+    Everything means everything: posts, the comments on them, the comments you
+    left elsewhere, your votes, and every session you have open. None of that
+    is spelled out here — each one is an `ON DELETE CASCADE` declared on the
+    column that points at you, so it holds whoever issues the DELETE and cannot
+    drift from what this function happens to remember to clean up.
+
+    The refresh cookie is cleared on the way out. It names a session row that
+    no longer exists, so the browser would recover on its own the next time it
+    tried; leaving somebody holding a credential for an account that is gone is
+    nevertheless not a tidy way to say goodbye.
+    """
+    db.delete(current_user)
+    db.commit()
+    oauth2.clear_refresh_cookie(response)
 
 
 @router.get(

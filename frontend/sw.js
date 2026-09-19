@@ -95,6 +95,7 @@ const SHELL = [
   "./js/views/profile.js",
   "./js/views/shelf.js",
   "./js/views/colophon.js",
+  "./js/views/settings.js",
   "./js/views/auth.js",
   "./js/views/compose.js",
   "./js/demo/backend.js",

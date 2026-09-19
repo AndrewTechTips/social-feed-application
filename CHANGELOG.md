@@ -23,6 +23,89 @@ about the reader.
 
 ### Added
 
+- **Your account.** A screen at `#/settings` with the three things you can do to
+  one, in the order that runs from the reversible to the permanent: change the
+  name everybody sees, sign out everywhere, delete the account.
+
+  **Renaming is safe because identity was never the name.** Posts, comments and
+  votes join on `users.id`; a rename touches one column and nothing else moves.
+  `PATCH /users/me` takes the username and only the username — a 409 with a
+  sentence if it is taken, caught from the database rather than checked first,
+  because two people asking for the same free name in the same moment both pass
+  a lookup and one of them still has to lose. Asking for the name you already
+  have is not a collision, which is the commonest thing done to a settings form
+  and the one a naive version answers with *that username is taken*, by you,
+  from you.
+
+  **Not the email, and not the password.** Both are the credential half of an
+  account and changing either is a flow with a confirmation link in it. Commons
+  has no way to send mail, so neither is offered — and the screen says that out
+  loud rather than showing a box that half-works.
+
+  **Sign out everywhere is why the sessions are a table.** A stateless refresh
+  token cannot be taken back, so `POST /auth/logout-all` would otherwise have
+  been a button that cleared one cookie and lied about the rest. It revokes
+  every live family for the account, and it authenticates with the *access*
+  token rather than the refresh cookie: holding a cookie is enough to end the
+  session that cookie belongs to, and ending every other one should take more
+  than having once been handed one.
+
+  **Deleting takes everything, and the database is what makes that true.**
+  `DELETE /users/me` issues one `DELETE` and the six `ON DELETE CASCADE`s do
+  the rest — posts, the comments under them, the comments left under other
+  people's posts, the replies to those, votes, and sessions. Nothing is
+  enumerated in the handler, so it cannot drift from what the schema says. Each
+  cascade has a test named for it, and each was verified by removing that one
+  `ondelete` and watching that test, and only that test, fail. The confirmation
+  is typing your own username: the one check a reflex cannot clear.
+
+
+- **The feed tells you when something arrives.** A pill at the top of the list
+  — *Three new posts* — offering them rather than moving the page under you.
+  Press it and they go in above what you were reading, and the page goes to the
+  top because that is what you pressed it for.
+
+  **Polling, not a WebSocket, and the arithmetic is the argument.** This feed
+  receives a few posts a day. A socket would hold a connection open per reader
+  for hours to deliver a handful of messages, push async concerns into an
+  otherwise synchronous SQLAlchemy codebase, and — the part that settles it —
+  could only ever be demonstrated on somebody's own machine, because the
+  published build has no server at all. Every forty-five seconds, only while
+  the tab is visible and the feed is on screen, one request that answers with
+  one number: `GET /posts/?page_size=1&since=…`, whose envelope's `total` is
+  exactly how many have arrived.
+
+  `since` is the other end of the window `as_of` opened — one closes the feed at
+  the top so a scroll holds still, the other opens it at the bottom so the pill
+  can count. New rows are prepended *above* the paginated set rather than into
+  it, so taking them doesn't renumber a single page below; that is what
+  [ADR 0005's third trigger](docs/adr/0005-offset-pagination.md) was for.
+
+  Not offered on a ranking or a search: neither is in time order, so there is
+  no anchor to ask "since" of and nowhere sensible to put what came back.
+
+- **The demo is coherent across two tabs.** `js/demo/backend.js` now listens for
+  the `storage` event and re-reads its state when another tab writes — which is
+  the only way the pill above can be shown on a site with no server, and the
+  best two-tab demonstration this project has. Safe by construction: the event
+  fires only in the *other* tabs, and every mutation in that file already saves.
+- **Replies, exactly one level deep.** You can answer a comment rather than
+  only the post. The depth is declared in the API's own schema — `ReplyOut` has
+  no replies of its own, so the shape of the response cannot express a third
+  level — and enforced in one check that answers 400 for a reply to a reply and
+  404 for a parent that isn't a comment on this post. Unbounded nesting is a
+  rendering problem, an indentation problem on a phone and a moderation
+  problem, and on a feed this size it buys nothing.
+
+  The page is over **conversations**, and replies arrive with their parent:
+  paging the two together would eventually put a page boundary through the
+  middle of an exchange, which is the one place a boundary must not fall. So
+  `total` counts conversations — it is what `pages` is computed from — and a
+  new `total_replies` says how many messages hang off them, which is what the
+  heading adds up. On screen a reply is indented under what it answers behind a
+  hairline, with no Reply control of its own; the cascade on `parent_id` is at
+  the database, so a comment that goes takes the replies to it whoever issued
+  the DELETE.
 - **A search result shows the sentence it matched on**, with the matching
   words marked — stemmed, so searching "kettles" marks "kettle". `ts_headline`
   does it, which is the rest of the reason for having a `tsvector` rather than
@@ -230,6 +313,25 @@ about the reader.
   Said plainly in the README and the ADR rather than papered over.
 
 ### Fixed
+
+- **The danger red failed AA on every light surface.** `--danger` was `#c0492f`,
+  which measures 4.37:1 against `--bg` — under the 4.5:1 small text needs. It
+  had gone unnoticed for the ordinary reason: the two screens carrying a quiet
+  danger button (a post you wrote, and now your account) were not being
+  axe-scanned, so nothing ever asked. It is `#a63a22` now — the same hue walked
+  down until it clears on every light surface, 5.69:1 on `--bg` and 6.29:1 on a
+  card.
+- **Two destructive buttons sat side by side at 320px.** They fit, which was the
+  problem: a thumb aimed at *Keep it* landed a few millimetres from *Delete my
+  account*, and of the two mistakes only one is recoverable. Below 380px the
+  confirmation row stacks and both go full width.
+- **Deleting an account cleared the refresh cookie with the wrong flags.** A
+  browser only replaces a cookie whose name, path *and* flags match, so clearing
+  it without `Secure` would have left the original sitting there in production.
+  The flags were already written down correctly next to the route that sets
+  them; they now live in `oauth2.clear_refresh_cookie`, which all three ways of
+  ceasing to be signed in call.
+
 
 - **The reading panel switched off the shortcuts that advertise it.** The
   guard that stops a keystroke being stolen from someone typing asked only

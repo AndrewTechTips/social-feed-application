@@ -65,6 +65,17 @@
           "content": {
             "title": "Content",
             "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
           }
         },
         "required": [
@@ -74,6 +85,7 @@
         "type": "object"
       },
       "CommentOut": {
+        "description": "Something said about a post, with whatever was said back.\n\nReplies are not paged. A conversation arrives whole or the page boundary\nwould fall through the middle of one, and a thread on this app is a handful\nof lines rather than a hundred.",
         "properties": {
           "content": {
             "title": "Content",
@@ -88,9 +100,28 @@
             "title": "Id",
             "type": "integer"
           },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
           "post_id": {
             "title": "Post Id",
             "type": "integer"
+          },
+          "replies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReplyOut"
+            },
+            "title": "Replies",
+            "type": "array"
           },
           "user": {
             "$ref": "#/components/schemas/UserOut"
@@ -143,6 +174,11 @@
           },
           "total": {
             "title": "Total",
+            "type": "integer"
+          },
+          "total_replies": {
+            "default": 0,
+            "title": "Total Replies",
             "type": "integer"
           }
         },
@@ -217,6 +253,20 @@
           "email"
         ],
         "title": "MeOut",
+        "type": "object"
+      },
+      "MeUpdate": {
+        "description": "What you may change about yourself. One field, on purpose.\n\nNot the email: it is the credential half of an account, and changing one is\na flow with a confirmation link in it rather than a text box. Not the\npassword either, for the same reason. The username is the public half —\nwhat everybody else sees — and the one that is nobody's business but yours.",
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "MeUpdate",
         "type": "object"
       },
       "PostCreate": {
@@ -407,6 +457,50 @@
           }
         },
         "title": "PostUpdate",
+        "type": "object"
+      },
+      "ReplyOut": {
+        "description": "An answer to a comment.\n\n**Note what it hasn't got: replies of its own.** That is the one-level rule,\nwritten where a reader of the contract will see it rather than buried in a\nhandler — the shape of the response is the specification, and this shape\ncannot express a third level.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "parent_id": {
+            "title": "Parent Id",
+            "type": "integer"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "created_at",
+          "post_id",
+          "user_id",
+          "user",
+          "parent_id"
+        ],
+        "title": "ReplyOut",
         "type": "object"
       },
       "Token": {
@@ -602,6 +696,36 @@
           }
         },
         "summary": "Sign out",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "description": "End every session this account has, including this one.\n\nAuthenticated with the *access* token rather than the refresh cookie, which\nis the difference between this and `/logout`. Signing out one browser is\nsomething a browser asks for and needs no proof beyond holding the cookie;\nsigning out every browser is something a person asks for, and it should\ntake more than having once been handed a cookie to do it.\n\nThat is also why there is a `refresh_sessions` table at all. A stateless\nrefresh token cannot be taken back, so this would have been a button that\ncleared one cookie and lied about the rest.",
+        "operationId": "logout_everywhere_auth_logout_all_post",
+        "responses": {
+          "204": {
+            "description": "Every session ended, on every machine."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Sign out everywhere",
         "tags": [
           "Authentication"
         ]
@@ -859,6 +983,25 @@
               "$ref": "#/components/schemas/PostSort",
               "default": "new",
               "description": "`new` is newest first. `warm` and `discussed` are rankings that decay with age, so neither becomes a museum of whatever was popular two years ago. Ignored while searching, where relevance leads. See ADR 0008 for the two constants."
+            }
+          },
+          {
+            "description": "Only posts written *after* this moment — the other end of the window `as_of` closes. Ask for one page of one with it and the envelope's `total` is exactly how many posts have arrived since, which is what a \"new posts\" control needs and the whole of what it needs. URL-encode it, for the reason given on `as_of`.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only posts written *after* this moment — the other end of the window `as_of` closes. Ask for one page of one with it and the envelope's `total` is exactly how many posts have arrived since, which is what a \"new posts\" control needs and the whole of what it needs. URL-encode it, for the reason given on `as_of`.",
+              "title": "Since"
             }
           },
           {
@@ -1332,7 +1475,7 @@
     },
     "/posts/{post_id}/comments": {
       "get": {
-        "description": "One page of a post's comments, **oldest first**.\n\nThe feed runs newest-first because you arrive at it to see what's new. A\ncomment thread is read top to bottom like a conversation, so it runs the\nother way — and the page size is larger, because twenty short lines is\nabout one screen where ten posts is several.",
+        "description": "One page of a post's conversations, **oldest first**, each with whatever\nwas said back to it.\n\nThe feed runs newest-first because you arrive at it to see what's new. A\ncomment thread is read top to bottom like a conversation, so it runs the\nother way — and the page size is larger, because twenty short lines is\nabout one screen where ten posts is several.\n\n**The page is over top-level comments, and replies come with their\nparent.** Paging the two together would eventually put a page boundary\nthrough the middle of an exchange, which is the one place a boundary must\nnot fall; and a reply can only ever belong to something on the same page as\nitself, so the alternative buys nothing. `total` therefore counts\nconversations — it is what `pages` is computed from — and `total_replies`\nsays how many messages hang off them, so a heading can report the size of\nthe conversation without walking it.",
         "operationId": "get_comments_posts__post_id__comments_get",
         "parameters": [
           {
@@ -1421,7 +1564,7 @@
         ]
       },
       "post": {
-        "description": "Add a comment to a post you can see.\n\nWhitespace is trimmed and an empty comment is a 422 — the cap is enforced\nhere and not only in the form, because this is the field a script would\npoint at first.",
+        "description": "Add a comment to a post you can see, or a reply to one of its comments.\n\nWhitespace is trimmed and an empty comment is a 422 — the cap is enforced\nhere and not only in the form, because this is the field a script would\npoint at first.\n\n`parent_id` makes it a reply, and there are exactly two ways that can be\nrefused. A parent that isn't a comment on *this* post is a 404 rather than\na 400: from here it does not exist, and saying otherwise would confirm the\nexistence of comments on a draft somebody hasn't published. A parent that\nis itself a reply is a 400, because the request is well-formed and simply\nasks for something this app does not do.",
         "operationId": "create_comment_posts__post_id__comments_post",
         "parameters": [
           {
@@ -1466,6 +1609,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "The request was understood and asks for nothing."
           },
           "401": {
             "content": {
@@ -1563,6 +1716,34 @@
       }
     },
     "/users/me": {
+      "delete": {
+        "description": "Delete your account and everything attached to it.\n\nEverything means everything: posts, the comments on them, the comments you\nleft elsewhere, your votes, and every session you have open. None of that\nis spelled out here — each one is an `ON DELETE CASCADE` declared on the\ncolumn that points at you, so it holds whoever issues the DELETE and cannot\ndrift from what this function happens to remember to clean up.\n\nThe refresh cookie is cleared on the way out. It names a session row that\nno longer exists, so the browser would recover on its own the next time it\ntried; leaving somebody holding a credential for an account that is gone is\nnevertheless not a tidy way to say goodbye.",
+        "operationId": "delete_me_users_me_delete",
+        "responses": {
+          "204": {
+            "description": "Gone, along with everything you wrote."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete your account",
+        "tags": [
+          "Users"
+        ]
+      },
       "get": {
         "description": "Who the caller is.\n\nLogging in takes an email and a password and hands back a token, which\ntells the client nothing about the person it just signed in. That was\nsurvivable while posts carried their author's email and the client could\nmatch on it; now that the public identity is a username and the email never\nleaves this endpoint, something has to close the gap. Without it a browser\nwith no local history can sign in successfully and still not know which\nposts are its own.",
         "operationId": "get_me_users_me_get",
@@ -1600,6 +1781,70 @@
           }
         ],
         "summary": "Who the caller is",
+        "tags": [
+          "Users"
+        ]
+      },
+      "patch": {
+        "description": "Change the name everybody else sees.\n\nOnly the username. The email and the password are the credential half of an\naccount and changing either is a flow with a confirmation in it, not a text\nbox on a settings screen.\n\nA name that is taken is a 409 with a sentence, the same answer registering\ngives — and for the same reason it is caught from the database rather than\nchecked first: two people asking for the same free name in the same moment\nboth pass a lookup and one of them still has to lose.\n\nNothing else moves. Posts, comments and votes are joined by id, and the id\nis the half of an identity that was always meant to be the durable one.",
+        "operationId": "update_me_users_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-08-21T09:14:02.511Z",
+                  "email": "maren.holt@example.com",
+                  "id": 7,
+                  "username": "marenholt"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "That would collide with something already there."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Change your username",
         "tags": [
           "Users"
         ]

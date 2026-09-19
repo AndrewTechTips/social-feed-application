@@ -198,6 +198,7 @@ def page_of_posts(
     search: str = "",
     viewer: Optional[models.User] = None,
     as_of: Optional[datetime] = None,
+    since: Optional[datetime] = None,
     sort: schemas.PostSort = schemas.PostSort.new,
 ) -> dict[str, Any]:
     """One page of posts with their vote counts — in the shape ``PostPage``
@@ -232,8 +233,14 @@ def page_of_posts(
     """
     offset = (page - 1) * page_size
 
+    # A window, closed at the top by `as_of` and open at the bottom by `since`.
+    # The pair is what makes both the stable scroll and the "3 new posts"
+    # control possible with one endpoint: one asks for the feed as it stood,
+    # the other for what has happened since.
     if as_of is not None:
         filters = (*filters, models.Post.created_at <= as_of)
+    if since is not None:
+        filters = (*filters, models.Post.created_at > since)
 
     total = db.scalar(select(func.count()).select_from(models.Post).where(*filters))
 
@@ -356,6 +363,16 @@ def get_posts(
             "leads. See ADR 0008 for the two constants."
         ),
     ),
+    since: Optional[datetime] = Query(
+        None,
+        description=(
+            "Only posts written *after* this moment — the other end of the "
+            "window `as_of` closes. Ask for one page of one with it and the "
+            "envelope's `total` is exactly how many posts have arrived since, "
+            'which is what a "new posts" control needs and the whole of what '
+            "it needs. URL-encode it, for the reason given on `as_of`."
+        ),
+    ),
     as_of: Optional[datetime] = Query(
         None,
         description=(
@@ -384,6 +401,7 @@ def get_posts(
         search=search,
         viewer=current_user,
         as_of=as_of,
+        since=since,
         sort=sort,
     )
 

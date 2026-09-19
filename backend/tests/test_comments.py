@@ -157,6 +157,8 @@ def test_a_post_with_nothing_said_about_it(client, test_posts):
     assert body == {
         "items": [],
         "total": 0,
+        # Conversations and messages are counted separately; see get_comments.
+        "total_replies": 0,
         "page": 1,
         "page_size": 20,
         "pages": 0,
@@ -345,3 +347,124 @@ def test_deleting_a_user_deletes_their_comments(commented_post, test_user2, sess
     still_there = {c.id for c in session.scalars(select(models.Comment)).all()}
     assert still_there.isdisjoint(theirs)
     assert still_there.issuperset(mine)
+
+
+# ── replies, one level deep ────────────────────────────────────────────────
+#
+# The depth is declared in the schema — ReplyOut has no replies of its own —
+# and enforced in one check. These pin down both halves, and the shape of the
+# page that carries them.
+
+
+def _say(client, post_id, content, parent_id=None):
+    body = {"content": content}
+    if parent_id is not None:
+        body["parent_id"] = parent_id
+    return client.post(f"/posts/{post_id}/comments", json=body)
+
+
+def test_a_reply_arrives_attached_to_what_it_answers(authorized_client, commented_post):
+    post_id, _ = commented_post
+    parent = _say(authorized_client, post_id, "The wall is still standing.").json()
+
+    reply = _say(authorized_client, post_id, "Two winters now.", parent["id"])
+    assert reply.status_code == 201
+    assert reply.json()["parent_id"] == parent["id"]
+
+    page = authorized_client.get(f"/posts/{post_id}/comments").json()
+    conversation = next(c for c in page["items"] if c["id"] == parent["id"])
+    assert [r["content"] for r in conversation["replies"]] == ["Two winters now."]
+    # And it is not also loose in the list.
+    assert reply.json()["id"] not in [c["id"] for c in page["items"]]
+
+
+def test_the_page_counts_conversations_and_messages_separately(
+    authorized_client, commented_post
+):
+    """`total` is what `pages` is computed from, so it counts the things being
+    paged. `total_replies` is so a heading can say how big the conversation is
+    without walking every page of it."""
+    post_id, _ = commented_post
+    before = authorized_client.get(f"/posts/{post_id}/comments").json()
+    parent = _say(authorized_client, post_id, "One.").json()
+    _say(authorized_client, post_id, "A.", parent["id"])
+    _say(authorized_client, post_id, "B.", parent["id"])
+
+    page = authorized_client.get(f"/posts/{post_id}/comments").json()
+    assert page["total"] == before["total"] + 1
+    assert page["total_replies"] == before["total_replies"] + 2
+
+
+def test_a_reply_to_a_reply_is_refused(authorized_client, commented_post):
+    """Well-formed, and asking for something this app does not do — so 400
+    rather than 422, and a sentence rather than a validation error."""
+    post_id, _ = commented_post
+    parent = _say(authorized_client, post_id, "One.").json()
+    reply = _say(authorized_client, post_id, "Two.", parent["id"]).json()
+
+    refused = _say(authorized_client, post_id, "Three.", reply["id"])
+    assert refused.status_code == 400
+    assert refused.json()["detail"] == "Replies go one level deep"
+
+
+def test_replying_to_a_comment_on_another_post_is_a_404(
+    authorized_client, commented_post, test_posts
+):
+    """From here it does not exist. A 400 would confirm that it does, which on
+    a draft nobody has published is the thing the visibility rule is for."""
+    post_id, _ = commented_post
+    elsewhere = _say(authorized_client, test_posts[1].id, "Over there.").json()
+    refused = _say(authorized_client, post_id, "Hello?", elsewhere["id"])
+    assert refused.status_code == 404
+
+
+def test_replying_to_nothing_at_all_is_a_404(authorized_client, commented_post):
+    post_id, _ = commented_post
+    assert _say(authorized_client, post_id, "Hello?", 999_999).status_code == 404
+
+
+def test_a_conversation_is_never_split_across_pages(authorized_client, test_posts):
+    """The whole reason the page is over top-level comments. Two conversations,
+    one reply each, one per page — and each page carries its own replies.
+
+    On a post nobody has said anything about yet, so that "page two" is the
+    second of exactly two conversations rather than the second of five.
+    """
+    post_id = test_posts[1].id
+    first = _say(authorized_client, post_id, "First.").json()
+    _say(authorized_client, post_id, "to the first", first["id"])
+    second = _say(authorized_client, post_id, "Second.").json()
+    _say(authorized_client, post_id, "to the second", second["id"])
+
+    page_two = authorized_client.get(
+        f"/posts/{post_id}/comments?page=2&page_size=1"
+    ).json()
+    assert len(page_two["items"]) == 1
+    only = page_two["items"][0]
+    assert only["replies"], "a conversation arrived without what was said back to it"
+    assert only["replies"][0]["parent_id"] == only["id"]
+
+
+def test_deleting_a_comment_takes_its_replies(
+    authorized_client, commented_post, session
+):
+    """The cascade is at the database, so it holds whoever issued the DELETE."""
+    post_id, _ = commented_post
+    parent = _say(authorized_client, post_id, "One.").json()
+    reply = _say(authorized_client, post_id, "Two.", parent["id"]).json()
+
+    assert authorized_client.delete(f"/comments/{parent['id']}").status_code == 204
+
+    gone = session.get(models.Comment, reply["id"])
+    assert gone is None
+
+
+def test_a_reply_is_removable_on_its_own(authorized_client, commented_post):
+    post_id, _ = commented_post
+    parent = _say(authorized_client, post_id, "One.").json()
+    reply = _say(authorized_client, post_id, "Two.", parent["id"]).json()
+
+    assert authorized_client.delete(f"/comments/{reply['id']}").status_code == 204
+    page = authorized_client.get(f"/posts/{post_id}/comments").json()
+    still_there = next(c for c in page["items"] if c["id"] == parent["id"])
+    assert still_there["replies"] == []

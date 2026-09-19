@@ -20,7 +20,7 @@ from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import database, schemas, models, utils, oauth2
+from .. import database, schemas, models, utils, oauth2, docs
 from ..config import settings
 from ..limiter import limiter
 
@@ -65,19 +65,9 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    """Expire the cookie, with the same flags it was set with.
-
-    The flags matter on the way out as much as on the way in: a browser will
-    only replace a cookie with one whose name, path and domain match, so
-    clearing it with a different path leaves the original sitting there.
-    """
-    response.delete_cookie(
-        key=oauth2.REFRESH_COOKIE,
-        path=oauth2.REFRESH_COOKIE_PATH,
-        httponly=True,
-        samesite="lax",
-        secure=settings.secure_cookies,
-    )
+    """Expire the refresh cookie. See oauth2.clear_refresh_cookie for why the
+    flags live next to the ones that set it rather than here."""
+    oauth2.clear_refresh_cookie(response)
 
 
 def _token_body(access_token: str, csrf_token: str) -> dict[str, object]:
@@ -238,3 +228,33 @@ def logout(
     # would let any page on the internet sign a reader out by asking.
     if presented:
         _clear_refresh_cookie(response)
+
+
+@auth_router.post(
+    "/logout-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Sign out everywhere",
+    responses={
+        204: {"description": "Every session ended, on every machine."},
+        **docs.errors(401),
+    },
+)
+def logout_everywhere(
+    response: Response,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+) -> None:
+    """End every session this account has, including this one.
+
+    Authenticated with the *access* token rather than the refresh cookie, which
+    is the difference between this and `/logout`. Signing out one browser is
+    something a browser asks for and needs no proof beyond holding the cookie;
+    signing out every browser is something a person asks for, and it should
+    take more than having once been handed a cookie to do it.
+
+    That is also why there is a `refresh_sessions` table at all. A stateless
+    refresh token cannot be taken back, so this would have been a button that
+    cleared one cookie and lied about the rest.
+    """
+    oauth2.close_all_refresh_sessions(db, current_user)
+    _clear_refresh_cookie(response)

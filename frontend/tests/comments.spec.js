@@ -288,3 +288,153 @@ test("deleting a post takes its comments with it", async ({ page, api }) => {
   expect(left[0].content).toBe("Said on the other one.");
   expect(String(left[0].post_id)).toBe(survivor);
 });
+
+
+// ---------------------------------------------------------------------------
+// Replying — one level, deliberately
+// ---------------------------------------------------------------------------
+//
+// The depth is declared in the API's schema (a ReplyOut has no replies) and
+// drawn here by position: a reply is indented under what it answers and has no
+// Reply control of its own. These check both halves, and the counting, which
+// is the part with two numbers behind it.
+
+const replies = (page) => page.locator(".comment--reply");
+
+async function replyTo(page, index, words) {
+  await page.locator(".comment__reply").nth(index).click();
+  const form = page.locator(".composer--reply");
+  await expect(form).toBeVisible();
+  await form.locator("textarea").fill(words);
+  await form.getByRole("button", { name: "Reply", exact: true }).click();
+}
+
+test("a reply lands under what it answers", async ({ page, api }) => {
+  await register(page, uniqueEmail("reply"));
+  await writePost(page, "A wall");
+  await say(page, "Still standing?");
+  await settled(page);
+
+  await replyTo(page, 0, "Two winters now.");
+  await settled(page);
+
+  await expect(replies(page)).toHaveCount(1);
+  await expect(replies(page)).toHaveText(/Two winters now\./);
+  // Inside the conversation it answers, not loose in the thread.
+  await expect(
+    page.locator(".comments__list > .comment").first().locator(".comment__replies .comment")
+  ).toHaveCount(1);
+  await expect(page.locator(".comments__list > .comment")).toHaveCount(1);
+});
+
+test("it survives a reload, which is where the optimistic row stops helping", async ({
+  page,
+  api,
+}) => {
+  await register(page, uniqueEmail("replyreload"));
+  await writePost(page, "A wall");
+  await say(page, "Still standing?");
+  await settled(page);
+  await replyTo(page, 0, "Two winters now.");
+  await settled(page);
+
+  await page.reload();
+  await expect(page.locator(".detail__title")).toBeVisible();
+  await expect(replies(page)).toHaveCount(1);
+  await expect(replies(page)).toHaveText(/Two winters now\./);
+});
+
+test("a reply has no Reply of its own", async ({ page, api }) => {
+  await register(page, uniqueEmail("onelevel"));
+  await writePost(page, "A wall");
+  await say(page, "Still standing?");
+  await settled(page);
+  await replyTo(page, 0, "Two winters now.");
+  await settled(page);
+
+  // One conversation, one reply, and exactly one control — on the conversation.
+  await expect(page.locator(".comment__reply")).toHaveCount(1);
+  await expect(replies(page).locator(".comment__reply")).toHaveCount(0);
+});
+
+test("the heading counts everything said, not just the conversations", async ({
+  page,
+  api,
+}) => {
+  await register(page, uniqueEmail("counting"));
+  await writePost(page, "A wall");
+  await say(page, "One.");
+  await settled(page);
+  await expect(page.locator(".comments__count")).toHaveText("1");
+
+  await replyTo(page, 0, "Two.");
+  await settled(page);
+  await expect(page.locator(".comments__count")).toHaveText("2");
+
+  await say(page, "Three.");
+  await settled(page);
+  await expect(page.locator(".comments__count")).toHaveText("3");
+
+  // And the number a reload produces is the same one, which is the bit the
+  // optimistic counting could get wrong.
+  await page.reload();
+  await expect(page.locator(".detail__title")).toBeVisible();
+  await expect(page.locator(".comments__count")).toHaveText("3");
+});
+
+test("removing a conversation takes what was said back to it", async ({ page, api }) => {
+  await register(page, uniqueEmail("cascade"));
+  await writePost(page, "A wall");
+  await say(page, "One.");
+  await settled(page);
+  await replyTo(page, 0, "Two.");
+  await settled(page);
+  await expect(page.locator(".comments__count")).toHaveText("2");
+
+  await page.locator(".comment__remove").first().click();
+  await page.locator(".comment__remove").first().click();
+  await expect(comments(page)).toHaveCount(0);
+  // Not "1 left" — the reply went with it, at the database and on screen.
+  await expect(page.locator(".comments__count")).toHaveText("");
+  await expect(page.locator(".comments__status")).toBeVisible();
+});
+
+test("only one reply box is open at a time", async ({ page, api }) => {
+  await register(page, uniqueEmail("onebox"));
+  await writePost(page, "A wall");
+  await say(page, "One.");
+  await settled(page);
+  await say(page, "Two.");
+  await settled(page);
+
+  await page.locator(".comment__reply").first().click();
+  await expect(page.locator(".composer--reply")).toHaveCount(1);
+  await page.locator(".comment__reply").last().click();
+  // Two open boxes is a question about which one you are typing in.
+  await expect(page.locator(".composer--reply")).toHaveCount(1);
+});
+
+test("cancelling puts the thread back", async ({ page, api }) => {
+  await register(page, uniqueEmail("cancel"));
+  await writePost(page, "A wall");
+  await say(page, "One.");
+  await settled(page);
+
+  await page.locator(".comment__reply").click();
+  await expect(page.locator(".composer--reply")).toBeVisible();
+  await page.locator(".composer--reply").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".composer--reply")).toHaveCount(0);
+  await expect(page.locator(".comment__reply")).toBeVisible();
+});
+
+test("a signed-out reader is offered nothing to reply with", async ({ page, api }) => {
+  await register(page, uniqueEmail("anon"));
+  const id = await writePost(page, "A wall");
+  await say(page, "One.");
+  await settled(page);
+  await signOut(page);
+
+  await page.goto(`/#/posts/${id}`);
+  await expect(comments(page)).toHaveCount(1);
+  await expect(page.locator(".comment__reply")).toHaveCount(0);
+});

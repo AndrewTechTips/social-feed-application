@@ -336,6 +336,56 @@ class State:
             return "forged"
         return row["email"], f"{family}.{self.rotate_in_place(family)}", row["csrf"]
 
+    def close_all_sessions(self, email: str) -> int:
+        """Mirrors oauth2.close_all_refresh_sessions. Revoked, not dropped —
+        a revoked family is what lets a cookie presented later be answered
+        with "that session is over" rather than "no such session"."""
+        count = 0
+        for row in self.sessions.values():
+            if row["email"] == email and not row["revoked"]:
+                row["revoked"] = True
+                count += 1
+        return count
+
+    def delete_user(self, email: str) -> None:
+        """Mirrors what the real backend gets from ON DELETE CASCADE.
+
+        Written out by hand here because a dict has no foreign keys, which is
+        exactly why it is worth checking the list against models.py rather than
+        against memory: posts, the comments under them, the comments left
+        elsewhere, votes, sessions and tokens. Six, and the easy one to forget
+        is the fourth — a comment that points away from you, under somebody
+        else's post.
+        """
+        mine = [pid for pid, row in self.posts.items() if row["author_email"] == email]
+        for pid in mine:
+            self.posts.pop(pid, None)
+        self.comments = {
+            cid: row
+            for cid, row in self.comments.items()
+            if row["author_email"] != email and row["post_id"] not in mine
+        }
+        # And the replies to what just went, which is the second step of a
+        # cascade the database would have walked on its own.
+        while True:
+            orphans = [
+                cid
+                for cid, row in self.comments.items()
+                if row.get("parent_id") and row["parent_id"] not in self.comments
+            ]
+            if not orphans:
+                break
+            for cid in orphans:
+                self.comments.pop(cid, None)
+        self.votes = {(e, pid) for (e, pid) in self.votes if e != email and pid not in mine}
+        self.sessions = {
+            fam: row for fam, row in self.sessions.items() if row["email"] != email
+        }
+        self.tokens = {
+            tok: pair for tok, pair in self.tokens.items() if pair[0] != email
+        }
+        self.users.pop(email, None)
+
     def close_session(self, raw: str | None, csrf: str | None) -> None:
         family, _, secret = (raw or "").partition(".")
         row = self.sessions.get(family)
@@ -409,23 +459,42 @@ class State:
         return row
 
     # — comments ------------------------------------------------------------------
-    def comment_out(self, row: dict) -> dict:
+    def comment_out(self, row: dict, with_replies: bool = False) -> dict:
+        """One comment. `with_replies` is what makes it a conversation rather
+        than a message — mirrors CommentOut vs ReplyOut in schemas.py, where the
+        one-level rule lives: a reply has no replies of its own."""
         author = row["author_email"]
-        return {
+        out = {
             "id": row["id"],
             "content": row["content"],
             "created_at": row["created_at"],
             "post_id": row["post_id"],
             "user_id": self.users[author]["id"],
             "user": self.public_user(author),
+            "parent_id": row.get("parent_id"),
         }
+        if with_replies:
+            out["replies"] = [self.comment_out(r) for r in self.replies_to(row["id"])]
+        return out
 
-    def add_comment(self, post_id: int, author_email: str, content: str) -> dict:
+    def replies_to(self, comment_id: int) -> list[dict]:
+        rows = [r for r in self.comments.values() if r.get("parent_id") == comment_id]
+        rows.sort(key=lambda r: (r["created_at"], r["id"]))
+        return rows
+
+    def add_comment(
+        self,
+        post_id: int,
+        author_email: str,
+        content: str,
+        parent_id: int | None = None,
+    ) -> dict:
         row = {
             "id": self.next_comment_id,
             "post_id": post_id,
             "author_email": author_email,
             "content": content,
+            "parent_id": parent_id,
             # offset by the id so created_at ordering is stable and distinct,
             # the same trick add_post uses
             "created_at": now_iso(offset_seconds=self.next_comment_id),
@@ -434,11 +503,21 @@ class State:
         self.next_comment_id += 1
         return row
 
-    def comments_on(self, post_id: int) -> list[dict]:
+    def comments_on(self, post_id: int, top_level_only: bool = False) -> list[dict]:
         """Oldest first — a thread is read top to bottom."""
-        rows = [r for r in self.comments.values() if r["post_id"] == post_id]
+        rows = [
+            r
+            for r in self.comments.values()
+            if r["post_id"] == post_id
+            and not (top_level_only and r.get("parent_id") is not None)
+        ]
         rows.sort(key=lambda r: (r["created_at"], r["id"]))
         return rows
+
+    def drop_replies_to(self, comment_id: int) -> None:
+        """What the ON DELETE CASCADE on comments.parent_id does."""
+        for rid in [r["id"] for r in self.replies_to(comment_id)]:
+            self.comments.pop(rid, None)
 
     def drop_comments_on_post(self, post_id: int) -> None:
         """ON DELETE CASCADE, by hand. The real schema does this in Postgres;
@@ -668,6 +747,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._register(self._json())
         if path == "/users/me" and method == "GET":
             return self._me()
+        if path == "/users/me" and method == "PATCH":
+            return self._update_me(self._json())
+        if path == "/users/me" and method == "DELETE":
+            return self._delete_me()
 
         m = re.match(r"^/users/([^/]+)/posts$", path)
         if m and method == "GET":
@@ -681,6 +764,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._refresh()
         if path == "/auth/logout" and method == "POST":
             return self._logout()
+        if path == "/auth/logout-all" and method == "POST":
+            return self._logout_everywhere()
         if path == "/posts/" and method == "GET":
             return self._list_posts(query)
         if path == "/posts/" and method == "POST":
@@ -783,6 +868,63 @@ class Handler(BaseHTTPRequestHandler):
                 "created_at": user["created_at"],
             },
         )
+
+    def _update_me(self, data: dict) -> None:
+        """Change the name everybody else sees. Only the username.
+
+        Nothing else moves, and here that is structural rather than a promise:
+        every row in this mock is joined to its author by *email*, which is the
+        stand-in for the real backend's user id. A rename that lost a post
+        would have to be a bug in this function specifically.
+        """
+        email = self._require_auth()
+        if not email:
+            return
+        wanted = (data.get("username") or "").strip().lower()
+        if not USERNAME_RE.match(wanted) or wanted in RESERVED_USERNAMES:
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["body", "username"],
+                            "msg": "3–20 characters: letters, digits, - and _, starting with a letter",
+                            "type": "value_error",
+                        }
+                    ]
+                },
+            )
+        user = ST.users[email]
+        if wanted != user["username"]:
+            taken = ST.user_by_username(wanted)
+            if taken:
+                return self._send(409, {"detail": "That username is taken"})
+            user["username"] = wanted
+        self._send(
+            200,
+            {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "created_at": user["created_at"],
+            },
+        )
+
+    def _delete_me(self) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        ST.delete_user(email)
+        self._send(204, None, cookie=self._cleared_cookie())
+
+    def _logout_everywhere(self) -> None:
+        """Authenticated with the access token, not the cookie — which is the
+        whole difference between this and /auth/logout."""
+        email = self._require_auth()
+        if not email:
+            return
+        ST.close_all_sessions(email)
+        self._send(204, None, cookie=self._cleared_cookie())
 
     def _profile(self, username: str) -> None:
         user = ST.user_by_username(username)
@@ -888,24 +1030,29 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
 
-        as_of = None
-        raw_as_of = query.get("as_of", [None])[0]
-        if raw_as_of is not None and only_author is None:
+        # A window: `as_of` closes it at the top, `since` opens it at the
+        # bottom. Both feed-only, for the reason given above.
+        bounds: dict[str, datetime | None] = {"as_of": None, "since": None}
+        for name in bounds:
+            raw = query.get(name, [None])[0]
+            if raw is None or only_author is not None:
+                continue
             try:
-                as_of = datetime.fromisoformat(raw_as_of)
+                bounds[name] = datetime.fromisoformat(raw)
             except ValueError:
                 return self._send(
                     422,
                     {
                         "detail": [
                             {
-                                "loc": ["query", "as_of"],
+                                "loc": ["query", name],
                                 "msg": "Input should be a valid datetime or date",
                                 "type": "datetime_from_date_parsing",
                             }
                         ]
                     },
                 )
+        as_of, since = bounds["as_of"], bounds["since"]
         if len(search) > 100:  # matches max_length on the real endpoint
             return self._send(
                 422,
@@ -921,6 +1068,8 @@ class Handler(BaseHTTPRequestHandler):
             if self._may_see(r, viewer)
             and (only_author is None or r["author_email"] == only_author)
             and (as_of is None or datetime.fromisoformat(r["created_at"]) <= as_of)
+            # Exclusive: the anchor is a post the reader already has.
+            and (since is None or datetime.fromisoformat(r["created_at"]) > since)
         ]
 
         if terms:
@@ -1098,15 +1247,26 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
 
-        rows = ST.comments_on(pid)
+        # The page is over conversations; replies come with their parent. See
+        # the long note on get_comments in backend/app/routers/comment.py.
+        rows = ST.comments_on(pid, top_level_only=True)
         total = len(rows)
+        total_replies = sum(
+            1
+            for r in ST.comments.values()
+            if r["post_id"] == pid and r.get("parent_id") is not None
+        )
         pages = (total + page_size - 1) // page_size if total else 0
         start = (page - 1) * page_size
         self._send(
             200,
             {
-                "items": [ST.comment_out(r) for r in rows[start : start + page_size]],
+                "items": [
+                    ST.comment_out(r, with_replies=True)
+                    for r in rows[start : start + page_size]
+                ],
                 "total": total,
+                "total_replies": total_replies,
                 "page": page,
                 "page_size": page_size,
                 "pages": pages,
@@ -1149,7 +1309,17 @@ class Handler(BaseHTTPRequestHandler):
                     ]
                 },
             )
-        row = ST.add_comment(pid, email, content)
+        parent_id = data.get("parent_id")
+        if parent_id is not None:
+            parent = ST.comments.get(parent_id)
+            if parent is None or parent["post_id"] != pid:
+                return self._send(
+                    404, {"detail": f"Comment with id: {parent_id} does not exist"}
+                )
+            if parent.get("parent_id") is not None:
+                return self._send(400, {"detail": "Replies go one level deep"})
+
+        row = ST.add_comment(pid, email, content, parent_id)
         self._send(201, ST.comment_out(row))
 
     def _delete_comment(self, cid: int) -> None:
@@ -1165,6 +1335,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(
                 403, {"detail": "Not authorized to perform requested action"}
             )
+        # The cascade the database does, done here too.
+        ST.drop_replies_to(cid)
         del ST.comments[cid]
         self._send(204, None)
 

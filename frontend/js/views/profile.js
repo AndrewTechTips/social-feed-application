@@ -35,7 +35,19 @@ export function renderProfile({ params, isStale }) {
       "div",
       { class: "stack" },
       h("h1", { class: "profile__name" }, username),
-      h("p", { class: "profile__count" }, " ")
+      h("p", { class: "profile__count" }, " "),
+      // Only on your own. This is the screen somebody is on when they are
+      // thinking about themselves, which makes it the one place a link to the
+      // account screen is where you would have looked for it — the header is
+      // full, and the masthead that carries the colophon link is shown to
+      // signed-out visitors only.
+      get("session")?.username === username.toLowerCase()
+        ? h(
+            "p",
+            { class: "profile__more" },
+            h("a", { href: "#/settings" }, "Your account")
+          )
+        : null
     )
   );
 

@@ -120,6 +120,47 @@
   border-bottom-color: var(--accent);
 }
 
+/* — what has arrived while you were here ----------------------------------------
+   A pill at the top of the feed, and the one piece of chrome in this app that
+   appears without being asked for. So it is quiet about it: it is the shape of
+   a control rather than a notification, it carries no dot and no colour beyond
+   the accent's "where you are", and it is gone the moment it has been used.
+
+   Sticky rather than fixed. It belongs to the top of the list — press it and
+   the page goes there — so it rides with the list and stops under the header
+   instead of floating in front of the page.
+   -------------------------------------------------------------------------- */
+.feed__new {
+  position: sticky;
+  top: calc(var(--header-h) + var(--s-3));
+  z-index: 3;
+  align-self: center;
+  display: block;
+  margin: 0 auto var(--s-4);
+  min-height: 36px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-pill);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  transition: background-color var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .feed__new:hover {
+    background: var(--surface-solid);
+  }
+}
+.feed__new[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .feed__list {
   display: flow-root;
 }
@@ -757,6 +798,62 @@
   opacity: 0.55;
 }
 
+/* — what was said back ----------------------------------------------------------
+   One level, and the indentation is the whole of the drawing: a hairline down
+   the left of the thread, and the replies set in from the words they answer
+   rather than from the avatar. Anything more — a second border, a tint, a
+   connector — would be decorating a relationship the position already states.
+
+   The indent is deliberately modest. It is the only nesting this app has, so
+   it never has to survive being applied twice, and forty pixels off a 320px
+   screen is forty pixels of measure.
+   -------------------------------------------------------------------------- */
+.comment__replies {
+  list-style: none;
+  padding-inline-start: var(--s-4);
+  margin-top: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  border-inline-start: 1px solid var(--border);
+}
+.comment__replies:empty {
+  display: none;
+}
+
+/* Quiet until you want it: a live control under every comment in the thread
+   would read as a toolbar down the page. Same treatment the remove control
+   gets, and on touch — where there is no hover — both are simply always
+   there. */
+.comment__replywrap {
+  margin-top: var(--s-2);
+}
+.comment__reply {
+  padding: var(--s-1) 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition: color var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .comment:hover > .comment__body > .comment__replywrap .comment__reply,
+  .comment__reply:focus-visible {
+    color: var(--text-dim);
+  }
+  .comment__reply:hover {
+    color: var(--text);
+  }
+}
+.comment__reply:active {
+  color: var(--text);
+}
+.composer--reply {
+  margin-top: var(--s-3);
+}
+
 /* — read on ---------------------------------------------------------------------
    Two links into the list the reader arrived from, at the end of the page.
 
@@ -1043,4 +1140,100 @@
   .detail__actions {
     flex-direction: column;
   }
+}
+
+/* — your account ----------------------------------------------------------------
+   A narrow column of titled blocks, ordered from the reversible to the
+   permanent. It borrows the colophon's measure rather than the feed's, because
+   what is on it is prose and form fields rather than cards — and the form
+   fields are the ones from the sign-in screen, unchanged, so that a text box on
+   this screen behaves exactly like the text box somebody already used to get
+   here.
+   -------------------------------------------------------------------------- */
+.settings {
+  width: 100%;
+  max-width: var(--col-max);
+  margin-inline: auto;
+}
+.settings__head {
+  margin-bottom: var(--s-8);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+}
+.settings__title {
+  font-size: var(--fs-h1);
+  margin-bottom: var(--s-3);
+}
+.settings__line {
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+.settings__section {
+  margin-bottom: var(--s-8);
+  padding-bottom: var(--s-7);
+  border-bottom: 1px solid var(--border);
+}
+/* The last block is the destructive one, and a rule under it would read as a
+   line above whatever came next — there is nothing next. */
+.settings__section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.settings__heading {
+  font-size: var(--fs-h2);
+  margin-bottom: var(--s-3);
+}
+.settings__blurb {
+  max-width: var(--measure);
+  margin-bottom: var(--s-5);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.55;
+}
+.settings__form {
+  max-width: 30rem;
+}
+/* The email. Set in the reading face because it is content — the one piece of
+   the account that is shown rather than edited. */
+.settings__value {
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  margin-bottom: var(--s-3);
+  overflow-wrap: anywhere;
+}
+.settings__note {
+  max-width: var(--measure);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.55;
+}
+.settings__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+/* Both buttons do fit side by side at 320px — that is the problem. A thumb
+   aimed at "Keep it" lands a few millimetres from "Delete my account", and of
+   the two mistakes only one is recoverable. So below the project's narrow
+   breakpoint they stack and go full width: two unmissable targets with a gap
+   between them instead of two small ones in a row. */
+@media (max-width: 380px) {
+  .settings__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+.settings__loading {
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+
+/* The one link on your own profile that isn't a post. Same weight and the same
+   restraint as the colophon offer under the masthead: one line, at meta size,
+   the last thing in the block. */
+.profile__more {
+  margin-top: var(--s-2);
+  font-size: var(--fs-meta);
 }

@@ -211,6 +211,9 @@ class Comment(Base):
     __table_args__ = (
         Index("ix_comments_post_id_created_at", "post_id", "created_at"),
         Index("ix_comments_user_id", "user_id"),
+        # "the replies to comment N" is asked once per conversation on every
+        # page of every thread, which is often enough to index.
+        Index("ix_comments_parent_id", "parent_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -225,5 +228,31 @@ class Comment(Base):
     # happened to have loaded.
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # What this is a reply to, or null for something said to the post itself.
+    #
+    # **One level, and the schema is what says so** — see ReplyOut in
+    # schemas.py, which has no replies of its own. Unbounded nesting is a
+    # rendering problem, an indentation problem on a phone and a moderation
+    # problem, and on a feed this size it buys nothing. Declaring the depth in
+    # the types rather than only enforcing it in a handler means the shape is
+    # visible to anybody reading the contract.
+    #
+    # The cascade is at the database for the reason written above: a comment
+    # that goes takes the replies to it whoever issued the DELETE.
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), nullable=True
+    )
 
     user: Mapped["User"] = relationship()
+    # passive_deletes because the database is already doing it. Without it
+    # SQLAlchemy loads every reply in order to delete them one at a time, which
+    # is the ORM redoing the work and getting a different answer for any row it
+    # happened not to have loaded.
+    replies: Mapped[list["Comment"]] = relationship(
+        back_populates="parent",
+        passive_deletes=True,
+        order_by="Comment.created_at, Comment.id",
+    )
+    parent: Mapped["Comment | None"] = relationship(
+        back_populates="replies", remote_side="Comment.id"
+    )

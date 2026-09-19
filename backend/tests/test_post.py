@@ -385,3 +385,77 @@ def test_sorting_leaves_the_visibility_rules_alone(anonymous_client, own_draft):
     for sort in ("new", "warm", "discussed"):
         page = anonymous_client.get(f"/posts/?sort={sort}").json()
         assert own_draft.id not in [p["id"] for p in page["items"]]
+
+
+# ── the other end of the window ────────────────────────────────────────────
+#
+# `as_of` closes the window at the top so a scroll holds still. `since` opens
+# it at the bottom, so one request can answer "how many have arrived?" — which
+# is the whole of what a "new posts" control needs.
+
+
+def test_since_counts_what_has_arrived(authorized_client, test_posts):
+    from urllib.parse import quote
+
+    now = authorized_client.get("/posts/").json()
+    anchor = now["items"][0]["created_at"]
+    assert authorized_client.get(f"/posts/?since={quote(anchor)}").json()["total"] == 0
+
+    authorized_client.post("/posts/", json={"title": "one", "content": "a"})
+    authorized_client.post("/posts/", json={"title": "two", "content": "b"})
+
+    # One page of one is enough: the envelope's total is the answer, and the
+    # item is only there because a page has to have a shape.
+    asked = authorized_client.get(f"/posts/?page_size=1&since={quote(anchor)}").json()
+    assert asked["total"] == 2
+    assert len(asked["items"]) == 1
+    assert asked["items"][0]["title"] == "two"  # newest first, as ever
+
+
+def test_since_is_exclusive_so_the_anchor_itself_is_not_new(
+    authorized_client, test_posts
+):
+    """The anchor is a post the reader already has. `>` rather than `>=`, or
+    every poll would report the newest thing on screen as news."""
+    from urllib.parse import quote
+
+    anchor = authorized_client.get("/posts/").json()["items"][0]["created_at"]
+    assert authorized_client.get(f"/posts/?since={quote(anchor)}").json()["total"] == 0
+
+
+def test_since_and_as_of_are_one_window(authorized_client, test_posts, session):
+    """Aged by hand, because the fixture inserts all four in one transaction and
+    `now()` is the transaction's clock — so out of the box they share a
+    timestamp to the microsecond and there is no window to open."""
+    from urllib.parse import quote
+
+    for hours, post in enumerate(test_posts):
+        _aged(session, post, hours + 1)
+
+    page = authorized_client.get("/posts/").json()
+    newest = page["items"][0]["created_at"]
+    oldest = page["items"][-1]["created_at"]
+
+    both = authorized_client.get(
+        f"/posts/?since={quote(oldest)}&as_of={quote(newest)}"
+    ).json()
+    # Everything except the one at the bottom, which the exclusive lower bound
+    # leaves out. `as_of` is inclusive, so the newest stays.
+    assert both["total"] == page["total"] - 1
+    assert newest in [p["created_at"] for p in both["items"]]
+
+
+def test_since_leaves_the_visibility_rules_alone(
+    anonymous_client, authorized_client, own_draft
+):
+    from urllib.parse import quote
+
+    long_ago = "2000-01-01T00:00:00+00:00"
+    mine = authorized_client.get(f"/posts/?since={quote(long_ago)}").json()
+    assert own_draft.id in [p["id"] for p in mine["items"]]
+    theirs = anonymous_client.get(f"/posts/?since={quote(long_ago)}").json()
+    assert own_draft.id not in [p["id"] for p in theirs["items"]]
+
+
+def test_a_bad_since_is_a_422(authorized_client, test_posts):
+    assert authorized_client.get("/posts/?since=whenever").status_code == 422

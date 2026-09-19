@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, UTC
 
 import jwt
-from fastapi import Depends, Request, status, HTTPException
+from fastapi import Depends, Request, Response, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
@@ -288,6 +288,53 @@ def rotate_refresh_session(
     token = _rotate(row)
     db.commit()
     return user, token, row.csrf_token
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    """Expire the cookie, with the same flags it was set with.
+
+    The flags matter on the way out as much as on the way in: a browser will
+    only replace a cookie with one whose name, path and domain match, so
+    clearing it with a different path leaves the original sitting there.
+
+    It lives here rather than beside the route that sets it because there are
+    now three ways to stop being signed in — one browser, every browser, and
+    deleting the account — and two of them are in a different module. One
+    parameter drifting apart between them leaves a cookie outliving the session
+    it names, which is the bug the matching flags exist to prevent.
+    """
+    response.delete_cookie(
+        key=REFRESH_COOKIE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        samesite="lax",
+        secure=settings.secure_cookies,
+    )
+
+
+def close_all_refresh_sessions(db: Session, user: models.User) -> int:
+    """Revoke every live session this person has, on every machine.
+
+    The reason there is a table here at all. A stateless refresh token cannot
+    be taken back, so "sign out everywhere" would have been a checkbox that
+    cleared one cookie and lied about the rest; revocation is a column, and
+    this is the operation it was put there for.
+
+    Revoked rather than deleted, the same way a single sign-out is: a revoked
+    row is what lets a later presentation of the same cookie be answered with
+    "that session is over" rather than "no such session".
+    """
+    rows = db.scalars(
+        select(models.RefreshSession).where(
+            models.RefreshSession.user_id == user.id,
+            models.RefreshSession.revoked_at.is_(None),
+        )
+    ).all()
+    now = datetime.now(UTC)
+    for row in rows:
+        row.revoked_at = now
+    db.commit()
+    return len(rows)
 
 
 def close_refresh_session(db: Session, raw: str | None, csrf_token: str | None) -> None:
