@@ -170,6 +170,46 @@ function transitionEnded() {
 }
 
 /**
+ * Cross-fade the whole page over a change that isn't a navigation.
+ *
+ * The room changing light rather than the reader changing room, which is a
+ * different movement and needs a different one: `tryTransition` above is tuned
+ * for going somewhere — the outgoing screen holds still, the incoming one
+ * rises four pixels — and applied to a theme flip that rise reads as the page
+ * being replaced by a copy of itself. So this marks the document for the
+ * duration and base.css swaps in a symmetric fade with no travel.
+ *
+ * The flag goes on *before* the transition is asked for, which is what lets
+ * base.css do the rest of the work: styles set now are the ones captured in the
+ * old snapshot, so a rule keyed off it can also take the name off the header
+ * and fold the chrome back into the page for the duration.
+ *
+ * Returns true if it took the swap. False means it did nothing and the caller
+ * still has to apply the change itself — same contract as tryTransition, for
+ * the same reason.
+ *
+ * @param {() => void} swap
+ */
+export function crossFade(swap) {
+  if (!canMorph()) return false;
+
+  const root = document.documentElement;
+  root.dataset.themeShift = "";
+  transitionStarted();
+  const transition = document.startViewTransition(swap);
+
+  transition.ready.catch(() => {});
+  transition.updateCallbackDone.catch(() => {});
+  transition.finished
+    .catch(() => {})
+    .then(() => {
+      transitionEnded();
+      delete root.dataset.themeShift;
+    });
+  return true;
+}
+
+/**
  * Run a DOM swap inside a view transition, if one is possible and wanted.
  *
  * Returns true if it took the swap — false means it did nothing at all and the

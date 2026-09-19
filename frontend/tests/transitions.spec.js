@@ -109,6 +109,70 @@ test("the chrome stays put instead of cross-fading with the page", async ({ page
   ).toBe("site-header");
 });
 
+// ── the lights coming up ───────────────────────────────────────────────────
+// A theme change is the one transition that isn't a navigation. It gets its own
+// recipe (a symmetric fade, no travel) and its own flag, and the flag is the
+// part with teeth: it has to be on while the snapshots are taken and off again
+// afterwards, or the *next* page change inherits a theme change's animation.
+
+const themeButton = (page) => page.getByRole("button", { name: /Switch to .* theme/ });
+const theme = (page) => page.evaluate(() => document.documentElement.dataset.theme);
+
+test("changing the theme cross-fades the room", async ({ page, api }) => {
+  await countTransitions(page);
+  await api.seed(2);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(2);
+  if (!(await supported(page))) test.skip();
+
+  const before = await theme(page);
+  await themeButton(page).click();
+
+  expect(await started(page)).toBe(1);
+  await expect.poll(() => theme(page)).not.toBe(before);
+});
+
+test("the flag it animates by does not outlive the transition", async ({ page, api }) => {
+  // It keys a different animation onto ::view-transition-*(root). Left behind,
+  // every subsequent navigation would fade like a theme change — and it would
+  // be invisible in review, because nothing about the theme would be wrong.
+  await api.seed(2);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(2);
+
+  await themeButton(page).click();
+  await expect
+    .poll(() => page.evaluate(() => "themeShift" in document.documentElement.dataset))
+    .toBe(false);
+});
+
+test("the header joins the fade instead of sitting it out", async ({ page, api }) => {
+  // It normally carries its own view-transition-name so that the chrome holds
+  // still while the page under it changes. On a theme change the chrome changes
+  // colour too, so it has to give the name up — and that has to happen before
+  // the snapshot, which means it is checked while the transition is running.
+  await api.seed(2);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(2);
+  if (!(await supported(page))) test.skip();
+
+  const named = page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const real = document.startViewTransition.bind(document);
+        document.startViewTransition = (cb) =>
+          real(() => {
+            // Inside the callback the old snapshot has been taken, so this is
+            // the value it was taken with.
+            resolve(getComputedStyle(document.querySelector(".site-header")).viewTransitionName);
+            cb();
+          });
+      })
+  );
+  await themeButton(page).click();
+  expect(await named).toBe("none");
+});
+
 test.describe("reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 
@@ -125,6 +189,26 @@ test.describe("reduced motion", () => {
     // can't reach ::view-transition-* from the blanket rule in base.css — so
     // the decision has to be made before starting one, and this proves it is.
     expect(await started(page)).toBe(0);
+  });
+
+  test("and none for a theme change either, which still changes the theme", async ({
+    page,
+    api,
+  }) => {
+    await countTransitions(page);
+    await api.seed(2);
+    await page.goto("/");
+    await expect(page.locator(CARD)).toHaveCount(2);
+
+    const before = await page.evaluate(() => document.documentElement.dataset.theme);
+    await page.getByRole("button", { name: /Switch to .* theme/ }).click();
+
+    // The decision is made before a transition is started, and the flip still
+    // happens unwrapped — which is what it always was.
+    expect(await started(page)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).not.toBe(
+      before
+    );
   });
 });
 

@@ -23,6 +23,55 @@ about the reader.
 
 ### Added
 
+- **The lights come up.** Changing the theme cross-fades the whole page instead
+  of snapping. Every colour is a custom property, so the flip is one attribute
+  and the repaint is instantaneous — which is exactly why it read as a glitch.
+  It gets its own recipe rather than the page-change one: both ends fade and
+  neither travels, because a theme change is one picture of the room dissolving
+  into another rather than a journey to a different room. The header gives up
+  its own snapshot for the duration, so the chrome changes colour with
+  everything else instead of holding its old palette while the rest crosses
+  over. Skipped entirely under `prefers-reduced-motion`, which the View
+  Transitions API does not consult on its own.
+
+- **⌥1 to ⌥5 run the first five rows of the palette.** Alt rather than a bare
+  digit: the palette is a text field, and taking `3` away from it would mean no
+  post whose title starts with a number could ever be searched for. ⌘1–⌘8
+  belongs to the browser's tab bar and a page cannot reliably take it back.
+  Matched on `event.code`, because on a Mac Alt+1 arrives as `¡`.
+
+- **A profile comes back where you left it**, which the feed has done for a
+  while and the profile did not. That meant the store had to hold more than one
+  list: with a single slot, visiting a profile on the way back to the feed
+  would have evicted the feed. It holds four now — enough for the feed under
+  two orderings, a profile, and the search you came from.
+
+- **The composer says what you have written, not how close you are to a wall.**
+  `1,234 / 5,000` became `312 words, about 2 min`, from the same
+  `readingMinutes` the card and the post screen use — so the figure a writer
+  watches is the figure a reader will be shown. The character count is not
+  gone; it appears within four hundred characters of the limit, which is far
+  enough ahead to cut a paragraph rather than a sentence.
+
+- **A half-written post survives the tab.** The composer keeps what you type in
+  `commons.draft`, debounced at half a second, flushed on `pagehide` and
+  `visibilitychange` because a phone reclaiming a tab never fires unload. Come
+  back and the form is as you left it, above one line — *Picked up where you
+  left off* — and a way to start fresh. It is cleared once the server has the
+  post and **not** before: the write that fails is the one moment the words
+  exist nowhere else, so that path flushes them to disk instead. Stamped with
+  who typed it, for the reason the feed cache is. New posts only; editing an
+  existing post already has somewhere to keep its words.
+
+- **The empty states ask for something.** A search that found nothing says that
+  it looks at titles and bodies and to try one word rather than several. An
+  empty feed invites a signed-in reader to be the first and tells a signed-out
+  one to sign in, rather than offering a door that is locked. A stranger's
+  empty profile names them — *bea hasn't posted anything yet* — because
+  "Nothing here yet" on somebody's profile reads like a page that failed to
+  load.
+
+
 - **Your account.** A screen at `#/settings` with the three things you can do to
   one, in the order that runs from the reversible to the permanent: change the
   name everybody sees, sign out everywhere, delete the account.
@@ -313,6 +362,29 @@ about the reader.
   Said plainly in the README and the ADR rather than papered over.
 
 ### Fixed
+
+- **Any list could be torn down by an event that changed nothing, and the
+  profile usually was.** `hashchange` fires once per *event*, not once per
+  screen, and two navigations in quick succession queue two events that both
+  read the same final hash. The router already dedupes the second one — it
+  builds no new screen — but every list view had hung its own teardown on a
+  plain `hashchange` listener, which ran anyway and disconnected the observer
+  and aborted the in-flight fetch of the screen that was still on the page.
+
+  Signing out navigates home, so signing out and then opening a profile hit it
+  almost every time: heading drawn, skeletons drawn, and nothing ever replacing
+  them. Nothing logged and nothing threw. The check the router makes for itself
+  is now made for the views too, in `onLeavingScreen`.
+
+- **Coming back to a list landed about four hundred pixels too high.** The
+  position was read at teardown, and by then the page had moved: activating a
+  card focuses its link, and the browser scrolls a focused element clear of the
+  sticky header before any of our code runs. Measured on the feed, leaving from
+  900px cached 498. It is now taken at the last moment it is still the
+  reader's — the press that starts the navigation — and only trusted for a
+  second afterwards, so a navigation nobody pressed for still falls back to
+  asking the window.
+
 
 - **The danger red failed AA on every light surface.** `--danger` was `#c0492f`,
   which measures 4.37:1 against `--bg` — under the 4.5:1 small text needs. It

@@ -1284,3 +1284,34 @@
     min-height: 44px;
   }
 }
+
+/* The row's ordinal — ⌥1 to ⌥5 — at the head of the row.
+   Quieter than .palette__key on the right: that one is a shortcut that works
+   anywhere in the app and is worth advertising, this one is a position in a
+   list that is already on screen. No border, so the two don't read as a pair
+   of keys with the label stranded between them. */
+.palette__ordinal {
+  flex: none;
+  width: 2.1em;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+/* Rows past the fifth keep the same indent rather than sliding left, so the
+   labels stay in one column and the numbers read as running out rather than as
+   a change of layout. */
+.palette__ordinal--none {
+  visibility: hidden;
+}
+
+/* The character count, which only appears within four hundred characters of
+   the limit. Set apart from the words-and-minutes line beside it so that the
+   two read as two facts rather than one run-on: this one is about the wall
+   ahead, and it arrives with a rule to mark that it wasn't there a moment ago. */
+.counter--limit {
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}

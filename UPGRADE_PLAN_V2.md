@@ -443,6 +443,7 @@ The accumulation of these is what makes software feel expensive.
 | **Follows / a social graph** | Unchanged: fourteen seeded posts can't populate a graph. §6.4 (replies) gives you the social depth at a tenth of the cost. |
 | **Infinite comment nesting** | §6.4 explains the judgement. One level, deliberately. |
 | **WebSockets** | §5.3 explains the arithmetic. Revisit only if the feed ever changes more than a few times a minute, which it won't. |
+| **Optimistic post creation** | Listed in §8 and dropped on 2026-09-19, after draft autosave shipped. The argument for it was that the wait is the one write still making you wait and that a failed write loses your words; the second half is no longer true — `commons.draft` keeps them through a failure, a reload and a closed tab. What is left is saving one request's latency, paid for with a provisional card in the feed's cache, its `as_of` window and the new-posts pill, and with a change to where posting lands you. Not worth it. Revisit if posting ever becomes something people do several times in a sitting. |
 | **A framework rewrite** | §6 of the previous plan still holds, and every item above is cheaper in this codebase than the migration would be. |
 
 ---

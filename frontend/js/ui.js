@@ -59,6 +59,38 @@ export function icon(name, size = 16) {
   return s;
 }
 
+// — where you were when you left ------------------------------------------------
+/**
+ * The scroll position to put a list back to.
+ *
+ * Not `window.scrollY` read at teardown, which is what this replaced and what
+ * was quietly wrong. A list tears down on `hashchange`, and by then the page
+ * has already moved: activating a card focuses its link, and a focused element
+ * that the sticky header would overlap gets scrolled into view by the browser
+ * before anything of ours runs. Measured on the feed, leaving from 900px
+ * cached 498 — so coming back landed four hundred pixels above where the
+ * reader had actually been, every time, on every list.
+ *
+ * So the position is taken at the last moment it is still the reader's: the
+ * press that starts the navigation. Every pointerdown and keydown stamps one,
+ * in the capture phase so it lands before any handler can scroll, and the
+ * stamp is only trusted for a second afterwards. A navigation nobody pressed
+ * for — a hash typed into the bar, a restored session — has no press to read,
+ * and falls back to asking the window, which for that case is right.
+ */
+let pressed = { y: 0, at: 0 };
+const stamp = () => {
+  pressed = { y: window.scrollY, at: Date.now() };
+};
+addEventListener("pointerdown", stamp, true);
+addEventListener("keydown", stamp, true);
+
+const PRESS_WINDOW = 1000;
+
+export function leavingScrollY() {
+  return Date.now() - pressed.at < PRESS_WINDOW ? pressed.y : window.scrollY;
+}
+
 // — view mounting ---------------------------------------------------------------
 // #view is in index.html and the whole router depends on it; a call site that
 // checked for null would be pretending otherwise.

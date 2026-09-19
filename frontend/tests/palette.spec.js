@@ -203,3 +203,74 @@ test("but stay out of the way while you're typing", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
   await expect(page).not.toHaveURL(/compose|login/);
 });
+
+// ── the numbered rows ──────────────────────────────────────────────────────
+// ⌥1 to ⌥5 run the first five rows. Alt rather than a bare digit, because this
+// is a text field and a bare digit would take the first character of every
+// search that begins with a number.
+
+test("the first five rows carry a number, and the rest do not", async ({ page }) => {
+  await open(page);
+
+  // Read what is painted, not what is in the DOM: past the fifth row the
+  // element is still there — it holds the indent so the labels stay in one
+  // column — and `visibility: hidden` is what makes it not a number.
+  const shown = await page.locator(".palette__ordinal").evaluateAll((els) =>
+    els.map((el) =>
+      getComputedStyle(el).visibility === "hidden" ? null : el.textContent
+    )
+  );
+  expect(shown.length).toBeGreaterThan(5);
+  expect(shown.slice(0, 5)).toEqual(["⌥1", "⌥2", "⌥3", "⌥4", "⌥5"]);
+  expect(shown.slice(5).every((v) => v === null)).toBe(true);
+});
+
+test("pressing one runs that row", async ({ page }) => {
+  await open(page);
+  // Whatever the third row happens to be, rather than hard-coding a command
+  // that may move: the promise is that the number and the row agree.
+  const third = await page.locator(".palette__label").nth(2).textContent();
+  expect(third).toBe("Go to the feed");
+
+  await page.keyboard.press("Alt+Digit3");
+  await expect(page.locator(".palette__panel")).toBeHidden();
+  await expect(page).toHaveURL(/#\/$/);
+});
+
+test("a digit on its own is still just a digit", async ({ page }) => {
+  // The whole reason the shortcut takes a modifier. Typing a number has to
+  // search for it, or no post whose title starts with one is reachable here.
+  await open(page);
+  await page.keyboard.type("3");
+
+  await expect(page.locator(".palette__input")).toHaveValue("3");
+  await expect(page.locator(".palette__panel")).toBeVisible();
+});
+
+test("a number past the end of the list does nothing at all", async ({ page }) => {
+  await open(page);
+  await page.locator(".palette__input").fill("Go to the feed");
+  await expect(rows(page)).toHaveCount(1);
+
+  await page.keyboard.press("Alt+Digit4");
+
+  // Not wrapped around to the one row that is there, and not closed. Running
+  // it would have closed the palette, so the panel still being up is the
+  // assertion — the URL is no use here, because the row leads to the feed and
+  // the feed is where this test already is.
+  await expect(page.locator(".palette__panel")).toBeVisible();
+  await expect(rows(page)).toHaveCount(1);
+  // And the keystroke was swallowed rather than typed into the box.
+  await expect(page.locator(".palette__input")).toHaveValue("Go to the feed");
+});
+
+test("the numbers follow the results rather than the commands", async ({ page }) => {
+  await open(page);
+  await page.locator(".palette__input").fill("Open your shelf");
+  await expect(rows(page)).toHaveCount(1);
+
+  // It was the fourth row a moment ago; filtered down it is the first, and ⌥1
+  // is what runs it.
+  await page.keyboard.press("Alt+Digit1");
+  await expect(page).toHaveURL(/#\/shelf$/);
+});

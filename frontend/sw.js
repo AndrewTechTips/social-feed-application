@@ -85,6 +85,7 @@ const SHELL = [
   "./js/transitions.js",
   "./js/reading.js",
   "./js/shelf.js",
+  "./js/draft.js",
   "./js/components/palette.js",
   "./js/components/comments.js",
   "./js/components/feedkeys.js",

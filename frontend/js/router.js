@@ -80,6 +80,42 @@ export function previousScreen() {
   return previousHash;
 }
 
+/**
+ * Call `fn` once the reader has actually gone somewhere else.
+ *
+ * Every list screen holds something that has to be let go of when it leaves —
+ * an IntersectionObserver, a poll, an in-flight fetch — and they used to hang
+ * that on `hashchange` directly. That is one event too eager. hashchange fires
+ * once per *event*, not once per screen, and two navigations in quick
+ * succession queue two events that both read the same final hash: resolve()
+ * dedupes the second one (see lastResolvedHash above), so no new screen is
+ * built — but a plain hashchange listener registered by the screen the *first*
+ * event built still runs, and tears down a screen that is very much still on
+ * the page.
+ *
+ * The symptom was a profile stuck on skeletons for ever: sign out — which
+ * navigates home — then open a profile before the queue drains, and the
+ * profile's own fetch is aborted by the teardown belonging to the profile that
+ * fetch was for. Nothing logs, nothing throws, and the list simply never
+ * arrives.
+ *
+ * So the check the router makes for itself is made here too: the hash this was
+ * registered at is the screen it belongs to, and anything else is not leaving.
+ *
+ * @param {() => void} fn
+ * @returns {() => void} stop listening, for a screen torn down some other way
+ */
+export function onLeavingScreen(fn) {
+  const mountedAt = location.hash;
+  const leave = () => {
+    if (location.hash === mountedAt) return;
+    removeEventListener("hashchange", leave);
+    fn();
+  };
+  addEventListener("hashchange", leave);
+  return () => removeEventListener("hashchange", leave);
+}
+
 async function resolve() {
   previousHash = lastResolvedHash;
   lastResolvedHash = location.hash;

@@ -67,7 +67,7 @@ const state = {
   // refresh cookie, and when the token stops being worth sending. Never
   // written to storage, never persisted, gone on reload — see the note above.
   access: null,
-  feedCache: null,
+  listCache: [],
   knownPosts: [], // the list last drawn — see setKnownPosts
   knownFrom: null,
 };
@@ -209,7 +209,7 @@ export function notePostVote(id, votes, voted) {
   state.knownPosts.forEach(patch);
   // The same objects, usually — both are built from the feed's `items` — but
   // not always, and patching twice costs nothing.
-  if (state.feedCache) state.feedCache.items.forEach(patch);
+  state.listCache.forEach((c) => c.items.forEach(patch));
 }
 
 // — feed cache ----------------------------------------------------------------
@@ -232,9 +232,24 @@ export function viewerKey() {
   return state.session ? state.session.id : null;
 }
 
+// How many lists are held at once.
+//
+// It used to be one, and one was wrong the moment the profile learned to
+// restore its own scroll: the feed, a profile and a set of search results are
+// all the same kind of screen, and going feed → profile → back would have had
+// the profile evict the feed on its way past. Four covers the journeys somebody
+// actually makes — the feed under two orderings, a profile, and the search they
+// came from — and is small enough that the oldest falling off is a reload of
+// something they have stopped looking at.
+const CACHE_SLOTS = 4;
+
 /** @param {Omit<import("./types.js").FeedCache, "at">} snapshot */
 export function cacheFeed(snapshot) {
-  state.feedCache = { ...snapshot, at: Date.now() };
+  const fresh = { ...snapshot, at: Date.now() };
+  state.listCache = [
+    fresh,
+    ...state.listCache.filter((c) => c.key !== fresh.key),
+  ].slice(0, CACHE_SLOTS);
 }
 
 /**
@@ -242,14 +257,14 @@ export function cacheFeed(snapshot) {
  * @returns {import("./types.js").FeedCache | null}
  */
 export function readFeedCache(key) {
-  const c = state.feedCache;
-  if (!c || c.key !== key || c.viewer !== viewerKey()) return null;
+  const c = state.listCache.find((entry) => entry.key === key);
+  if (!c || c.viewer !== viewerKey()) return null;
   if (Date.now() - (c.at ?? 0) >= CACHE_TTL) return null;
   return c;
 }
 
 export function dropFeedCache() {
-  state.feedCache = null;
+  state.listCache = [];
 }
 
 // — the list you were last looking at ------------------------------------------

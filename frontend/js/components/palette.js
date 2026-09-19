@@ -177,6 +177,26 @@ const searchGlyph = () =>
     })
   );
 
+// How many rows get a number. Five because that is how far down a list somebody
+// can point without counting — past that the number is slower to find than the
+// arrow keys it replaces.
+const NUMBERED = 5;
+
+// Alt, not ⌘, and not a bare digit.
+//
+// A bare digit is what the plan asked for and it is the one option that cannot
+// work: this is a *text field*, and taking `3` away from it means nobody can
+// search for a post with a number at the front of its title. ⌘1–⌘8 belongs to
+// the browser's tab bar and a page cannot reliably take it back. Alt is left,
+// it is what a page is allowed to have, and it costs the search box nothing.
+//
+// Matched on `code` rather than `key`, because on a Mac Alt+1 arrives as `¡`.
+const numberPressed = (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return -1;
+  const m = /^Digit([1-9])$/.exec(e.code);
+  return m ? Number(m[1]) - 1 : -1;
+};
+
 // — the overlay ---------------------------------------------------------------
 function build() {
   const input = h("input", {
@@ -232,6 +252,14 @@ function build() {
             role: "option",
             "aria-selected": String(i === 0),
           },
+          // The ordinal leads the row and the shortcut closes it, which keeps
+          // them from being read as one thing: the number is *where this row
+          // is*, and the kbd on the right is what the row does from outside the
+          // palette. Hidden from assistive tech — a listbox already announces
+          // "3 of 9", and the only way to press this is to be looking at it.
+          i < NUMBERED
+            ? h("kbd", { class: "palette__ordinal", "aria-hidden": "true" }, `⌥${i + 1}`)
+            : h("span", { class: "palette__ordinal palette__ordinal--none", "aria-hidden": "true" }),
           h("span", { class: "palette__label" }, row.label),
           h("kbd", { class: "palette__key" }, row.key || "↵")
         )
@@ -263,6 +291,19 @@ function build() {
   input.addEventListener("input", paint);
 
   input.addEventListener("keydown", (e) => {
+    const numbered = numberPressed(e);
+    if (numbered >= 0) {
+      e.preventDefault();
+      // Only as far as the numbers actually go, and only onto a row that is
+      // there. ⌥7 with four results does nothing rather than wrapping round,
+      // because a shortcut that lands somewhere unexpected is worse than one
+      // that does nothing.
+      if (numbered < NUMBERED && numbered < rows.length) {
+        highlight(numbered);
+        runActive();
+      }
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       highlight(active + 1);

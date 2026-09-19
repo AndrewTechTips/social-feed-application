@@ -105,9 +105,13 @@
 /** @typedef {Page<Comment>} CommentPage */
 
 /**
- * A cached feed render, so coming back from a post feels instant.
+ * A cached list render, so coming back from a post feels instant. The feed, a
+ * profile and a set of search results are all one of these.
  * @typedef {object} FeedCache
- * @property {string} key         the search term this page was fetched for
+ * @property {string} key         which list this is — the feed's sort and
+ *   search term, or `u/<username>` for a profile. It is also the cache slot,
+ *   so two lists that should not be mistaken for each other must not agree
+ *   on it
  * @property {number | null} viewer  who it was fetched *as* — a signed-in
  *   snapshot must never be replayed to a signed-out visitor, because it may
  *   contain their own drafts
@@ -127,7 +131,8 @@
  * @typedef {object} State
  * @property {Session | null} session
  * @property {Access | null} access   never persisted; see the note in store.js
- * @property {FeedCache | null} feedCache
+ * @property {FeedCache[]} listCache  the last few lists that were drawn,
+ *   newest first — the feed, a profile, a set of results. See CACHE_SLOTS.
  * @property {Post[]} knownPosts   the list last drawn — what the palette
  *   searches, and what the post screen reads on from
  * @property {string | null} knownFrom  where that list came from, named as a

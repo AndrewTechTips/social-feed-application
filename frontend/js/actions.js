@@ -10,6 +10,7 @@ import { api, forgetPendingRefresh } from "./api.js";
 import { clearSession, dropFeedCache } from "./store.js";
 import { toast } from "./ui.js";
 import { navigate } from "./router.js";
+import { crossFade } from "./transitions.js";
 
 const THEME_KEY = "commons.theme";
 
@@ -23,16 +24,31 @@ export function otherTheme() {
 
 export function toggleTheme() {
   const next = otherTheme();
-  document.documentElement.dataset.theme = next;
-  try {
-    localStorage.setItem(THEME_KEY, next);
-  } catch (e) {
-    /* storage disabled — the choice just won't survive a reload */
-  }
-  // The header's toggle draws itself from the current theme, and the palette
-  // can change it from the other side of the app. Announce it rather than
-  // letting the button quietly go stale.
-  dispatchEvent(new CustomEvent("commons:theme", { detail: next }));
+
+  const apply = () => {
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (e) {
+      /* storage disabled — the choice just won't survive a reload */
+    }
+    // The header's toggle draws itself from the current theme, and the palette
+    // can change it from the other side of the app. Announce it rather than
+    // letting the button quietly go stale.
+    dispatchEvent(new CustomEvent("commons:theme", { detail: next }));
+  };
+
+  // Every colour in the app is a custom property, so the flip is one attribute
+  // and the repaint is instantaneous — which is exactly the problem. A room
+  // does not snap from lamplight to daylight, and the snap is most of why a
+  // theme toggle feels like a setting rather than like a light switch. Inside
+  // a view transition the browser cross-fades the two paintings of the page
+  // for a fifth of a second and it reads as the lights coming up.
+  //
+  // crossFade answers false where the API is missing or the reader has asked
+  // for less motion, and then the flip still has to happen — unwrapped, which
+  // is what it always was.
+  if (!crossFade(apply)) apply();
   return next;
 }
 

@@ -1237,3 +1237,22 @@
   margin-top: var(--s-2);
   font-size: var(--fs-meta);
 }
+
+/* "Picked up where you left off." — the line above a composer that has been
+   refilled from a draft. It sits inside the panel rather than above it because
+   it is about the fields, not about the screen, and it is quiet: the reader
+   asked for none of this, and the only decision on offer is whether to keep it. */
+.compose__resumed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.compose__resumed-line {
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}

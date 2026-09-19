@@ -20,7 +20,14 @@ import { get } from "../store.js";
 // you find out before you've typed another paragraph.
 const COMMENT_MAX = 2000;
 const COMMENTS_PER_PAGE = 20;
-const EMPTY = "Nothing said about this one yet.";
+// An invitation to whoever can accept one. Signed out there is already a
+// prompt to sign in directly below this line, so adding "say the first thing"
+// would be asking for something the reader cannot do yet and pointing at the
+// answer twice.
+const empty = () =>
+  get("session")
+    ? "Nothing said about this one yet. Say the first thing."
+    : "Nothing said about this one yet.";
 
 // Same reasoning as SKELETON_AFTER below, applied to the thread: a placeholder
 // that is on screen for a hundred and fifty milliseconds and gone is not
@@ -109,7 +116,7 @@ export function commentsFor(post, isStale, firstComments) {
     // The empty state is about whether anybody has said anything, and a reply
     // cannot exist without something to reply to — so it is the conversations
     // that decide it.
-    setStatus(total === 0 ? EMPTY : "");
+    setStatus(total === 0 ? empty() : "");
   }
 
   // The prefetched first page, claimed once. A retry after a failure, or a
@@ -175,7 +182,7 @@ export function commentsFor(post, isStale, firstComments) {
           ? h("button", { class: "btn btn--quiet", type: "button", onclick: load },
               "More comments")
           : null);
-      setStatus(total === 0 ? EMPTY : "");
+      setStatus(total === 0 ? empty() : "");
     } catch (err) {
       if (isStale()) return;
       if (wantPage === 1) list.replaceChildren();

@@ -4,7 +4,7 @@
 // post restores the list and scroll position from a short-lived cache.
 
 import { api } from "../api.js";
-import { h, mountView, skeletonCards, postCard, toast } from "../ui.js";
+import { h, mountView, skeletonCards, postCard, toast, leavingScrollY } from "../ui.js";
 import {
   get,
   isMine,
@@ -14,6 +14,7 @@ import {
   setKnownPosts,
 } from "../store.js";
 import { isNewSince, lastVisit, sinceLabel, spellCount } from "../reading.js";
+import { onLeavingScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
 import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
@@ -280,10 +281,20 @@ export function renderFeed({ query, isStale }) {
   function renderTail() {
     renderSince();
     if (total === 0) {
+      // Two different emptinesses, and neither is a shrug.
+      //
+      // A search that found nothing is not a dead end, it is a query that was
+      // too narrow — so say the thing that makes the next attempt better
+      // rather than only reporting the failure. And an empty room is an
+      // invitation, but only to somebody who can accept it: offering "be the
+      // first to say something" to a visitor with no account is an invitation
+      // to a door they will find locked.
       setStatus(
         search
-          ? `Nothing matches "${search}".`
-          : "Nothing here yet. Be the first to say something.",
+          ? `Nothing matches "${search}". It searches titles and bodies, so try one word rather than several.`
+          : get("session")
+          ? "Nothing here yet. Be the first to say something."
+          : "Nothing here yet. Sign in and you could be the first to say something.",
         true
       );
 
@@ -493,20 +504,20 @@ export function renderFeed({ query, isStale }) {
     if (torn) return;
     torn = true;
     if (activeTeardown === teardown) activeTeardown = null;
-    removeEventListener("hashchange", teardown);
+    stopLeaving();
     removeEventListener("visibilitychange", askWhatsNew);
     if (poller) clearInterval(poller);
     poller = null;
     if (observer) observer.disconnect();
     if (controller) controller.abort();
     if (items.length) {
-      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, anchor, scrollY: window.scrollY });
+      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, anchor, scrollY: leavingScrollY() });
     }
   }
 
   if (activeTeardown) activeTeardown(); // clean up a feed instance we're replacing
   activeTeardown = teardown;
-  addEventListener("hashchange", teardown);
+  const stopLeaving = onLeavingScreen(teardown);
 
   const cached = readFeedCache(key);
   if (cached) {

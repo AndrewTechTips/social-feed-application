@@ -17,6 +17,7 @@ import { api, ApiError } from "../api.js";
 import { h, mountView, skeletonCards, postCard } from "../ui.js";
 import { setKnownPosts } from "../store.js";
 import { shelfIds, dropFromShelf } from "../shelf.js";
+import { onLeavingScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
 
 const PAGE_SIZE = 10;
@@ -189,14 +190,14 @@ export function renderShelf({ isStale }) {
     if (torn) return;
     torn = true;
     if (activeTeardown === teardown) activeTeardown = null;
-    removeEventListener("hashchange", teardown);
+    stopLeaving();
     if (observer) observer.disconnect();
     if (controller) controller.abort();
   }
 
   if (activeTeardown) activeTeardown();
   activeTeardown = teardown;
-  addEventListener("hashchange", teardown);
+  const stopLeaving = onLeavingScreen(teardown);
 
   mountView(root);
   setupObserver();

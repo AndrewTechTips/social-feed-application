@@ -7,8 +7,9 @@
 // already looking at a filter.
 
 import { api, ApiError } from "../api.js";
-import { h, mountView, skeletonCards, avatar, postCard } from "../ui.js";
-import { get, setKnownPosts } from "../store.js";
+import { h, mountView, skeletonCards, avatar, postCard, leavingScrollY } from "../ui.js";
+import { get, setKnownPosts, cacheFeed, readFeedCache, viewerKey } from "../store.js";
+import { onLeavingScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
 
 const PAGE_SIZE = 10;
@@ -60,6 +61,13 @@ export function renderProfile({ params, isStale }) {
     sentinel
   );
 
+  // Namespaced, because this shares the cache with the feed and with search.
+  // A profile whose key collided with a set of results would restore the wrong
+  // list under the right heading, which is the kind of bug that looks like a
+  // caching problem and is actually a naming one.
+  const key = `u/${username.toLowerCase()}`;
+  let viewer = viewerKey();
+
   const items = [];
   let page = 0,
     pages = 1,
@@ -82,8 +90,13 @@ export function renderProfile({ params, isStale }) {
     if (total === 0) {
       const session = get("session");
       const mine = session?.username === username;
+      // Yours says what to do with the space; somebody else's says whose
+      // space it is. "Nothing here yet" on a stranger's profile reads like the
+      // page failed to load, which for a moment is exactly what it looks like.
       setStatus(
-        mine ? "You haven't written anything yet." : "Nothing here yet.",
+        mine
+          ? "You haven't written anything yet. Whatever you post will collect here."
+          : `${username} hasn't posted anything yet.`,
         true
       );
     } else if (!hasNext) {
@@ -190,18 +203,50 @@ export function renderProfile({ params, isStale }) {
     if (torn) return;
     torn = true;
     if (activeTeardown === teardown) activeTeardown = null;
-    removeEventListener("hashchange", teardown);
+    stopLeaving();
     if (observer) observer.disconnect();
     if (controller) controller.abort();
+    // Same bargain the feed makes: hold the page you were on so that coming
+    // back from a post lands you where you left rather than at the top of a
+    // list you have already read. No `anchor` — that is the feed's stable
+    // pagination window, and a profile has no live insertions to be stable
+    // against.
+    if (items.length) {
+      cacheFeed({
+        key,
+        viewer,
+        items: items.slice(),
+        page,
+        pages,
+        hasNext,
+        total,
+        anchor: null,
+        scrollY: leavingScrollY(),
+      });
+    }
   }
 
   if (activeTeardown) activeTeardown();
   activeTeardown = teardown;
-  addEventListener("hashchange", teardown);
+  const stopLeaving = onLeavingScreen(teardown);
 
-  mountView(root);
-  setupObserver();
-  load(true);
+  const cached = readFeedCache(key);
+  if (cached) {
+    ({ page, pages, hasNext, total, viewer } = cached);
+    cached.items.forEach((post) => {
+      items.push(post);
+      list.append(postCard(post));
+    });
+    setKnownPosts(items, username);
+    paintCount();
+    renderTail();
+    mountView(root, { restoreScroll: cached.scrollY });
+    setupObserver();
+  } else {
+    mountView(root);
+    setupObserver();
+    load(true);
+  }
 
   // A profile isn't the feed, so a morph waiting for a feed card has nowhere
   // to land.

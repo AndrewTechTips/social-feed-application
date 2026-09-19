@@ -426,6 +426,62 @@ h3 {
   animation-timing-function: var(--ease);
 }
 
+/* — the lights coming up ----------------------------------------------------
+   A theme change is not a navigation, and the recipe above is a navigation's:
+   the old screen holds at full opacity and the new one rises four pixels over
+   it. Apply that to a theme flip and the page appears to be replaced by a copy
+   of itself that arrived from slightly below — movement with no journey, which
+   reads as a glitch rather than as a change of light.
+
+   What a theme change is, is one picture of the room dissolving into another.
+   So while js/actions.js has the flag on, both ends move and neither travels.
+   The blend stays normal for the same reason it does everywhere else in this
+   file: `plus-lighter` adds the two images, and a page added to its own
+   inverse is a white flash.
+
+   The header gives up its name for the duration. A named element is snapshot
+   separately and sits out the root transition, which is right when the content
+   changed underneath it and wrong here — the header changes colour with
+   everything else, and one strip of the room holding its old palette while the
+   rest crosses over is worse than not animating at all. This works from CSS
+   because js/actions.js sets the flag *before* asking for the transition, so
+   the style is already applied when the old snapshot is taken.
+
+   220ms rather than 180. It is ambient rather than an answer to going
+   somewhere, so it can afford to be slower than a page change — but not much:
+   the document takes no input while a transition runs, and 320ms was measured
+   to be long enough to swallow a tap. */
+:root[data-theme-shift] .site-header {
+  view-transition-name: none;
+}
+:root[data-theme-shift]::view-transition-group(root) {
+  animation-duration: 220ms;
+}
+:root[data-theme-shift]::view-transition-old(root) {
+  animation: theme-leave 220ms var(--ease) both;
+  opacity: 1;
+}
+:root[data-theme-shift]::view-transition-new(root) {
+  animation: theme-arrive 220ms var(--ease) both;
+}
+@keyframes theme-leave {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes theme-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+    /* Stated, because screen-arrive's `transform: none` is not what is being
+       overridden here — there is no transform in this pair at all, and saying
+       so is cheaper than trusting that nobody adds one. */
+    transform: none;
+  }
+}
+
 /* The morphing title outlasts the page fade slightly, so it stays legible the
    whole way across, and paints above the content it travels over. */
 ::view-transition-group(post-title) {
