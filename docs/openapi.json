@@ -828,6 +828,25 @@
               "title": "Search",
               "type": "string"
             }
+          },
+          {
+            "description": "Only posts written at or before this moment. Send back the `created_at` of the newest post the first page gave you, and every page after it is served out of the same feed — otherwise a post written while you scroll pushes the rest down and you are handed one you have already read. URL-encode it: a timestamp carries a `+` in its offset, and a bare `+` in a query string decodes to a space.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only posts written at or before this moment. Send back the `created_at` of the newest post the first page gave you, and every page after it is served out of the same feed — otherwise a post written while you scroll pushes the rest down and you are handed one you have already read. URL-encode it: a timestamp carries a `+` in its offset, and a bare `+` in a query string decodes to a space.",
+              "title": "As Of"
+            }
           }
         ],
         "responses": {

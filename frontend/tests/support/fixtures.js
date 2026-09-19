@@ -243,6 +243,21 @@ const test = base.test.extend({
           backend.control.register(email, password, username);
           await install();
         },
+        // Seed into the state the *page* is reading, rather than into the
+        // Node-side copy the init script carries.
+        //
+        // api.seed writes to the snapshot and re-registers the init script, so
+        // nothing lands until the next document load — which is exactly right
+        // for setting a test up, and useless for a test about something
+        // arriving while a screen is already on it. Same reasoning as
+        // failNext below, and the same control surface.
+        seedLive: async (target, count, author, votes) => {
+          await target.waitForFunction(() => !!window.__commonsDemo);
+          return target.evaluate(
+            (args) => window.__commonsDemo.seed(args),
+            { count, ...(author ? { author } : {}), ...(votes ? { votes } : {}) }
+          );
+        },
         failNext: async (rule) => {
           // Prefer the adapter the page is actually running. The Node-side
           // backend only reaches the browser through an init script, which
@@ -352,6 +367,15 @@ const test = base.test.extend({
       // `votes` gives every post this call creates that many upvotes — the one
       // way a spec can put a post on either side of the warmth threshold.
       seed: (count, author, votes) =>
+        post("/__seed", {
+          count,
+          ...(author ? { author } : {}),
+          ...(votes ? { votes } : {}),
+        }),
+      // Already live: this is a real HTTP write to a real server, so the page
+      // sees it on its next request either way. It exists so a spec can ask
+      // for the live version without knowing which backend it is on.
+      seedLive: (_target, count, author, votes) =>
         post("/__seed", {
           count,
           ...(author ? { author } : {}),

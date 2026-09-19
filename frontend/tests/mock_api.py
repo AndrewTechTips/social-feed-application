@@ -804,6 +804,33 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         search = query.get("search", [""])[0]
+
+        # The window the reader arrived in. Parsed rather than string-compared:
+        # this mock stamps UTC, Postgres stamps a local offset, and the anchor
+        # a client hands back is whichever one it was given.
+        #
+        # Only on the feed. The real API declares it on GET /posts/ and nowhere
+        # else, and FastAPI ignores a query parameter a route never asked for —
+        # so a profile that honoured it here would be answering differently
+        # from the thing this file exists to stand in for.
+        as_of = None
+        raw_as_of = query.get("as_of", [None])[0]
+        if raw_as_of is not None and only_author is None:
+            try:
+                as_of = datetime.fromisoformat(raw_as_of)
+            except ValueError:
+                return self._send(
+                    422,
+                    {
+                        "detail": [
+                            {
+                                "loc": ["query", "as_of"],
+                                "msg": "Input should be a valid datetime or date",
+                                "type": "datetime_from_date_parsing",
+                            }
+                        ]
+                    },
+                )
         if len(search) > 100:  # matches max_length on the real endpoint
             return self._send(
                 422,
@@ -818,6 +845,7 @@ class Handler(BaseHTTPRequestHandler):
             for r in ST.posts.values()
             if self._may_see(r, viewer)
             and (only_author is None or r["author_email"] == only_author)
+            and (as_of is None or datetime.fromisoformat(r["created_at"]) <= as_of)
         ]
 
         if terms:

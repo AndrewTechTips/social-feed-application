@@ -106,6 +106,24 @@ export function renderFeed({ query, isStale }) {
   // "new" is a prefix of it, and finding where that prefix ends is the same
   // walk as drawing the cards.
   let newCount = 0, boundaryFound = false;
+  // The moment this feed was fetched at, sent back on every page after the
+  // first so they are all served out of the same feed.
+  //
+  // Offset pagination counts from the top, so a post written between one page
+  // and the next pushes every later page down by one and hands the reader a
+  // card they have already read. ADR 0005 knew that and judged it not worth
+  // paying for; what changed is that the app is about to start *inserting*
+  // rows into a feed while it is being read, which turns a rare race into one
+  // duplicate per insertion.
+  //
+  // The newest post's own timestamp rather than the browser's clock: it comes
+  // from the server, so there is no skew to get wrong, and by construction
+  // every post already on screen is inside the window.
+  //
+  // Not while searching. Those results are ordered by relevance, so the first
+  // one is not the newest and an anchor taken from it would mean nothing.
+  let anchor = null;
+  const anchored = !search;
   let page = 0, pages = 1, hasNext = true, total = null;
   let loading = false, controller = null, observer = null, errorBox = null;
   // Who these items were fetched for. Recorded here rather than read back at
@@ -215,12 +233,19 @@ export function renderFeed({ query, isStale }) {
     try {
       const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
       if (search) qs.set("search", search);
+      // URLSearchParams encodes the `+` in the timestamp's offset, which a
+      // bare string concatenation would hand over as a space and the API would
+      // answer with a 422.
+      if (anchor) qs.set("as_of", anchor);
       const data = await api.get(`/posts/?${qs}`, { signal: controller.signal });
       if (isStale()) return;
 
       ({ page, pages, has_next: hasNext, total } = data);
       viewer = viewerKey();
       if (initial) {
+        // Page one *is* the window, so it is asked for unanchored and then
+        // defines the anchor for everything after it.
+        anchor = anchored && data.items.length ? data.items[0].created_at : null;
         list.replaceChildren();
         items.length = 0;
         // The walk starts over with the list, or a refetch would go on
@@ -297,7 +322,7 @@ export function renderFeed({ query, isStale }) {
     if (observer) observer.disconnect();
     if (controller) controller.abort();
     if (items.length) {
-      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, scrollY: window.scrollY });
+      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, anchor, scrollY: window.scrollY });
     }
   }
 
@@ -307,7 +332,10 @@ export function renderFeed({ query, isStale }) {
 
   const cached = readFeedCache(key);
   if (cached) {
-    ({ page, pages, hasNext, total, viewer } = cached);
+    // The anchor comes back with the rest of it: without it, the next page
+    // fetched after a cache restore would be counted from a feed that had
+    // moved on since.
+    ({ page, pages, hasNext, total, viewer, anchor } = cached);
     appendPosts(list, cached.items);
     setKnownPosts(items, listName);
     renderTail();

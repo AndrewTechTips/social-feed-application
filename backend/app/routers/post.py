@@ -1,4 +1,5 @@
 import math
+from datetime import datetime
 from typing import Optional
 
 from typing import Any
@@ -124,6 +125,7 @@ def page_of_posts(
     page_size: int,
     search: str = "",
     viewer: Optional[models.User] = None,
+    as_of: Optional[datetime] = None,
 ) -> dict[str, Any]:
     """One page of posts with their vote counts — in the shape ``PostPage``
     describes.
@@ -142,8 +144,21 @@ def page_of_posts(
     outer-joins every vote in order to count them, so "did this reader vote"
     is a second aggregate over rows that have been read anyway — no extra join,
     no correlated subquery, no second round trip per post.
+
+    ``as_of`` holds the window still. Offset pagination counts from the top, so
+    a post written between one page and the next pushes every later page down
+    by one and the reader is handed a card they have already seen. That is
+    ADR 0005's known cost, and it was correctly judged not worth paying for
+    until something started *inserting* rows into a feed while it was being
+    read — at which point it stops being a rare race and becomes one duplicate
+    per insertion. One ``created_at <= :as_of`` is what stops it: later pages
+    are served out of the feed as it stood when the reader arrived, which is
+    what an infinite scroll means anyway.
     """
     offset = (page - 1) * page_size
+
+    if as_of is not None:
+        filters = (*filters, models.Post.created_at <= as_of)
 
     total = db.scalar(select(func.count()).select_from(models.Post).where(*filters))
 
@@ -213,6 +228,18 @@ def get_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     search: str = Query("", max_length=100),
+    as_of: Optional[datetime] = Query(
+        None,
+        description=(
+            "Only posts written at or before this moment. Send back the "
+            "`created_at` of the newest post the first page gave you, and "
+            "every page after it is served out of the same feed — otherwise a "
+            "post written while you scroll pushes the rest down and you are "
+            "handed one you have already read. URL-encode it: a timestamp "
+            "carries a `+` in its offset, and a bare `+` in a query string "
+            "decodes to a space."
+        ),
+    ),
 ) -> dict[str, Any]:
     """The feed, and the search over it.
 
@@ -228,6 +255,7 @@ def get_posts(
         page_size=page_size,
         search=search,
         viewer=current_user,
+        as_of=as_of,
     )
 
 

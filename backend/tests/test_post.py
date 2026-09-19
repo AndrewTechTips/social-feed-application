@@ -171,3 +171,86 @@ def test_patch_post_empty_body(authorized_client, test_posts):
 def test_patch_other_user_post(authorized_client, test_posts):
     res = authorized_client.patch(f"/posts/{test_posts[3].id}", json={"title": "nope"})
     assert res.status_code == 403
+
+
+# ── holding the window still ───────────────────────────────────────────────
+#
+# `quote` on every anchor below, and it is not ceremony: a Postgres timestamp
+# serialises with a `+03:00` offset, and a bare `+` in a query string decodes to
+# a space. Unencoded, every one of these is a 422 about "unexpected extra
+# characters". URLSearchParams gets this right on its own, which is why the app
+# never trips on it and a hand-written curl does.
+#
+# Offset pagination counts from the top, so a post written between one page and
+# the next pushes every later page down by one. ADR 0005 names that as a known
+# cost and judged it not worth paying for — right up until something started
+# inserting rows into a feed while it was being read. `as_of` is the amendment.
+
+
+def test_as_of_keeps_a_post_written_mid_scroll_out_of_the_later_pages(
+    authorized_client, test_posts
+):
+    from urllib.parse import quote
+
+    first = authorized_client.get("/posts/?page=1&page_size=2").json()
+    assert len(first["items"]) == 2
+    anchor = first["items"][0]["created_at"]
+    seen = [item["id"] for item in first["items"]]
+
+    # Somebody posts while the reader is still on page one.
+    authorized_client.post("/posts/", json={"title": "brand new", "content": "hello"})
+
+    # Without the anchor, page two starts one row later than it should and the
+    # last card of page one comes back a second time.
+    drifted = authorized_client.get("/posts/?page=2&page_size=2").json()
+    assert seen[-1] in [item["id"] for item in drifted["items"]]
+
+    # With it, the reader walks the feed as it stood when they arrived.
+    held = authorized_client.get(
+        f"/posts/?page=2&page_size=2&as_of={quote(anchor)}"
+    ).json()
+    assert not set(seen) & {item["id"] for item in held["items"]}
+
+
+def test_as_of_narrows_the_total_to_the_window_it_names(authorized_client, test_posts):
+    from urllib.parse import quote
+
+    before = authorized_client.get("/posts/").json()
+    anchor = before["items"][0]["created_at"]
+    was = before["total"]
+
+    authorized_client.post("/posts/", json={"title": "after", "content": "the anchor"})
+    assert authorized_client.get("/posts/").json()["total"] == was + 1
+
+    held = authorized_client.get(f"/posts/?as_of={quote(anchor)}").json()
+    assert held["total"] == was
+    assert all(item["created_at"] <= anchor for item in held["items"])
+
+
+def test_as_of_is_optional_and_a_bad_one_is_a_422(authorized_client, test_posts):
+    assert authorized_client.get("/posts/").status_code == 200
+    assert authorized_client.get("/posts/?as_of=").status_code == 422
+    assert authorized_client.get("/posts/?as_of=lunchtime").status_code == 422
+
+
+def test_as_of_leaves_the_visibility_rules_alone(
+    anonymous_client, authorized_client, own_draft
+):
+    """It is a window in time, not a second access rule: a draft stays its
+    author's whether or not one is asked for.
+
+    `anonymous_client` rather than `client`: authorized_client signs `client`
+    in by mutating its headers and hands the same object back, so asking for
+    both gets you two names for one signed-in client — which is precisely the
+    thing this test would then fail to notice.
+    """
+    from urllib.parse import quote
+
+    mine = authorized_client.get("/posts/").json()
+    anchor = mine["items"][0]["created_at"]
+
+    held = authorized_client.get(f"/posts/?as_of={quote(anchor)}").json()
+    assert own_draft.id in [item["id"] for item in held["items"]]
+
+    theirs = anonymous_client.get(f"/posts/?as_of={quote(anchor)}").json()
+    assert own_draft.id not in [item["id"] for item in theirs["items"]]

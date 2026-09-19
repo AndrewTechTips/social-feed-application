@@ -23,6 +23,18 @@ about the reader.
 
 ### Added
 
+- **`GET /posts/?as_of=`** — a window on the feed. Offset pagination counts
+  from the top, so a post written between one page and the next pushes every
+  later page down by one and hands the reader a card they have already read.
+  The feed asks for page one unanchored — page one *is* the window — and sends
+  back the `created_at` of the newest post it got on every page after it. The
+  anchor is a server timestamp rather than the browser's clock, so there is no
+  skew to get wrong; it isn't sent while searching, where results are ordered
+  by relevance and the first one isn't the newest; and the parameter doesn't
+  exist on a profile, because nothing inserts into a profile while it is being
+  read. [ADR 0005 is amended](docs/adr/0005-offset-pagination.md) with the
+  trigger its original two didn't cover, and with why this isn't yet the moment
+  for keyset.
 - **`PostOut.voted`** — whether the person asking has upvoted this post. It is a
   property of the pair rather than of the post, so the same row answers
   differently for two readers; `votes` is still the room's count. Free on the

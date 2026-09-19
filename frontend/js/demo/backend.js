@@ -648,6 +648,27 @@ export function createDemoBackend({
       return invalid(["query", "search"], "too long");
     }
 
+    // The window the reader arrived in. Parsed rather than string-compared:
+    // this adapter stamps ISO-with-Z, Postgres stamps a local offset, and the
+    // anchor a client hands back is whichever one it was given.
+    //
+    // Only on the feed. The real API declares it on GET /posts/ and nowhere
+    // else, and FastAPI ignores a query parameter a route never asked for — so
+    // a profile that honoured it here would answer differently from the thing
+    // this file exists to mirror.
+    let asOf = null;
+    const rawAsOf = query.get("as_of");
+    if (rawAsOf !== null && onlyAuthor === undefined) {
+      asOf = Date.parse(rawAsOf);
+      if (!Number.isFinite(asOf)) {
+        return invalid(
+          ["query", "as_of"],
+          "Input should be a valid datetime or date",
+          "datetime_from_date_parsing"
+        );
+      }
+    }
+
     const byNewest = (a, b) =>
       a.created_at === b.created_at
         ? b.id - a.id
@@ -658,7 +679,8 @@ export function createDemoBackend({
     const visible = state.posts.filter(
       (r) =>
         maySee(r, viewer) &&
-        (onlyAuthor === undefined || r.author_email === onlyAuthor)
+        (onlyAuthor === undefined || r.author_email === onlyAuthor) &&
+        (asOf === null || Date.parse(r.created_at) <= asOf)
     );
 
     const terms = searchTerms(search);

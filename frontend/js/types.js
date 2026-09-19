@@ -112,6 +112,8 @@
  * @property {number} pages
  * @property {boolean} hasNext
  * @property {number} total
+ * @property {string | null} anchor  the `as_of` the later pages were fetched
+ *   with, so a page fetched after a cache restore is still the same feed
  * @property {number} scrollY
  * @property {number} [at]        set by the store when it's written
  */
