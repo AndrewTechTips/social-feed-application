@@ -80,6 +80,17 @@ const json = (status, payload) =>
 const nowIso = (offsetSeconds = 0) =>
   new Date(Date.now() + offsetSeconds * 1000).toISOString();
 
+// Mirrors VOTE_GRAVITY / COMMENT_GRAVITY in backend/app/routers/post.py. See
+// docs/adr/0008-a-ranking-with-two-gravities.md for how they were chosen.
+const VOTE_GRAVITY = 0.5;
+const COMMENT_GRAVITY = 0.25;
+const SORTS = ["new", "warm", "discussed"];
+
+const decayed = (count, createdAt, gravity) => {
+  const hours = Math.max(0, (Date.now() - Date.parse(createdAt)) / 3600000);
+  return count / Math.pow(hours + 2, gravity);
+};
+
 const detail = (status, message) => json(status, { detail: message });
 
 const invalid = (loc, msg, type = "value_error") =>
@@ -656,6 +667,15 @@ export function createDemoBackend({
     // else, and FastAPI ignores a query parameter a route never asked for — so
     // a profile that honoured it here would answer differently from the thing
     // this file exists to mirror.
+    const sort = query.get("sort") || "new";
+    if (!SORTS.includes(sort)) {
+      return invalid(
+        ["query", "sort"],
+        `Input should be ${SORTS.map((v) => `'${v}'`).join(" or ")}`,
+        "enum"
+      );
+    }
+
     let asOf = null;
     const rawAsOf = query.get("as_of");
     if (rawAsOf !== null && onlyAuthor === undefined) {
@@ -687,11 +707,23 @@ export function createDemoBackend({
     let rows;
     if (terms.length) {
       // Relevance leads, recency breaks the tie — the ORDER BY in
-      // page_of_posts().
+      // page_of_posts(). `sort` is ignored here for the same reason it is
+      // there: "the warmest, in relevance order" means nothing.
       rows = visible
         .map((row) => ({ row, rank: searchRank(row, terms) }))
         .filter((hit) => hit.rank !== null)
         .sort((a, b) => (b.rank - a.rank) || byNewest(a.row, b.row))
+        .map((hit) => hit.row);
+    } else if (sort === "warm" || sort === "discussed") {
+      const warm = sort === "warm";
+      const countOf = (r) =>
+        warm
+          ? state.votes.filter((v) => v.endsWith(`\u0000${r.id}`)).length
+          : state.comments.filter((c) => c.post_id === r.id).length;
+      const gravity = warm ? VOTE_GRAVITY : COMMENT_GRAVITY;
+      rows = visible
+        .map((row) => ({ row, score: decayed(countOf(row), row.created_at, gravity) }))
+        .sort((a, b) => b.score - a.score || byNewest(a.row, b.row))
         .map((hit) => hit.row);
     } else {
       rows = visible.slice().sort(byNewest);

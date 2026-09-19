@@ -17,3 +17,4 @@ comment nobody reads.
 | [0005](0005-offset-pagination.md) | Offset pagination, and when to switch to keyset |
 | [0006](0006-lighthouse-without-lhci.md) | Lighthouse runs from a script, not from `@lhci/cli` |
 | [0007](0007-a-network-first-service-worker.md) | The service worker is network-first |
+| [0008](0008-a-ranking-with-two-gravities.md) | A ranking with two gravities |

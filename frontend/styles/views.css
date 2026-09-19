@@ -79,6 +79,47 @@
   font-size: 1.05rem;
 }
 
+/* — how the feed is ordered ------------------------------------------------------
+   Three links, quiet, sitting on the list rather than over it. Not a segmented
+   control with a filled pill for the active one: that is a form control, and
+   these are three addresses — the one you are on is marked the way a current
+   page is marked anywhere else, with weight and a rule under it.
+
+   aria-current does the selecting, so there is no second class to keep in step
+   with the state, and a screen reader is told which one you are on without
+   anything being said twice.
+   -------------------------------------------------------------------------- */
+.sortbar {
+  display: flex;
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.sortbar__option {
+  padding: var(--s-2) 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  font-size: var(--fs-ui);
+  text-decoration: none;
+  transition: color var(--t-mid) var(--ease),
+    border-color var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .sortbar__option:hover {
+    color: var(--text);
+  }
+}
+.sortbar__option:active {
+  color: var(--text);
+}
+/* The amber, spent on "where you are" — which is the third of the three things
+   it is allowed to say, and this is exactly that. */
+.sortbar__option[aria-current] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
 .feed__list {
   display: flow-root;
 }

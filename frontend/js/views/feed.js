@@ -71,9 +71,47 @@ function masthead() {
 // amber is spent on votes and warmth.
 const bookmark = () => h("p", { class: "bookmark" }, "Where you left off");
 
+// How the feed is ordered. Links rather than buttons, because each one is a
+// real address: it can be shared, and Back undoes it.
+//
+// `new` has no query of its own — the plain feed is the default, and a URL that
+// spelled out the thing that happens anyway is a URL that dates badly.
+const SORTS = [
+  ["new", "Newest", "#/"],
+  ["warm", "Warmest", "#/?sort=warm"],
+  ["discussed", "Discussed", "#/?sort=discussed"],
+];
+
+/** @param {string} current */
+function sortbar(current) {
+  return h(
+    "nav",
+    { class: "sortbar", "aria-label": "Order the feed" },
+    SORTS.map(([value, label, href]) =>
+      h(
+        "a",
+        {
+          class: "sortbar__option",
+          href,
+          "aria-current": value === current ? "page" : null,
+        },
+        label
+      )
+    )
+  );
+}
+
+const SORT_VALUES = SORTS.map(([value]) => value);
+
 export function renderFeed({ query, isStale }) {
   const search = (query.get("search") || "").trim();
-  const key = search.toLowerCase();
+  // Anything else is the default rather than an error: a hand-edited URL
+  // shouldn't be able to put the feed in a state it can't draw.
+  const asked = query.get("sort") || "new";
+  const sort = SORT_VALUES.includes(asked) ? asked : "new";
+  // The cache is a snapshot of one list, and two orderings of the same posts
+  // are two lists.
+  const key = `${sort}:${search.toLowerCase()}`;
 
   const list = h("div", { class: "feed__list" });
   const status = h("p", { class: "feed__status", hidden: true });
@@ -84,7 +122,11 @@ export function renderFeed({ query, isStale }) {
   // Same rule, same reason — plus a second one. "New since Tuesday" is a
   // statement about the feed, and a set of search results is not the feed.
   const since = h("p", { class: "feed__since", hidden: true });
-  const tellsYouWhatsNew = !search && lastVisit() !== null;
+  // Only on the chronological feed. The count and the rule below it say "what
+  // arrived while you were away, and where that run ends" — and the run only
+  // *is* a run if the list is in time order. On a ranking the boundary would
+  // be drawn somewhere in the middle of nothing.
+  const tellsYouWhatsNew = !search && sort === "new" && lastVisit() !== null;
   // What the post screen calls this list when it offers the next one in it.
   // Named as a place, the same way the Back link names one.
   const listName = search ? "these results" : "the feed";
@@ -94,6 +136,9 @@ export function renderFeed({ query, isStale }) {
     { class: "feed", "aria-label": search ? `Posts matching ${search}` : "Latest posts" },
     showMasthead ? masthead() : null,
     since,
+    // Directly above the list it orders, and gone while searching: relevance
+    // leads there, so all three would be the same list under different names.
+    search ? null : sortbar(sort),
     list,
     status,
     sentinel
@@ -120,10 +165,13 @@ export function renderFeed({ query, isStale }) {
   // from the server, so there is no skew to get wrong, and by construction
   // every post already on screen is inside the window.
   //
-  // Not while searching. Those results are ordered by relevance, so the first
-  // one is not the newest and an anchor taken from it would mean nothing.
+  // Not while searching, and not on a ranking. Both order by something other
+  // than time, so the first item is not the newest and an anchor taken from it
+  // would exclude posts that belong in the window. A ranking is unstable under
+  // pagination anyway — a vote reorders it — and the control that will insert
+  // rows into a feed only ever inserts into the newest one.
   let anchor = null;
-  const anchored = !search;
+  const anchored = !search && sort === "new";
   let page = 0, pages = 1, hasNext = true, total = null;
   let loading = false, controller = null, observer = null, errorBox = null;
   // Who these items were fetched for. Recorded here rather than read back at
@@ -198,6 +246,7 @@ export function renderFeed({ query, isStale }) {
           : "Nothing here yet. Be the first to say something.",
         true
       );
+
     } else if (!hasNext) {
       setStatus("That's everything for now.");
     } else {
@@ -233,6 +282,7 @@ export function renderFeed({ query, isStale }) {
     try {
       const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
       if (search) qs.set("search", search);
+      if (sort !== "new") qs.set("sort", sort);
       // URLSearchParams encodes the `+` in the timestamp's offset, which a
       // bare string concatenation would hand over as a space and the API would
       // answer with a 422.

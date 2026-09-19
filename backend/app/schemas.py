@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from enum import Enum
 from typing import Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -56,6 +57,20 @@ class PostUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     published: Optional[bool] = None
+
+
+class PostSort(str, Enum):
+    """How the feed is ordered.
+
+    `new` is the default and needs no explanation. The other two are rankings,
+    and what makes them rankings rather than tallies is that both decay — see
+    docs/adr/0008-a-ranking-with-two-gravities.md for how the two constants
+    were chosen, which was by measuring rather than by copying Hacker News.
+    """
+
+    new = "new"
+    warm = "warm"
+    discussed = "discussed"
 
 
 class PostOut(PostBase):

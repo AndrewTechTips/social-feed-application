@@ -23,6 +23,23 @@ about the reader.
 
 ### Added
 
+- **Three ways to order the feed** — newest, warmest, discussed — and with them
+  the first thing in this app that makes a vote *do* something rather than
+  decorate a card. Both rankings decay, so neither becomes a museum of whatever
+  was liked first, and they decay at **different rates**: votes at gravity 0.5,
+  a half-life of about six hours; comments at 0.25, about thirty. A vote is a
+  reaction and it stales; a conversation is a thing you can still join. Both
+  constants were chosen by measuring them against the seeded feed rather than
+  by copying Hacker News — at its 1.8, "warmest" here returns exactly
+  chronological order among the posts that have votes, which is a sort
+  reproducing another sort. The measurements are in
+  [ADR 0008](docs/adr/0008-a-ranking-with-two-gravities.md).
+
+  Two things the feed does had to learn that a ranking is not in time order:
+  the "new since" count and the rule under it are only drawn on the newest
+  feed, and the `as_of` window is only sent for it — an anchor taken from the
+  top of a ranking is not the newest post, so it would cut posts out of the
+  window rather than hold it still.
 - **`GET /posts/?as_of=`** — a window on the feed. Offset pagination counts
   from the top, so a post written between one page and the next pushes every
   later page down by one and hands the reader a card they have already read.

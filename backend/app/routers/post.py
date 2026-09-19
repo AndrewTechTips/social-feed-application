@@ -87,6 +87,33 @@ def visible_to(user: Optional[models.User]) -> ColumnElement[bool]:
 # generated column, so it is not a thing to sprinkle around as a literal.
 SEARCH_CONFIG = "english"
 
+# How fast a ranking forgets. score = n / (hours_old + 2) ** gravity
+#
+# Two constants because two quantities age differently, and both were chosen by
+# measuring them against the seeded feed rather than by copying somebody with a
+# thousand times the traffic. Hacker News uses 1.8; at anything above about 1.2
+# "warmest" on a feed this quiet collapses into "newest with the unvoted posts
+# pushed to the bottom", which is a sort that reproduces another sort.
+#
+#   VOTE_GRAVITY 0.5 — a half-life of about six hours. A vote is a reaction and
+#     it stales: this morning's post is still in contention this evening, last
+#     week's is not. It also sits exactly at the boundary of the judgement that
+#     matters here — three votes from yesterday just edge out one from an hour
+#     ago, and at 0.6 that flips.
+#
+#   COMMENT_GRAVITY 0.25 — a half-life of about thirty hours, five times
+#     gentler. A conversation is not a reaction; it is a thing you can still
+#     join, so it ages more slowly. At the vote's gravity, one comment from six
+#     minutes ago outranks a five-comment thread, which is not what anybody
+#     means by "discussed".
+#
+# The +2 is the usual smoothing: without it a post minutes old divides by
+# almost nothing and one vote takes the top of the feed.
+#
+# See docs/adr/0008-a-ranking-with-two-gravities.md for the measurements.
+VOTE_GRAVITY = 0.5
+COMMENT_GRAVITY = 0.25
+
 
 def search_query(search: str) -> ColumnElement[Any]:
     """The caller's words as a tsquery.
@@ -126,6 +153,7 @@ def page_of_posts(
     search: str = "",
     viewer: Optional[models.User] = None,
     as_of: Optional[datetime] = None,
+    sort: schemas.PostSort = schemas.PostSort.new,
 ) -> dict[str, Any]:
     """One page of posts with their vote counts — in the shape ``PostPage``
     describes.
@@ -135,10 +163,12 @@ def page_of_posts(
     filter, which is an access rule rather than a display one.
 
     Ordering depends on whether anyone asked a question. With no search there
-    is no notion of a better match, so the answer is simply the newest posts.
-    With one, relevance leads and recency breaks the ties — a good match from
-    last year should outrank a poor one from this morning, but two equally good
-    matches should come back newest first.
+    is no notion of a better match, so the answer is whatever ``sort`` asks
+    for — newest by default, or one of the two decaying rankings above. With
+    one, relevance leads and recency breaks the ties — a good match from last
+    year should outrank a poor one from this morning, but two equally good
+    matches should come back newest first — and ``sort`` is ignored, because
+    "the warmest, in relevance order" is not a thing anybody asked for.
 
     ``viewer`` decides one field and costs nothing to answer. The query already
     outer-joins every vote in order to count them, so "did this reader vote"
@@ -162,10 +192,31 @@ def page_of_posts(
 
     total = db.scalar(select(func.count()).select_from(models.Post).where(*filters))
 
+    # Age in hours, as the ranking sees it. now() is the transaction's clock,
+    # so every row in one page is scored against the same instant.
+    hours_old = func.extract("epoch", func.now() - models.Post.created_at) / 3600.0
+
+    # count(distinct ...) rather than count(...), and it is not caution: the
+    # "discussed" sort joins comments as well as votes, and two outer joins
+    # multiply — a post with three votes and two comments comes back as six
+    # rows, and a plain count would call that six of each.
+    vote_count = func.count(func.distinct(models.Vote.user_id))
+    comment_count = func.count(func.distinct(models.Comment.id))
+
     order: tuple[UnaryExpression[Any], ...]
     if search:
         rank = func.ts_rank(models.Post.search_vector, search_query(search))
         order = (rank.desc(), models.Post.created_at.desc())
+    elif sort is schemas.PostSort.warm:
+        order = (
+            (vote_count / func.power(hours_old + 2, VOTE_GRAVITY)).desc(),
+            models.Post.created_at.desc(),
+        )
+    elif sort is schemas.PostSort.discussed:
+        order = (
+            (comment_count / func.power(hours_old + 2, COMMENT_GRAVITY)).desc(),
+            models.Post.created_at.desc(),
+        )
     else:
         order = (models.Post.created_at.desc(),)
 
@@ -181,11 +232,7 @@ def page_of_posts(
         mine = func.coalesce(func.bool_or(models.Vote.user_id == viewer.id), False)
 
     stmt = (
-        select(
-            models.Post,
-            func.count(models.Vote.post_id).label("votes"),
-            mine.label("voted"),
-        )
+        select(models.Post, vote_count.label("votes"), mine.label("voted"))
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
         .options(selectinload(models.Post.user))
         .where(*filters)
@@ -194,6 +241,13 @@ def page_of_posts(
         .limit(page_size)
         .offset(offset)
     )
+    # Only where it is needed. Every other page pays nothing for a sort nobody
+    # asked for, and the fan-out the distinct counts guard against only exists
+    # on this branch.
+    if sort is schemas.PostSort.discussed and not search:
+        stmt = stmt.join(
+            models.Comment, models.Comment.post_id == models.Post.id, isouter=True
+        )
 
     items = []
     for post, votes, voted in db.execute(stmt).all():
@@ -228,6 +282,15 @@ def get_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     search: str = Query("", max_length=100),
+    sort: schemas.PostSort = Query(
+        schemas.PostSort.new,
+        description=(
+            "`new` is newest first. `warm` and `discussed` are rankings that "
+            "decay with age, so neither becomes a museum of whatever was "
+            "popular two years ago. Ignored while searching, where relevance "
+            "leads. See ADR 0008 for the two constants."
+        ),
+    ),
     as_of: Optional[datetime] = Query(
         None,
         description=(
@@ -256,6 +319,7 @@ def get_posts(
         search=search,
         viewer=current_user,
         as_of=as_of,
+        sort=sort,
     )
 
 

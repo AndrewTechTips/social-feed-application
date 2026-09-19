@@ -1,6 +1,6 @@
 import pytest
 
-from backend.app import schemas
+from backend.app import models, schemas
 
 
 # ---------------------------------------------------------------------------
@@ -254,3 +254,134 @@ def test_as_of_leaves_the_visibility_rules_alone(
 
     theirs = anonymous_client.get(f"/posts/?as_of={quote(anchor)}").json()
     assert own_draft.id not in [item["id"] for item in theirs["items"]]
+
+
+# ── the two rankings ───────────────────────────────────────────────────────
+#
+# What makes these rankings rather than tallies is that both decay. The
+# constants and how they were chosen are in
+# docs/adr/0008-a-ranking-with-two-gravities.md; these pin down the behaviour
+# that argument is about.
+
+
+def _aged(session, post, hours):
+    """Move a post back in time. The ranking is a function of age, so an
+    ordering test that could not age anything could only ever assert ties."""
+    from datetime import datetime, timedelta, timezone
+
+    post.created_at = datetime.now(timezone.utc) - timedelta(hours=hours)
+    session.add(post)
+    session.commit()
+    return post.id
+
+
+def test_warm_puts_a_liked_post_above_a_newer_unliked_one(
+    authorized_client, test_posts, session, test_user
+):
+    liked = _aged(session, test_posts[0], 6)
+    _aged(session, test_posts[1], 1)
+    session.add(models.Vote(post_id=liked, user_id=test_user["id"]))
+    session.commit()
+
+    order = [
+        p["id"] for p in authorized_client.get("/posts/?sort=warm").json()["items"]
+    ]
+    assert order[0] == liked
+    # …and newest still says what it always said.
+    newest = [p["id"] for p in authorized_client.get("/posts/").json()["items"]]
+    assert newest[0] != liked
+
+
+def test_warm_still_forgets(authorized_client, test_posts, session, test_user2):
+    """One vote an hour ago beats one vote a fortnight ago. Without the decay
+    this sort would be a museum of whatever was liked first."""
+    old = _aged(session, test_posts[0], 24 * 14)
+    fresh = _aged(session, test_posts[1], 1)
+    session.add_all(
+        [
+            models.Vote(post_id=old, user_id=test_user2["id"]),
+            models.Vote(post_id=fresh, user_id=test_user2["id"]),
+        ]
+    )
+    session.commit()
+
+    order = [
+        p["id"] for p in authorized_client.get("/posts/?sort=warm").json()["items"]
+    ]
+    assert order.index(fresh) < order.index(old)
+
+
+def test_discussed_ages_more_slowly_than_warm(
+    authorized_client, test_posts, session, test_user, test_user2
+):
+    """A five-comment thread from two weeks ago is still the most discussed
+    thing here; one comment from a minute ago is not. At the vote gravity it
+    would be the other way round, which is the whole reason there are two
+    constants."""
+    thread = _aged(session, test_posts[0], 24 * 14)
+    just_now = _aged(session, test_posts[1], 0)
+    session.add_all(
+        [
+            *[
+                models.Comment(post_id=thread, user_id=test_user["id"], content=f"c{i}")
+                for i in range(5)
+            ],
+            models.Comment(post_id=just_now, user_id=test_user2["id"], content="one"),
+        ]
+    )
+    session.commit()
+
+    order = [
+        p["id"] for p in authorized_client.get("/posts/?sort=discussed").json()["items"]
+    ]
+    assert order[0] == thread
+    assert order.index(thread) < order.index(just_now)
+
+
+def test_the_comment_join_does_not_multiply_the_vote_count(
+    authorized_client, test_posts, session, test_user, test_user2
+):
+    """Two outer joins fan out: three votes and two comments is six rows, and a
+    plain count would call that six of each. This is the test that would have
+    caught it."""
+    post_id = test_posts[0].id
+    session.add_all(
+        [
+            models.Vote(post_id=post_id, user_id=test_user["id"]),
+            models.Vote(post_id=post_id, user_id=test_user2["id"]),
+            models.Comment(post_id=post_id, user_id=test_user["id"], content="a"),
+            models.Comment(post_id=post_id, user_id=test_user["id"], content="b"),
+            models.Comment(post_id=post_id, user_id=test_user["id"], content="c"),
+        ]
+    )
+    session.commit()
+
+    for query in ("", "?sort=warm", "?sort=discussed"):
+        page = authorized_client.get(f"/posts/{query}").json()
+        row = next(p for p in page["items"] if p["id"] == post_id)
+        assert (
+            row["votes"] == 2
+        ), f"votes were {row['votes']} for {query or 'the default'}"
+        assert row["voted"] is True
+
+
+def test_sort_is_ignored_while_searching(authorized_client, test_posts, session):
+    """Relevance leads when somebody asks a question. "The warmest, in
+    relevance order" is not a thing anybody asked for."""
+    _aged(session, test_posts[0], 24 * 14)
+    plain = authorized_client.get("/posts/?search=title").json()
+    warm = authorized_client.get("/posts/?search=title&sort=warm").json()
+    assert [p["id"] for p in plain["items"]] == [p["id"] for p in warm["items"]]
+
+
+def test_an_unknown_sort_is_a_422(authorized_client, test_posts):
+    assert authorized_client.get("/posts/?sort=new").status_code == 200
+    assert authorized_client.get("/posts/?sort=warm").status_code == 200
+    assert authorized_client.get("/posts/?sort=discussed").status_code == 200
+    assert authorized_client.get("/posts/?sort=best").status_code == 422
+
+
+def test_sorting_leaves_the_visibility_rules_alone(anonymous_client, own_draft):
+    for sort in ("new", "warm", "discussed"):
+        page = anonymous_client.get(f"/posts/?sort={sort}").json()
+        assert own_draft.id not in [p["id"] for p in page["items"]]

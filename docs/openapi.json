@@ -348,6 +348,16 @@
         "title": "PostPage",
         "type": "object"
       },
+      "PostSort": {
+        "description": "How the feed is ordered.\n\n`new` is the default and needs no explanation. The other two are rankings,\nand what makes them rankings rather than tallies is that both decay — see\ndocs/adr/0008-a-ranking-with-two-gravities.md for how the two constants\nwere chosen, which was by measuring rather than by copying Hacker News.",
+        "enum": [
+          "new",
+          "warm",
+          "discussed"
+        ],
+        "title": "PostSort",
+        "type": "string"
+      },
       "PostUpdate": {
         "description": "Body for PATCH /posts/{id} — every field optional, only sent ones change.",
         "properties": {
@@ -827,6 +837,17 @@
               "maxLength": 100,
               "title": "Search",
               "type": "string"
+            }
+          },
+          {
+            "description": "`new` is newest first. `warm` and `discussed` are rankings that decay with age, so neither becomes a museum of whatever was popular two years ago. Ignored while searching, where relevance leads. See ADR 0008 for the two constants.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PostSort",
+              "default": "new",
+              "description": "`new` is newest first. `warm` and `discussed` are rankings that decay with age, so neither becomes a museum of whatever was popular two years ago. Ignored while searching, where relevance leads. See ADR 0008 for the two constants."
             }
           },
           {

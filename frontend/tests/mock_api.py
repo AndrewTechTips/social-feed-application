@@ -74,6 +74,20 @@ def now_iso(offset_seconds: int = 0) -> str:
     return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).isoformat()
 
 
+# — ranking ------------------------------------------------------------------
+# Mirrors VOTE_GRAVITY / COMMENT_GRAVITY in backend/app/routers/post.py. See
+# docs/adr/0008-a-ranking-with-two-gravities.md for how they were chosen.
+VOTE_GRAVITY = 0.5
+COMMENT_GRAVITY = 0.25
+SORTS = ("new", "warm", "discussed")
+
+
+def decayed(count: int, created_at: str, gravity: float) -> float:
+    age = datetime.now(timezone.utc) - datetime.fromisoformat(created_at)
+    hours = max(0.0, age.total_seconds() / 3600.0)
+    return count / ((hours + 2) ** gravity)
+
+
 # — search -------------------------------------------------------------------
 # The real backend hands this to Postgres: a generated tsvector over title
 # (weight A) and body (weight B), a GIN index, websearch_to_tsquery, and
@@ -813,6 +827,21 @@ class Handler(BaseHTTPRequestHandler):
         # else, and FastAPI ignores a query parameter a route never asked for —
         # so a profile that honoured it here would be answering differently
         # from the thing this file exists to stand in for.
+        sort = query.get("sort", ["new"])[0]
+        if sort not in SORTS:
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["query", "sort"],
+                            "msg": f"Input should be {' or '.join(repr(s) for s in SORTS)}",
+                            "type": "enum",
+                        }
+                    ]
+                },
+            )
+
         as_of = None
         raw_as_of = query.get("as_of", [None])[0]
         if raw_as_of is not None and only_author is None:
@@ -850,12 +879,33 @@ class Handler(BaseHTTPRequestHandler):
 
         if terms:
             # Relevance leads, recency breaks the tie — matching the ORDER BY
-            # in page_of_posts().
+            # in page_of_posts(). `sort` is ignored here for the same reason it
+            # is there: "the warmest, in relevance order" means nothing.
             scored = [(search_rank(r, terms), r) for r in visible]
             ranked = [(rank, r) for rank, r in scored if rank is not None]
             ranked.sort(key=lambda pair: (pair[0], pair[1]["created_at"], pair[1]["id"]),
                         reverse=True)
             rows = [r for _rank, r in ranked]
+        elif sort in ("warm", "discussed"):
+            if sort == "warm":
+                count_of = lambda r: sum(  # noqa: E731
+                    1 for (_e, pid) in ST.votes if pid == r["id"]
+                )
+                gravity = VOTE_GRAVITY
+            else:
+                count_of = lambda r: sum(  # noqa: E731
+                    1 for c in ST.comments.values() if c["post_id"] == r["id"]
+                )
+                gravity = COMMENT_GRAVITY
+            rows = sorted(
+                visible,
+                key=lambda r: (
+                    decayed(count_of(r), r["created_at"], gravity),
+                    r["created_at"],
+                    r["id"],
+                ),
+                reverse=True,
+            )
         else:
             rows = sorted(
                 visible, key=lambda r: (r["created_at"], r["id"]), reverse=True
