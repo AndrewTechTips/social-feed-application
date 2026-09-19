@@ -172,7 +172,16 @@ test.describe("new since your last visit", () => {
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(5);
 
-    await expect(page.locator(SINCE)).toHaveText("Five new posts since you were last here.");
+    // The moment is named loosely here, and only here, because this is one of
+    // the two tests that plants a visit *31 minutes* in the past to clear the
+    // session window — and for the first 31 minutes of any day that timestamp
+    // is genuinely yesterday. The app is right to say so; it is the assertion
+    // that would be wrong. The count and the mark are what this test is about,
+    // and both are still exact. The wording itself is pinned by the tests
+    // above, which plant their visits seconds ago and cannot cross midnight.
+    await expect(page.locator(SINCE)).toHaveText(
+      /^Five new posts since (you were last here|yesterday)\.$/
+    );
     await expect(page.locator(BOOKMARK)).toHaveCount(0);
   });
 
@@ -184,8 +193,9 @@ test.describe("new since your last visit", () => {
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(10);
 
+    // Loose about the moment, exact about the floor — see the note above.
     await expect(page.locator(SINCE)).toHaveText(
-      "At least ten new posts since you were last here."
+      /^At least ten new posts since (you were last here|yesterday)\.$/
     );
   });
 

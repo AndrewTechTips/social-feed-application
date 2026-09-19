@@ -468,6 +468,28 @@ about the reader.
 
 ### Fixed
 
+- **Whether you could see which notifications were new was a coin flip.** Found
+  by driving the real app rather than by reading it. Opening the screen fired
+  two requests — fetch the list, tell the server they are seen — and sent
+  together they race *at the database*: the UPDATE can commit before the SELECT
+  runs, and then every row comes back already read and the rule down the left,
+  the only thing saying which of these you had not seen, is drawn on none of
+  them. It went either way on successive loads.
+
+  The write now waits for the list, which also makes it honest: they are marked
+  as seen once they have actually been shown. And if the list never arrives the
+  count is put straight back, rather than leaving the lamp dark for up to
+  forty-five seconds on the strength of a list that failed to load.
+
+- **`unread.spec.js` failed for the first 31 minutes of every day.** Two of its
+  tests plant a visit 31 minutes in the past to clear the session window, and
+  asserted the line would read "since you were last here" — but across midnight
+  that timestamp is genuinely yesterday, and the app said so correctly. The
+  assertions now name the count and the mark exactly and the moment loosely;
+  the wording is still pinned by the tests that plant their visits seconds ago
+  and cannot cross midnight.
+
+
 - **`docs/seed_demo.py` had been left behind by the `/api/v1` move.** Every call
   it makes is to a path that no longer exists, so the script that builds the
   README's screenshots would have failed on its first request. Caught while

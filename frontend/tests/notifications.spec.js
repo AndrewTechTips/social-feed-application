@@ -281,3 +281,58 @@ test("it holds together at 320px", async ({ page, api }) => {
   );
   expect(spills).toBe(false);
 });
+
+// ── which ones are new ─────────────────────────────────────────────────────
+test("the ones you hadn't seen are marked, and the marking waits for the list", async ({
+  page,
+  api,
+}) => {
+  // Found live rather than by reading the code. Opening the screen fires two
+  // requests — fetch the list, tell the server they are seen — and sent
+  // together they race *at the database*: the UPDATE can commit before the
+  // SELECT runs, and then every row comes back already read and the rule down
+  // the left, the only thing saying which of these are new, is drawn on none
+  // of them. It went either way on successive loads.
+  //
+  // So the write waits for the list. This watches the order as well as the
+  // outcome, because the outcome alone passes half the time on the bug.
+  const order = [];
+  page.on("request", (r) => {
+    if (/notifications\/\?page=/.test(r.url())) order.push("list sent");
+    if (/notifications\/read/.test(r.url())) order.push("read sent");
+  });
+  page.on("response", (r) => {
+    if (/notifications\/\?page=/.test(r.request().url())) order.push("list back");
+  });
+
+  await room(page, api, BEA);
+  await comment(page, "Something you have not seen yet");
+  await switchTo(page, ADA);
+  await page.goto("/#/notifications");
+  await expect(notices(page)).toHaveCount(1);
+
+  await expect(page.locator(".notice--unread")).toHaveCount(1);
+
+  test.skip(order.length === 0, "no HTTP requests to observe in demo mode");
+  expect(order.indexOf("list back")).toBeLessThan(order.indexOf("read sent"));
+});
+
+test("and they are not marked at all if the list never arrives", async ({ page, api }) => {
+  // The other half of waiting: they are seen once they have been shown. A list
+  // that failed to load has shown nothing, so the count must survive it.
+  await room(page, api, BEA);
+  await comment(page, "Still unread after a failure");
+  await switchTo(page, ADA);
+  await expect(count(page)).toHaveText("1");
+
+  // Matched on the path alone — both stand-ins strip the query before testing
+  // the rule — so this is queued after the poll has already been and gone,
+  // which leaves the list as the next request through that path.
+  await api.failNext({ method: "GET", path: "^/notifications/$", status: 500 });
+  await page.goto("/#/notifications");
+  await expect(page.locator(".feed__status")).toContainText("Couldn't load");
+
+  await page.goto("/#/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+  await expect(count(page)).toHaveText("1");
+});

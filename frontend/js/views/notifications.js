@@ -183,15 +183,31 @@ export function renderNotifications({ isStale }) {
 
   mountView(root);
   setupObserver();
-  load(true);
 
-  // The lamp goes out now rather than when the request answers: the reader is
-  // looking at the list, so the badge is already wrong. The write follows, and
-  // if it fails the next poll puts the number back — which is the right way
-  // round, because a count that is briefly too low is a smaller lie than a
-  // badge that will not go away.
+  // The lamp goes out now rather than when anything answers: the reader is
+  // looking at the list, so the badge is already wrong. If the write below
+  // fails, the next poll puts the number back — a count that is briefly too
+  // low is a smaller lie than a badge that will not go away.
   markAllSeen();
-  api
-    .post("/notifications/read", undefined)
-    .catch(() => refreshUnread());
+
+  // The *server* is told only once the list has arrived, and that ordering is
+  // the whole point rather than tidiness.
+  //
+  // Sent together, the two race at the database: the UPDATE can commit before
+  // the SELECT runs, and then every row comes back already read and the rule
+  // down the left — the only thing saying *which* of these you haven't seen —
+  // is drawn on none of them. Measured live, it went either way on successive
+  // loads.
+  //
+  // Waiting also makes the write honest: they are marked as seen once they
+  // have actually been shown, so a list that failed to load leaves the count
+  // alone for next time.
+  load(true).then(() => {
+    if (isStale()) return;
+    // Nothing arrived, so nothing has been seen. Put the number back rather
+    // than leaving the lamp dark until the next poll — the badge was cleared
+    // on the promise of a list that never came.
+    if (total === null) return refreshUnread();
+    api.post("/notifications/read", undefined).catch(() => refreshUnread());
+  });
 }
