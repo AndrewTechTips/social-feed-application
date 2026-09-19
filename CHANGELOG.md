@@ -23,6 +23,21 @@ about the reader.
 
 ### Added
 
+- **The demo can show you its notifications.** The published site has one
+  visitor and nobody else awake, and you cannot be notified by yourself — so a
+  freshly registered account would have found the lamp unlit for ever, and a
+  feature that works on both backends would have been invisible on the one
+  deployment most people ever open.
+
+  The seeded comments now carry the notifications they would have caused, and
+  the demo notice offers to sign you in as one of the people who received them.
+  They are **derived, not authored**: the same two rules the API applies, run
+  over the same seeded comments, so `seed.json` stays a description of a
+  conversation and cannot drift into describing a different one. The colophon
+  says out loud that they are staged, and why. `docs/seed_demo.py` gets them for
+  free, because it writes through the API rather than inserting rows.
+
+
 - **Notifications.** Somebody replies to your comment, or comments on your post,
   and a count appears on a lamp in the header. `#/notifications` lists them —
   who, the first words of what they said, and which post — with the whole line
@@ -377,6 +392,21 @@ about the reader.
 
 ### Changed
 
+- **`components.css` split in two.** It had become the file everything landed
+  in — 1,358 lines of header, buttons, cards, palette, toasts and demo notice.
+  `chrome.css` now holds the frame the app is drawn inside: the header and
+  everything in it, the reading progress line, toasts, the command palette, the
+  demo notice. `components.css` keeps the pieces a view is built *from*.
+
+  The line is what a rule belongs to, not how big the file got. What made the
+  split safe to do was checking rather than assuming: the two groups share no
+  class at all, so nothing in one overrides anything in the other and the order
+  they load in cannot change what anybody sees. The one block that genuinely
+  mixed the two — the 640px media query — was split along the same line, each
+  half sitting beside what it changes. Verified declaration-for-declaration:
+  649 before, 649 after.
+
+
 - **The API moved to `/api/v1`.** Every route the app serves is under it; `/`
   and `/healthz` deliberately are not, because a liveness probe is asked for by
   whatever is running the container and has to keep answering across a version
@@ -437,6 +467,15 @@ about the reader.
   Said plainly in the README and the ADR rather than papered over.
 
 ### Fixed
+
+- **`docs/seed_demo.py` had been left behind by the `/api/v1` move.** Every call
+  it makes is to a path that no longer exists, so the script that builds the
+  README's screenshots would have failed on its first request. Caught while
+  checking something else, which is the only reason it was caught at all: it
+  needs a throwaway database and a running server, so nothing in CI exercises
+  it. It also now seeds a reply, so the screenshots show threading and both
+  kinds of notification rather than neither.
+
 
 - **Any list could be torn down by an event that changed nothing, and the
   profile usually was.** `hashchange` fires once per *event*, not once per

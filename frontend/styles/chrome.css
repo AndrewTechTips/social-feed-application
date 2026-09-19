@@ -1,0 +1,672 @@
+/* ============================================================================
+   chrome.css — the frame the app is drawn inside.
+   The header and everything that lives in it (the search, the account cluster,
+   the lamp), the reading progress line, toasts, the command palette, and the
+   demo notice.
+
+   Split out of components.css, which had become the file everything landed in.
+   The line between the two is what a rule belongs to rather than how big it
+   is: the pieces here are on screen regardless of which view is up, and a view
+   never styles them. components.css holds the pieces a view is built *from* —
+   a button, a card, a field — and is the file a new screen reaches for.
+
+   The two share no class. That was checked rather than assumed before they
+   were separated, which is what made the split safe: nothing here overrides
+   anything there, so the order they load in cannot change what anybody sees.
+   The order in index.html is still components first, because this file's
+   `.lamp` sets a button custom property and used to sit below `.btn--quiet` in
+   the single file.
+   ========================================================================== */
+
+/* — header ------------------------------------------------------------------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+  border-bottom: 1px solid var(--border);
+}
+.site-header::before {
+  /* hairline gradient sitting on the very top edge */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: var(--hairline);
+}
+/* — reading progress ------------------------------------------------------------
+   A 2px amber hairline lying along the header's bottom edge, filling as you
+   read. It exists because long serif posts are the reading experience the
+   whole type system was built for, and a reader forty percent into one has no
+   other way to know it.
+
+   No JavaScript and no scroll listener: animation-timeline hands the animation
+   the document's own scroll progress, so it is exact by construction, cannot
+   drift out of step with the page, and costs nothing per frame — it animates a
+   transform, which never leaves the compositor.
+
+   It measures the page rather than the post element, comments included. That's
+   the honest reading: the thread is part of what you came for, and a bar that
+   filled up two thirds of the way down the screen would be telling you you had
+   finished something you hadn't.
+
+   Everything is inside @supports, and the element is display:none outside it,
+   so a browser without scroll-driven animations gets an empty span and no
+   stray amber rule. That is the entire fallback story.
+   -------------------------------------------------------------------------- */
+.reading {
+  display: none;
+}
+@supports (animation-timeline: scroll()) {
+  body:has(#view .detail) .reading {
+    display: block;
+    position: absolute;
+    /* -1px so it lies *on* the header's bottom border rather than under it:
+       the line the eye already reads as "the chrome ends here" is the one
+       that fills. */
+    inset: auto 0 -1px 0;
+    height: 2px;
+    z-index: 1;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    animation: reading linear both;
+    animation-timeline: scroll(root block);
+  }
+
+  /* base.css collapses every animation-duration to 0.01ms under reduced
+     motion, which is right for anything that plays at you and wrong here: with
+     a progress-based timeline it would snap the bar to full at the first
+     pixel. Nothing about this moves unless the reader moves the page, so it
+     keeps its progress-based duration and stays truthful. */
+  @media (prefers-reduced-motion: reduce) {
+    body:has(#view .detail) .reading {
+      animation-duration: auto !important;
+    }
+  }
+}
+@keyframes reading {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.site-header__inner {
+  /* The positioning context for .focus-out, which takes the place of the brand,
+     the search and the account cluster while focus mode is on — see views.css. */
+  position: relative;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  min-height: var(--header-h);
+  /* The top inset keeps the row clear of the status bar / notch, which
+     viewport-fit=cover deliberately lets us paint under. */
+  padding: calc(var(--s-2) + env(safe-area-inset-top))
+    max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
+    max(var(--s-4), env(safe-area-inset-left));
+  display: grid;
+  /* minmax(0, …) on the middle track, not a bare 1fr: a bare 1fr refuses to go
+     below the search field's min-content, so once the brand and the account
+     cluster stop fitting the whole row overflows sideways instead. The search
+     is the one thing here that can afford to give ground, so let it. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  justify-self: start;
+  color: var(--text);
+  text-decoration: none;
+  font-family: var(--font-serif);
+  font-size: var(--fs-brand);
+  letter-spacing: 0.01em;
+}
+.brand__mark {
+  color: var(--text-dim);
+  transition: color var(--t-mid) var(--ease), transform var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .brand:hover .brand__mark {
+    color: var(--accent);
+    transform: rotate(-8deg);
+  }
+}
+.brand:active .brand__mark {
+  color: var(--accent);
+}
+.brand__word {
+  font-weight: 500;
+}
+
+/* — search --------------------------------------------------------------------- */
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  justify-self: stretch;
+  max-width: 30rem;
+  padding-inline: var(--s-3);
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
+  color: var(--text-dim);
+  transition: border-color var(--t-mid) var(--ease),
+    background-color var(--t-mid) var(--ease);
+}
+.search:focus-within {
+  border-color: var(--border-strong);
+  background: var(--surface-solid);
+}
+.search__icon {
+  flex: none;
+}
+.search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: var(--fs-field);
+}
+.search__input::placeholder {
+  color: var(--text-faint);
+}
+/* the native clear affordance clashes with the pill; keep it tidy */
+.search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* — account cluster --------------------------------------------------------- */
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  justify-self: end;
+  min-width: 0;
+}
+/* Write / Sign out: icon + word on a roomy screen, icon alone when the row
+   gets tight (see the narrow-screen rules in views.css). The accessible name
+   comes from aria-label either way, so hiding the word costs nothing. */
+.btn--action {
+  min-height: 44px;
+}
+/* Nice to have, first to go: from roughly 640 to 900px the signed-in cluster
+   and the search stop fitting on one row, and the email is the only part of
+   the cluster that isn't an action. */
+@media (max-width: 900px) {
+  .account__email {
+    display: none;
+  }
+}
+.account__email {
+  max-width: 15ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .account__email:hover {
+    color: var(--text);
+  }
+}
+
+/* — toasts ----------------------------------------------------------------------- */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: max(var(--s-5), env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  /* % on a fixed element is the viewport minus the scrollbar — 100vw isn't,
+     and would push the toast a scrollbar's width off-centre on the desktop. */
+  width: min(28rem, calc(100% - 2 * var(--s-4)));
+  pointer-events: none;
+}
+.toast {
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  pointer-events: auto;
+  animation: toast-in var(--t-mid) var(--ease) both;
+}
+.toast--leaving {
+  animation: toast-out var(--t-mid) var(--ease-in) both;
+}
+.toast::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: var(--hairline);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* — narrow screens ---------------------------------------------------------
+   Glass is the first thing to go. A backdrop-filter makes the browser snapshot
+   and blur everything behind the element on every frame it scrolls over; on a
+   phone GPU that's what turns a sticky header into a smear. Below 640px the
+   header, panels and toasts use their opaque fallbacks instead — same reading
+   surface, none of the per-frame cost.
+
+   The card and confirm rules that used to share this block are in
+   components.css under the same breakpoint, beside the things they change.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .site-header {
+    background: var(--glass-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .toast {
+    background: var(--panel-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Write / Sign out shed their words so the whole cluster — including the
+     theme toggle, which used to be pushed clean off the screen at 320px —
+     fits on one row. aria-label still carries the name. */
+  .btn--action {
+    min-width: 44px;
+    padding-inline: 0;
+  }
+  .btn--action .btn__label {
+    display: none;
+  }
+  .account {
+    gap: var(--s-1);
+  }
+  .site-header__inner {
+    gap: var(--s-2) var(--s-3);
+  }
+}
+
+/* — demo notice ---------------------------------------------------------------
+   Only ever present on the published (static-host) build, where the app is
+   answering its own API calls. Two placements, never both at once: a band
+   under the header, or folded into the masthead when that's on screen. See
+   syncDemoStrip in main.js.
+
+   Either way it scrolls with the page — this is context, not a control, and
+   pinning it would be shouting.
+   -------------------------------------------------------------------------- */
+/* shared by both placements */
+.demo {
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+}
+.demo--band {
+  border-bottom: 1px solid var(--border);
+  /* A neutral band, not a tinted one. The accent is reserved for live things —
+     your identity, an active upvote, a link — and a standing notice is not one
+     of those. An amber wash here also pulled the light theme toward the warm
+     cream it deliberately isn't. Only the label is accented. */
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-2));
+}
+.demo__inner {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
+    max(var(--s-4), env(safe-area-inset-left));
+}
+
+/* Inside the masthead it isn't a band: no full-bleed background, no border, no
+   page padding — it's the third line of a block that already has all three. */
+.demo--inline {
+  margin-top: var(--s-4);
+}
+.demo--inline .demo__inner {
+  padding: 0;
+  gap: var(--s-3);
+  align-items: baseline;
+}
+.demo__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
+.demo__label {
+  /* --accent-text, not --accent: this is 13px type, and the raw amber is a
+     fill colour that can't carry small text on the light theme's band. */
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.demo__text a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+@media (hover: hover) {
+  .demo__text a:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+}
+.demo__actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.demo__action {
+  min-height: 36px;
+  font-size: var(--fs-meta);
+}
+/* the fold chevron points down when open, up when folded */
+.demo__fold {
+  min-height: 36px;
+  min-width: 36px;
+  transform: rotate(-90deg);
+  transition: transform var(--t-mid) var(--ease);
+}
+.demo--folded .demo__fold {
+  transform: rotate(90deg);
+}
+.demo--folded .demo__text {
+  /* keep the label, drop the explanation — the strip stays visible either way */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo--folded .demo__action {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .demo--band .demo__inner {
+    align-items: flex-start;
+    gap: var(--s-2);
+    padding-block: var(--s-3);
+  }
+  .demo--inline .demo__inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+  }
+  .demo__action {
+    min-height: 44px;
+  }
+  .demo__fold {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .demo--folded .demo__inner {
+    align-items: center;
+  }
+}
+
+/* — command palette ----------------------------------------------------------
+   A panel over a dimmed page, near the top rather than centred — the list grows
+   downwards and a centred panel would jump about as it does.
+   -------------------------------------------------------------------------- */
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  /* dvh, not vh: vh is frozen at the largest viewport, so on a phone with
+     the URL bar showing a vh-sized panel is taller than the screen. */
+  padding: max(10dvh, var(--s-7)) var(--s-4) var(--s-4);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: palette-in var(--t-fast) var(--ease) both;
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.palette__panel {
+  width: min(34rem, 100%);
+  max-height: min(60dvh, 28rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  position: relative;
+}
+.palette__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: var(--hairline);
+}
+.palette__field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  flex: none;
+}
+.palette__glyph {
+  flex: none;
+}
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: var(--fs-field);
+}
+.palette__input::placeholder {
+  color: var(--text-faint);
+}
+.palette__list {
+  margin: 0;
+  padding: var(--s-2);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 40px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+/* Selection is driven by aria-selected, so the keyboard and the pointer can't
+   disagree about which row is live. */
+.palette__row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+.palette__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-ui);
+}
+.palette__key {
+  flex: none;
+  min-width: 1.6em;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  text-align: center;
+}
+.palette__row[aria-selected="true"] .palette__key {
+  border-color: var(--border-strong);
+  color: var(--text-dim);
+}
+.palette__empty {
+  padding: var(--s-5) var(--s-4) var(--s-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+
+/* The hint that the palette exists at all. Pointer-fine only: there's no ⌘K on
+   a phone, and advertising one there would be a lie. */
+.search__hint {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.search__hint kbd {
+  font: inherit;
+}
+@media (hover: hover) {
+  .search__hint:hover {
+    border-color: var(--border-strong);
+    color: var(--text-dim);
+  }
+}
+@media (max-width: 900px), (pointer: coarse) {
+  .search__hint {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .palette {
+    padding-top: var(--s-6);
+  }
+  .palette__panel {
+    background: var(--panel-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .palette__row {
+    min-height: 44px;
+  }
+}
+
+/* The row's ordinal — ⌥1 to ⌥5 — at the head of the row.
+   Quieter than .palette__key on the right: that one is a shortcut that works
+   anywhere in the app and is worth advertising, this one is a position in a
+   list that is already on screen. No border, so the two don't read as a pair
+   of keys with the label stranded between them. */
+.palette__ordinal {
+  flex: none;
+  width: 2.1em;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+/* Rows past the fifth keep the same indent rather than sliding left, so the
+   labels stay in one column and the numbers read as running out rather than as
+   a change of layout. */
+.palette__ordinal--none {
+  visibility: hidden;
+}
+
+/* The lamp, and the one number in the header.
+   The shelf link deliberately has no count — a number in the corner of a header
+   is a notification badge whatever you call it — and this is the exception that
+   proves it: this one *is* an inbox.
+
+   No amber. The accent is spent on a vote, on warmth and on where you are; an
+   unread count is none of those. It is said in the neutrals, and what carries
+   it is weight and a filled shape, the same way the shelf's saved state does. */
+.lamp {
+  position: relative;
+}
+.lamp--lit {
+  --btn-fg: var(--text);
+}
+.lamp__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  margin-left: calc(var(--s-1) * -1);
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+/* On a narrow screen the label is hidden and the button is a 44px icon, so the
+   count comes off the end of the row and sits on the lamp instead. */
+@media (max-width: 640px), (pointer: coarse) {
+  .lamp__count {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    margin-left: 0;
+  }
+}

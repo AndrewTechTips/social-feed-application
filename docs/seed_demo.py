@@ -27,7 +27,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-API = os.environ.get("DEMO_API", "http://127.0.0.1:8001")
+# The origin, and — separately — where the API lives under it.
+#
+# Kept apart so DEMO_API stays what it has always been: a host to point at.
+# The prefix mirrors API_PREFIX in backend/app/config.py, and every path below
+# is written without it, exactly as the app's own client writes them.
+ORIGIN = os.environ.get("DEMO_API", "http://127.0.0.1:8001")
+API = ORIGIN + "/api/v1"
 DB = os.environ.get("DATABASE_NAME", "commons_shots")
 PW = "commons-demo-pw"
 
@@ -49,7 +55,10 @@ def wipe() -> None:
     )
     with create_engine(url).begin() as conn:
         conn.execute(
-            text("TRUNCATE comments, votes, posts, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE notifications, comments, votes, posts, users "
+                "RESTART IDENTITY CASCADE"
+            )
         )
     print(f"emptied {DB}")
 
@@ -221,20 +230,37 @@ def main() -> int:
     # A couple of threads, so the post screenshot shows the feature rather than
     # an empty state. Mirrors what frontend/js/demo/seed.json gives the live
     # demo — different posts, because this list is a subset of that one.
+    #
+    # `answers` is a 1-based index into this list, not a comment id: the ids are
+    # handed out by the loop below, so the table cannot know them. A reply may
+    # only point at something listed before it. It must also point at a
+    # *top-level* comment — replies go one level deep, and the API refuses a
+    # second — so "Thursday it is." answers the question rather than the answer
+    # it is really agreeing with, which is how it renders on the thread anyway.
+    #
+    # Two of these are replies because the screenshots are the only place the
+    # threading and the two kinds of notification can be seen at a glance.
     COMMENTS = [
-        (ids[0], 1, "Which tram depot? I've been meaning to find somewhere like this.", "11 days"),
-        (ids[0], 0, "The one past the bridge. Thursdays are quietest.", "10 days"),
-        (ids[0], 1, "Thursday it is.", "9 days"),
-        (ids[1], 2, "A newspaper ends. That's the whole argument, and it took you two sentences.", "6 days"),
-        (ids[1], 4, "Counterpoint: the bottom of a feed is where I discover it's half past one.", "5 days"),
+        (ids[0], 1, None, "Which tram depot? I've been meaning to find somewhere like this.", "11 days"),
+        (ids[0], 0, 1, "The one past the bridge. Thursdays are quietest.", "10 days"),
+        (ids[0], 2, 1, "Thursday it is. I'll bring the thermos.", "9 days"),
+        (ids[1], 2, None, "A newspaper ends. That's the whole argument, and it took you two sentences.", "6 days"),
+        (ids[1], 4, None, "Counterpoint: the bottom of a feed is where I discover it's half past one.", "5 days"),
     ]
     aged = []
-    for pid, who, content, age in COMMENTS:
-        c = call(f"/posts/{pid}/comments", {"content": content},
-                 token=tokens[EMAILS[who]])
+    made = []
+    for pid, who, answers, content, age in COMMENTS:
+        body = {"content": content}
+        if answers is not None:
+            body["parent_id"] = made[answers - 1]
+        c = call(f"/posts/{pid}/comments", body, token=tokens[EMAILS[who]])
+        made.append(c["id"])
         aged.append((c["id"], age))
-    print("created comments", [cid for cid, _ in aged])
+    print("created comments", made)
     age_comments(aged)
+    # Nothing to do for notifications: these went through the API, so the rows
+    # exist already, made by the same rule the app uses. That is the whole
+    # reason this script writes through the API rather than inserting directly.
     return 0
 
 

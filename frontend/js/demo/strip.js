@@ -19,12 +19,19 @@
 // and the same person tomorrow — sees it again. A notice you can permanently
 // dismiss is a notice that stops being true.
 
-import { h, icon } from "../ui.js";
+import { h, icon, toast } from "../ui.js";
+import { api } from "../api.js";
 import { resetDemo, REPO_URL } from "../config.js";
-import { clearSession, dropFeedCache } from "../store.js";
+import { navigate } from "../router.js";
+import { clearSession, dropFeedCache, setAccess, setSession, get } from "../store.js";
 
 const REPO = REPO_URL;
 const FOLDED_KEY = "commons.demo.strip-folded";
+
+// The one password in the seeded data, and the same one every seeded account
+// carries. It is in js/demo/seed.json in plain sight, which is the correct
+// amount of secrecy for five fictional people whose posts reset on request.
+const SEED_PASSWORD = "commons-demo-pw";
 
 const folded = () => {
   try {
@@ -68,6 +75,57 @@ export function demoSentence() {
   );
 }
 
+// Somebody who has been here a while.
+//
+// The seeded feed is a room with five people in it and a conversation already
+// going, and a visitor who registers a fresh account can see none of that from
+// the inside: nobody has replied to them, nobody has commented on their posts,
+// and you cannot be notified by yourself. The lamp in the header would be unlit
+// for ever on the one deployment most people will ever look at.
+//
+// So: one press, and you are Jo. Jo has three notifications — a reply and two
+// comments, which is both kinds — three posts and a thread. Not a password
+// printed on the page: this is a real sign-in through the real form's code
+// path, and the credential is in seed.json where the rest of the demo's
+// furniture lives.
+//
+// Only offered when nobody is signed in. Offering to make you somebody else
+// while you are already someone is a way to lose a half-written post.
+const DEMO_PERSON = { email: "j.okafor@example.com", name: "Jo" };
+
+export function signInAsButton() {
+  const button = h(
+    "button",
+    { class: "btn btn--quiet demo__action demo__signin", type: "button" },
+    `Sign in as ${DEMO_PERSON.name}`
+  );
+  // The band is built once and kept, so it cannot decide this at build time
+  // the way the masthead's copy can. main.js's syncDemoStrip — which already
+  // runs on every session change — hides it by this class.
+  button.hidden = !!get("session");
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Just a sec…";
+    try {
+      // The same two calls the sign-in form makes, in the same order, for the
+      // same reason: the token says nothing about the person it signed in.
+      setAccess(await api.login(DEMO_PERSON.email, SEED_PASSWORD));
+      const me = await api.get("/users/me");
+      setSession({ id: me.id, username: me.username });
+      dropFeedCache();
+      toast(`Signed in as ${me.username}.`);
+      navigate("/");
+    } catch (e) {
+      button.disabled = false;
+      button.textContent = `Sign in as ${DEMO_PERSON.name}`;
+      toast("That didn't go through. Try again?");
+    }
+  });
+
+  return button;
+}
+
 export function resetButton() {
   const reset = h(
     "button",
@@ -100,7 +158,17 @@ export function demoNote() {
   return h(
     "div",
     { class: "demo demo--inline", "aria-label": "About this demo" },
-    h("div", { class: "demo__inner" }, demoSentence(), h("div", { class: "demo__actions" }, resetButton()))
+    h(
+      "div",
+      { class: "demo__inner" },
+      demoSentence(),
+      h(
+        "div",
+        { class: "demo__actions" },
+        ...(get("session") ? [] : [signInAsButton()]),
+        resetButton()
+      )
+    )
   );
 }
 
@@ -121,7 +189,7 @@ export function mountDemoStrip() {
       "div",
       { class: "demo__inner" },
       demoSentence(),
-      h("div", { class: "demo__actions" }, resetButton(), fold)
+      h("div", { class: "demo__actions" }, signInAsButton(), resetButton(), fold)
     )
   );
 

@@ -47,7 +47,7 @@ async function switchTo(page, email) {
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill("seedpassword");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/#\/$/);
 }
 

@@ -77,7 +77,7 @@ test("a post has no violations", async ({ page, api }) => {
 
 test("sign in has no violations", async ({ page, api }) => {
   await page.goto("/#/login");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await scan(page);
 });
 
@@ -91,7 +91,7 @@ test("a form showing its errors has no violations", async ({ page, api }) => {
   // Error states are where the labelling usually comes apart: a message that
   // isn't associated with its field, or a live region that never announces.
   await page.goto("/#/login");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Enter your email.")).toBeVisible();
   await scan(page);
 });

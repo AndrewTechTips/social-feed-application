@@ -12,7 +12,7 @@ test("wrong password shows one friendly line and stays on the page", async ({
 
   await page.getByLabel("Email").fill("ada@commons.test");
   await page.getByLabel("Password", { exact: true }).fill("nope-that's-wrong");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
   await expect(page.getByText("That email and password don't match.")).toBeVisible();
   await expect(page).toHaveURL(/#\/login$/);
@@ -35,7 +35,7 @@ test("registering a taken email is explained", async ({ page, api }) => {
 
 test("empty sign-in fields get inline errors", async ({ page }) => {
   await page.goto("/#/login");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
   await expect(page.getByText("Enter your email.")).toBeVisible();
   await expect(page.getByText("Enter a password.")).toBeVisible();
@@ -115,7 +115,7 @@ test("a registration whose sign-in fails says so, and moves you to sign in", asy
 
   // And it really was created, so signing in now works.
   await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 

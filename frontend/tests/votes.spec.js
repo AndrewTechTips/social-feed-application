@@ -92,7 +92,7 @@ test("somebody else's vote is not yours", async ({ page, api }) => {
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.getByLabel("Email").fill("bea@commons.test");
   await page.getByLabel("Password", { exact: true }).fill("seedpassword");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/#\/$/);
   await expect(page.locator(CARD)).toHaveCount(2);
 

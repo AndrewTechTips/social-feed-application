@@ -219,7 +219,7 @@ test("the author of a post can't remove comments on it either", async ({
   await page.goto("/#/login");
   await page.getByLabel("Email").fill(mine);
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/#\/$/);
 
   await page.goto(`/#/posts/${postId}`);

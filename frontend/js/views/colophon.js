@@ -169,6 +169,19 @@ function honest() {
     h(
       "p",
       { class: "colophon__prose" },
+      "Two things here are staged, and staged is not the same as faked. The " +
+        "feed opens on fourteen posts and a conversation between five people " +
+        "who do not exist, because an empty room demonstrates nothing. The " +
+        "notifications those five have are not written down anywhere: they are " +
+        "worked out from the seeded comments by the same two rules the API " +
+        "applies, so they are the notifications that conversation would " +
+        "actually have caused. The offer to sign in as one of them is there " +
+        "because you cannot be notified by yourself, and with one visitor and " +
+        "nobody else awake there is otherwise no way to see that screen at all."
+    ),
+    h(
+      "p",
+      { class: "colophon__prose" },
       "What stops the two drifting apart is that the contract is written down " +
         "and both are held to it: the generated ",
       out(`${REPO_URL}/blob/main/docs/openapi.json`, "OpenAPI spec"),

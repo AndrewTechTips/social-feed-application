@@ -94,7 +94,7 @@ test("a seeded draft belongs to its author", async ({ page }) => {
   await page.goto("/#/login");
   await page.getByLabel("Email").fill(author.email);
   await page.getByLabel("Password", { exact: true }).fill(author.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/#\/$/);
 
   await expect(page.getByRole("heading", { name: draft.title })).toBeVisible();
@@ -161,7 +161,7 @@ test("what you write survives a refresh, and Reset puts it back", async ({ page 
   await page.goto("/#/login");
   await page.getByLabel("Email").fill(author.email);
   await page.getByLabel("Password", { exact: true }).fill(author.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/#\/$/);
 
   await page.goto("/#/compose");
@@ -183,4 +183,97 @@ test("what you write survives a refresh, and Reset puts it back", async ({ page 
   ).toHaveCount(0);
   // and it signs you out, because the accounts went with the data
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+});
+
+// ── somebody who has been here a while ─────────────────────────────────────
+// The published site has one visitor and nobody else awake. You cannot be
+// notified by yourself, so a freshly registered account would find the lamp
+// unlit for ever — which would make a feature that works on both backends
+// invisible on the one deployment most people will ever open.
+//
+// So the seeded comments carry the notifications they would have caused, and
+// the demo offers to sign you in as one of the people who received them.
+
+/** The two rules the API applies, run over seed.json — the expected answer. */
+const seededFor = (email) =>
+  seed.comments.filter((c, i) => {
+    const recipient =
+      c.reply_to != null
+        ? seed.comments[c.reply_to - 1]?.author
+        : seed.posts[c.post - 1]?.author;
+    return recipient === email && recipient !== c.author;
+  });
+
+const JO = "j.okafor@example.com";
+
+test("the demo offers to sign you in as one of the people here", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+
+  const offer = page.getByRole("button", { name: "Sign in as Jo" });
+  await expect(offer).toBeVisible();
+
+  await offer.click();
+
+  await expect(page.locator(".account__email")).toHaveText("jokafor");
+  await expect(page).toHaveURL(/#\/$/);
+  // And the offer goes, because offering to make you somebody else while you
+  // are already someone is a way to lose a half-written post.
+  await expect(offer).toBeHidden();
+});
+
+test("that person has the notifications their conversation caused", async ({ page }) => {
+  const expected = seededFor(JO);
+  // Not a hard-coded number: if seed.json's conversation changes, the rules
+  // still say what the answer should be. But it must not be zero, or this test
+  // would pass on an app that seeds nothing at all.
+  expect(expected.length).toBeGreaterThan(0);
+
+  await page.goto("/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+  await page.getByRole("button", { name: "Sign in as Jo" }).click();
+  await expect(page.locator(".account__email")).toHaveText("jokafor");
+
+  await expect(page.locator(".lamp__count")).toHaveText(String(expected.length));
+
+  await page.goto("/#/notifications");
+  await expect(page.locator(".notice")).toHaveCount(expected.length);
+  // Both kinds, which is why this is the person the demo offers.
+  await expect(page.locator(".notice__who", { hasText: "replied to you" })).toHaveCount(
+    expected.filter((c) => c.reply_to != null).length
+  );
+  await expect(
+    page.locator(".notice__who", { hasText: "commented on your post" })
+  ).toHaveCount(expected.filter((c) => c.reply_to == null).length);
+});
+
+test("they are derived, not invented — nobody is notified by themselves", async ({
+  page,
+}) => {
+  // The seed contains a comment somebody left on their own post. A seeded list
+  // written by hand would have to remember to leave it out; one derived from
+  // the same rule as the API cannot include it.
+  const selfTalk = seed.comments.filter(
+    (c) => c.reply_to == null && seed.posts[c.post - 1]?.author === c.author
+  );
+  test.skip(selfTalk.length === 0, "the seed has nobody talking to themselves");
+
+  await page.goto("/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+  await page.getByRole("button", { name: "Sign in as Jo" }).click();
+  await expect(page.locator(".account__email")).toHaveText("jokafor");
+  await page.goto("/#/notifications");
+
+  const said = await page.locator(".notice__said").allTextContents();
+  for (const c of selfTalk) {
+    expect(said).not.toContain(c.content);
+  }
+});
+
+test("the colophon says the staging is staged", async ({ page }) => {
+  await page.goto("/#/colophon");
+
+  const honest = page.locator(".colophon__section", { hasText: "What's honest" });
+  await expect(honest).toContainText("worked out from the seeded comments");
+  await expect(honest).toContainText("cannot be notified by yourself");
 });

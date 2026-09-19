@@ -163,7 +163,7 @@ test.describe("signing in somewhere new", () => {
     await p2.goto("/#/login");
     await p2.getByLabel("Email").fill(email);
     await p2.getByLabel("Password", { exact: true }).fill(PW);
-    await p2.getByRole("button", { name: "Sign in" }).click();
+    await p2.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(p2).toHaveURL(/#\/$/);
 
     // What's in storage has to be an identity — and, since refresh tokens

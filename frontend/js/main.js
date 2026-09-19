@@ -211,6 +211,10 @@ function syncDemoStrip() {
   if (!demoBand) demoBand = mountDemoStrip();
   const mastheadHasIt = !get("session") && currentPath() === "/" && !currentQuery().get("search");
   demoBand.hidden = mastheadHasIt;
+  // The band is built once and kept, so its offer to sign you in as one of the
+  // seeded people has to be turned off from out here when you become somebody.
+  const signIn = demoBand.querySelector(".demo__signin");
+  if (signIn instanceof HTMLElement) signIn.hidden = !!get("session");
 }
 
 // ⌘ on a Mac, Ctrl everywhere else.

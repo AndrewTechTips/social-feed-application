@@ -163,7 +163,7 @@ backend/
   scripts/             coverage_badge.py
 frontend/
   index.html           shell: header, <main> mount, aria-live toasts, theme bootstrap
-  styles/              tokens.css · base.css · components.css · views.css
+  styles/              tokens.css · base.css · components.css · chrome.css · views.css
   js/
     config.js          picks the API: the real one, or the in-browser demo
     api.js             fetch wrapper — auth header, JSON, error normalisation, 401/403/429

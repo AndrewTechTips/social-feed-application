@@ -71,6 +71,7 @@ const SHELL = [
   "./styles/tokens.css",
   "./styles/base.css",
   "./styles/components.css",
+  "./styles/chrome.css",
   "./styles/views.css",
   "./styles/print.css",
 

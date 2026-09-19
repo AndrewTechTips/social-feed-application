@@ -454,6 +454,54 @@ function stateFromSeed(seed) {
     });
   }
 
+  // The notifications those comments would have caused, had they been made
+  // through the API rather than written into a file.
+  //
+  // Without this the published demo cannot show the feature at all. There is
+  // one visitor and no second person: you cannot be notified by yourself, so a
+  // freshly registered account would find the lamp unlit for ever and the
+  // screen permanently on its empty state. A feature that only exists on a
+  // machine running the backend is exactly what §2 of the upgrade plan exists
+  // to prevent.
+  //
+  // These are *derived*, not authored — the same two rules the API applies, run
+  // over the same seeded comments — so seed.json stays a description of a
+  // conversation and cannot drift into describing a different one. The colophon
+  // says out loud that they are seeded.
+  for (const [index, comment] of (seed.comments || []).entries()) {
+    const id = commentIds[index];
+    if (id == null) continue;
+    const post = state.posts[comment.post - 1];
+    /** @type {string | undefined} */
+    let recipient;
+    /** @type {"reply" | "comment"} */
+    let kind;
+    if (comment.reply_to != null) {
+      const parent = (seed.comments || [])[comment.reply_to - 1];
+      if (!parent) continue;
+      recipient = parent.author;
+      kind = "reply";
+    } else {
+      if (!post) continue;
+      // The built row, not the seed entry: `author_email` is what was actually
+      // stored, and reading it back is one fewer place for the two to disagree.
+      recipient = post.author_email;
+      kind = "comment";
+    }
+    if (!recipient || recipient === comment.author) continue;
+    state.notifications.push({
+      id: state.nextNotificationId++,
+      user_email: recipient,
+      actor_email: comment.author,
+      comment_id: id,
+      kind,
+      // The same age as the comment that caused it, so the list reads in step
+      // with the thread rather than as though everything arrived at once.
+      created_at: nowIso(-(comment.minutes_ago || 0) * 60),
+      read_at: null,
+    });
+  }
+
   return state;
 }
 
