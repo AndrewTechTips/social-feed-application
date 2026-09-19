@@ -5,7 +5,15 @@
 
 import { api } from "../api.js";
 import { h, mountView, skeletonCards, postCard } from "../ui.js";
-import { get, cacheFeed, readFeedCache, viewerKey, setKnownPosts } from "../store.js";
+import {
+  get,
+  isMine,
+  cacheFeed,
+  readFeedCache,
+  viewerKey,
+  setKnownPosts,
+} from "../store.js";
+import { isNewSince, lastVisit, sinceLabel, spellCount } from "../reading.js";
 import { forgetReturn } from "../transitions.js";
 import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
@@ -45,6 +53,17 @@ function masthead() {
   );
 }
 
+// The line between what arrived while you were away and what was already here
+// when you left.
+//
+// It is the half of "four new posts" that actually does something. The count
+// is a fact you read once; this is where that fact *is* on the page, so a
+// reader who comes back after a week can see the edge of the unfamiliar
+// instead of having to work out where they stopped. Drawn from --hairline's
+// neighbours rather than from the accent: it is a place, not a value, and the
+// amber is spent on votes and warmth.
+const bookmark = () => h("p", { class: "bookmark" }, "Where you left off");
+
 export function renderFeed({ query, isStale }) {
   const search = (query.get("search") || "").trim();
   const key = search.toLowerCase();
@@ -55,17 +74,28 @@ export function renderFeed({ query, isStale }) {
   // Not while searching: at that point the reader is looking for something
   // specific and an introduction is in the way.
   const showMasthead = !get("session") && !search;
+  // Same rule, same reason — plus a second one. "New since Tuesday" is a
+  // statement about the feed, and a set of search results is not the feed.
+  const since = h("p", { class: "feed__since", hidden: true });
+  const tellsYouWhatsNew = !search && lastVisit() !== null;
 
   const root = h(
     "section",
     { class: "feed", "aria-label": search ? `Posts matching ${search}` : "Latest posts" },
     showMasthead ? masthead() : null,
+    since,
     list,
     status,
     sentinel
   );
 
   const items = [];
+  // How many posts arrived since the reader's last visit, and whether we have
+  // seen the far edge of them yet. Both are computed while items are appended
+  // rather than afterwards, because the feed is in chronological order — so
+  // "new" is a prefix of it, and finding where that prefix ends is the same
+  // walk as drawing the cards.
+  let newCount = 0, boundaryFound = false;
   let page = 0, pages = 1, hasNext = true, total = null;
   let loading = false, controller = null, observer = null, errorBox = null;
   // Who these items were fetched for. Recorded here rather than read back at
@@ -79,7 +109,60 @@ export function renderFeed({ query, isStale }) {
     status.classList.toggle("feed__status--pad", !!pad);
   }
 
+  /**
+   * Draw a run of posts, keeping the "since your last visit" bookkeeping as we
+   * go. Both the network path and the cache-restore path come through here, so
+   * coming back from a post can't lose the bookmark the feed was wearing when
+   * you left it.
+   *
+   * @param {Node} target the list, or a fragment about to be appended to it
+   * @param {import("../types.js").Post[]} posts
+   */
+  function appendPosts(target, posts) {
+    posts.forEach((post) => {
+      items.push(post);
+      if (tellsYouWhatsNew && !boundaryFound) {
+        if (isNewSince(post)) {
+          // Your own posts are new to the feed and not to you, so they don't
+          // count — but they are still inside the new run, and the boundary
+          // has to stay where time put it or the line would be drawn through
+          // the middle of what arrived while you were away.
+          if (!isMine(post)) newCount++;
+        } else {
+          boundaryFound = true;
+          if (newCount > 0) target.appendChild(bookmark());
+        }
+      }
+      target.appendChild(postCard(post));
+    });
+  }
+
+  /**
+   * Deliberately does not count down as you read. It is a statement about what
+   * arrived, not a list of chores: the feedback for having read one of them is
+   * the card going quiet, which is on the card where the reader is looking.
+   */
+  function renderSince() {
+    const at = lastVisit();
+    if (!tellsYouWhatsNew || at === null || newCount === 0) {
+      since.hidden = true;
+      return;
+    }
+    // The count is exact once the boundary is on screen, or once there is
+    // nothing left to fetch. Before that all we honestly know is a floor —
+    // every post loaded so far is new and the next page may hold more.
+    const exact = boundaryFound || !hasNext;
+    const spelled = spellCount(newCount);
+    since.textContent =
+      (exact ? spelled : `At least ${spelled.toLowerCase()}`) +
+      (newCount === 1 ? " new post since " : " new posts since ") +
+      sinceLabel(at) +
+      ".";
+    since.hidden = false;
+  }
+
   function renderTail() {
+    renderSince();
     if (total === 0) {
       setStatus(
         search
@@ -130,13 +213,15 @@ export function renderFeed({ query, isStale }) {
       if (initial) {
         list.replaceChildren();
         items.length = 0;
+        // The walk starts over with the list, or a refetch would go on
+        // counting from where the last one stopped and the bookmark would be
+        // drawn twice.
+        newCount = 0;
+        boundaryFound = false;
       }
 
       const frag = document.createDocumentFragment();
-      data.items.forEach((post) => {
-        items.push(post);
-        frag.append(postCard(post));
-      });
+      appendPosts(frag, data.items);
       list.append(frag);
       setKnownPosts(items);
       renderTail();
@@ -213,10 +298,7 @@ export function renderFeed({ query, isStale }) {
   const cached = readFeedCache(key);
   if (cached) {
     ({ page, pages, hasNext, total, viewer } = cached);
-    cached.items.forEach((post) => {
-      items.push(post);
-      list.append(postCard(post));
-    });
+    appendPosts(list, cached.items);
     setKnownPosts(items);
     renderTail();
     mountView(root, { restoreScroll: cached.scrollY });

@@ -256,7 +256,7 @@ function emptyState() {
     sessions: {},
     cookie: null,
     posts: [],
-    votes: [], // ["email postId", ...]
+    votes: [], // ["email\u0000postId", ...]
     comments: [],
     nextUserId: 1,
     nextPostId: 1,
@@ -323,7 +323,16 @@ function stateFromSeed(seed) {
   return state;
 }
 
-const voteKey = (email, postId) => `${email} ${postId}`;
+// A vote is the pair (voter, post), and the pair is stored as one string with
+// a NUL between the halves — a byte that cannot occur in an email address, so
+// no address can be made to collide with another by containing the separator.
+//
+// Written as the escape and not as the character. A raw NUL in the source is a
+// valid string literal and runs correctly, and it also makes this file binary
+// to every tool that reads text: `file` reports "data", `grep` finds nothing
+// in it, and `git diff` refuses to show it. That cost an afternoon once. Same
+// value, same behaviour, and the file is text again.
+const voteKey = (email, postId) => `${email}\u0000${postId}`;
 
 /**
  * @param {object} [options]
@@ -402,7 +411,7 @@ export function createDemoBackend({
     updated_at: row.updated_at,
     user_id: userByEmail(row.author_email)?.id ?? 0,
     user: publicUser(row.author_email),
-    votes: state.votes.filter((v) => v.endsWith(` ${row.id}`)).length,
+    votes: state.votes.filter((v) => v.endsWith(`\u0000${row.id}`)).length,
   });
 
   // Published posts are public; a draft belongs to its author. Mirrors
@@ -749,7 +758,7 @@ export function createDemoBackend({
     state.posts = state.posts.filter((p) => p.id !== id);
     // ON DELETE CASCADE, by hand — the real schema has Postgres do this.
     state.comments = state.comments.filter((c) => c.post_id !== id);
-    state.votes = state.votes.filter((v) => !v.endsWith(` ${id}`));
+    state.votes = state.votes.filter((v) => !v.endsWith(`\u0000${id}`));
     save();
     return json(204, null);
   }

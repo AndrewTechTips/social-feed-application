@@ -61,8 +61,50 @@
   max-width: var(--col-max);
   margin-inline: auto;
 }
+/* "Four new posts since Tuesday." — set in the reading face, at the size the
+   feed's other piece of prose uses, in --text-dim. It is a dateline, not a
+   notification: no chip, no count badge, no colour. The thing it refers to is
+   twenty pixels below it. */
+.feed__since {
+  margin-bottom: var(--s-4);
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+
 .feed__list {
   display: flow-root;
+}
+
+/* — where you left off ----------------------------------------------------------
+   The boundary between what arrived while you were away and what was already
+   here. A label with a rule running out of it in both directions, fading as it
+   goes, so it reads as a place in the list rather than as a divider chopping
+   the list in two.
+
+   Drawn from --border-strong rather than from --hairline, whose gradient fades
+   at *both* ends: against the label that would leave a gap of nothing before
+   the line begins. Same neutral, aimed. */
+.bookmark {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-5) 0;
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-size: var(--fs-meta);
+}
+.bookmark::before,
+.bookmark::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+.bookmark::before {
+  background: linear-gradient(90deg, transparent, var(--border-strong));
+}
+.bookmark::after {
+  background: linear-gradient(90deg, var(--border-strong), transparent);
 }
 /* Cards used to fade up one after another on arrival. It looked considered and
    wasn't: it fired on pagination and on cache restore too, where nothing had

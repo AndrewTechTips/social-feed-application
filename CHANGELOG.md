@@ -20,6 +20,17 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 
 ### Added
 
+- **The feed remembers you.** Three things that are one idea, and none of
+  them touches the server. A post you have opened draws its title dimmed, so
+  what you haven't read is what stands forward — the same channel the warmth
+  hairline deliberately doesn't use, so a card can wear both. A returning
+  reader gets a count of what arrived while they were away, and a rule through
+  the list saying where they left off; the count is exact once the far edge of
+  the new run is on screen and given as a floor before that, because the only
+  other options were a wrong number or none. And every card says how long it
+  is. `commons.read` and `commons.visit` are two keys in `localStorage`, read
+  once at boot by `frontend/js/reading.js`, sent nowhere — which is a decision
+  about a reading record rather than an omission, and is written down as one.
 - **Comments.** A nested resource under a post: create, paginated list (oldest
   first), and delete by whoever wrote it. Both foreign keys cascade at the
   database, so deleting a post or an account takes the conversation with it.
@@ -94,6 +105,13 @@ Everything since `v0.2.0` — the pass described in [`UPGRADE_PLAN.md`](UPGRADE_
 
 ### Fixed
 
+- **`js/demo/backend.js` was a binary file.** The key a vote is stored under
+  puts a NUL between the voter and the post, and the separator had been written
+  as the character rather than as the escape. The module ran correctly and
+  always had; what it broke was every tool that reads text — `file` reported
+  "data", `grep` matched nothing in 1,082 lines, and `git diff` refused to show
+  it. `\u0000` is the same value and the same behaviour, with a note saying why
+  it is spelled out.
 - **A screen change showed a third screen in between.** Three unrelated faults
   reading as one:
   - The chrome — the search row, the demo band, the document title — was

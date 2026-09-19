@@ -430,4 +430,42 @@ const test = base.test.extend({
 // one with real latency it silently matches a skeleton instead.
 const CARD = ".card:not(.card--skeleton)";
 
-module.exports = { test, expect: base.expect, API_ORIGIN, CARD, usernameFor };
+/**
+ * Wait for the screen to stop moving before measuring it.
+ *
+ * mountView adds `.route-enter`, which fades the new view up from opacity 0
+ * and removes the class on animationend. Measuring during those ~120ms blends
+ * every foreground and background toward each other, which to axe looks like a
+ * page-full of contrast failures that don't exist once the animation lands —
+ * the first run of a11y.spec.js produced thirteen of them.
+ *
+ * CSS transitions are in `getAnimations()` too, and that is the half this is
+ * also needed for: `.card` transitions its background-colour, so a test that
+ * flips `data-theme` and reads a colour straight afterwards gets a value from
+ * somewhere between the two themes — a dark-theme foreground measured against
+ * a background still most of the way to white.
+ *
+ * Two kinds are skipped, both because waiting on them would hang forever.
+ * Infinite ones: the skeleton shimmer and the background blooms. And
+ * progress-based ones — the post's reading hairline runs on a scroll timeline,
+ * so it finishes when the reader reaches the bottom of the page and not
+ * before. It is already showing its correct value at every moment, which is
+ * the only sense in which "settled" means anything for it.
+ */
+async function settled(page) {
+  await page.waitForFunction(() => !document.querySelector(".route-enter"));
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter(
+          (a) =>
+            a.effect?.getComputedTiming().iterations !== Infinity &&
+            a.timeline instanceof DocumentTimeline
+        )
+        .map((a) => a.finished.catch(() => {}))
+    )
+  );
+}
+
+module.exports = { test, expect: base.expect, API_ORIGIN, CARD, usernameFor, settled };

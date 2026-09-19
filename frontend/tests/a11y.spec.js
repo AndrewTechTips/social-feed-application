@@ -11,7 +11,7 @@
 // nobody checked is exactly where the unlabelled input ends up.
 
 const AxeBuilder = require("@axe-core/playwright").default;
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const { test, expect, CARD, usernameFor, settled } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = (tag) =>
@@ -21,40 +21,6 @@ const uniqueEmail = (tag) =>
 // order in a fragment, region landmarks on everything) that are worth reading
 // but not worth failing a build over.
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
-
-/**
- * Wait for the screen to stop moving before measuring it.
- *
- * mountView adds `.route-enter`, which fades the new view up from opacity 0
- * and removes the class on animationend. Scanning during those ~120ms makes
- * axe blend every foreground and background toward each other and report a
- * page-full of contrast failures that don't exist once the animation lands —
- * the first run of this file produced thirteen of them.
- */
-async function settled(page) {
-  await page.waitForFunction(() => !document.querySelector(".route-enter"));
-  // And anything else still moving — the delete confirm fades in on its own
-  // animation, which is short enough to miss and long enough to skew a scan.
-  //
-  // Two kinds are skipped, both because waiting on them would hang here
-  // forever. Infinite ones: the skeleton shimmer and the background blooms.
-  // And progress-based ones — the post's reading hairline runs on a scroll
-  // timeline, so it finishes when the reader reaches the bottom of the page
-  // and not before. It is already showing its correct value at every moment,
-  // which is the only sense in which "settled" means anything for it.
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter(
-          (a) =>
-            a.effect?.getComputedTiming().iterations !== Infinity &&
-            a.timeline instanceof DocumentTimeline
-        )
-        .map((a) => a.finished.catch(() => {}))
-    )
-  );
-}
 
 async function scan(page, { include } = {}) {
   await settled(page);

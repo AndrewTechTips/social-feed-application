@@ -429,6 +429,29 @@
     transparent
   );
 }
+/* — read -----------------------------------------------------------------------
+   A post you have opened draws its title in --text-dim instead of --text, so
+   it steps back and what you haven't read is what stands forward. Books you
+   have finished go back on the shelf.
+
+   It uses the *other* channel from the warmth hairline on purpose. Warmth is an
+   edge; this is type weight. Neither can drown the other out and a card can
+   carry both at once, which several do.
+
+   No new colour, and none needed: the title is already the loudest thing in
+   the card, so taking it down to the preview's value is enough on its own.
+   Measured, because a dimmed title is still the link you click —
+   #93a3a1 on #131d20 is 6.5:1, and #4f5d59 on #fbfcfc is 6.7:1. Both clear AA
+   for body text, which is the bar that applies: 20.8px is under the 24px where
+   the large-text exception starts.
+
+   Deliberately not applied to .card__preview, which is already --text-dim.
+   Dimming that too would fade the whole card towards the background and read
+   as disabled rather than as read. */
+.card--read .card__title {
+  color: var(--text-dim);
+}
+
 @media (hover: hover) {
   .card:hover {
     transform: translateY(-2px);
@@ -496,6 +519,15 @@
   color: var(--text-faint);
   font-size: var(--fs-meta);
 }
+/* Neither of these may wrap. The row is a single line and the author's name is
+   the one item in it that can shrink — it has overflow: hidden below, which is
+   what gives a flex item an automatic minimum size of zero — so at 320px the
+   name ellipsises and the two short facts stay whole. */
+.card__meta time,
+.card__mins {
+  white-space: nowrap;
+}
+
 /* The author's name is a link to their posts, but inside a card that is
    itself mostly one big link — so it stays quiet until you point at it. */
 .card__author {

@@ -11,6 +11,7 @@
 import { api } from "../api.js";
 import { h, icon, mountView, avatar, relativeTime, fullTime, wasEdited, voteControl, toast } from "../ui.js";
 import { get, isMine, dropFeedCache } from "../store.js";
+import { markReadOnceSeen } from "../reading.js";
 import { nameForMorph, morphingBackTo, morphPending } from "../transitions.js";
 import { navigate, previousScreen } from "../router.js";
 
@@ -211,6 +212,10 @@ export async function renderPost({ params, isStale }) {
   if (mine) mountActions();
   mountView(root);
   conversation.load();
+  // Only from here. A post that 404'd or failed to load returns above, and
+  // marking one of those read would dim a card for something the reader never
+  // saw — and give them no way to undo it.
+  markReadOnceSeen(post.id, isStale);
 
   // — owner actions -----------------------------------------------------------
   // Returns the Delete button it just built. cancel() needs that: it calls

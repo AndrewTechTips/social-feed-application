@@ -5,6 +5,7 @@
 
 import { api } from "./api.js";
 import { get, hasVoted, setVoted } from "./store.js";
+import { hasRead, readingMinutes } from "./reading.js";
 import { tryTransition, nameForMorph, claimReturn } from "./transitions.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -273,6 +274,19 @@ export function postCard(post) {
   // so the journey reverses instead of just fading.
   if (claimReturn(post.id)) nameForMorph(title);
 
+  // How long this will take. Written "4 min" and read out "4 min read": the
+  // short form is what the row has space for on a phone, and the word is what
+  // stops it being a bare number in a list of other numbers to anybody
+  // listening rather than looking.
+  const mins = h(
+    "span",
+    { class: "card__mins" },
+    `${readingMinutes(post.content)} min`,
+    h("span", { class: "visually-hidden" }, " read")
+  );
+
+  const read = hasRead(post.id);
+
   const meta = h(
     "div",
     { class: "card__meta" },
@@ -287,12 +301,23 @@ export function postCard(post) {
       post.user.username
     ),
     h("time", { datetime: post.created_at }, relativeTime(post.created_at)),
+    mins,
+    // The dimmed title says this to anybody looking at it and to nobody
+    // listening — which is the opposite of the warmth hairline, where the vote
+    // button beside it was already saying the same thing out loud. There is no
+    // second channel carrying this one, so it needs its own.
+    read ? h("span", { class: "visually-hidden" }, "Already read") : null,
     post.published ? null : h("span", { class: "tag" }, "Draft")
   );
 
   return h(
     "article",
-    { class: "card" + (isWarm(post) ? " card--warm" : "") },
+    {
+      class:
+        "card" +
+        (isWarm(post) ? " card--warm" : "") +
+        (read ? " card--read" : ""),
+    },
     voteControl(post),
     h("div", { class: "card__body" }, link, meta)
   );
