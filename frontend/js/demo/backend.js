@@ -17,15 +17,26 @@
 // Everything below returns a real Response, so js/api.js can't tell the
 // difference and needs no branch of its own.
 
+// Mirrors API_PREFIX in js/config.js and backend/app/config.py.
+//
+// Declared here rather than imported, the same way the ranking gravities are:
+// config.js loads this module dynamically, so importing it back would be a
+// cycle — and this file's whole claim is that it can be read on its own
+// against backend/app/routers/.
+const API_PREFIX = "/api/v1";
+
 // The localStorage namespace, and — separately — the shape of what's in it.
 // The key name is a namespace and doesn't move; STATE_VERSION is the schema,
 // and bumping it is how a returning visitor's saved demo gets thrown away
 // rather than deserialised into code that no longer expects it. It went to 2
 // when comments arrived: a v1 blob has no `comments` array, and every read of
 // one would have been a TypeError on somebody's second visit. It went to 3 when
-// refresh tokens did, for the same reason — a v2 blob has no `sessions`.
+// refresh tokens did, for the same reason — a v2 blob has no `sessions`. It
+// went to 4 when notifications arrived, and that one is the clearest example
+// of why the number exists: a v3 blob has no `notifications` array, and the
+// first thing the header does on a signed-in visit is count the unread ones.
 const STORAGE_KEY = "commons.demo.v1";
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 
 // Access-token life, mirroring settings.access_token_expire_minutes and the
 // copy in tests/mock_api.py. The demo runs it at full length rather than
@@ -92,6 +103,46 @@ const decayed = (count, createdAt, gravity) => {
 };
 
 const detail = (status, message) => json(status, { detail: message });
+
+// Mirrors backend/app/etag.py. A weak validator over the response body, and a
+// 304 when the caller hands back the one it already has.
+//
+// A cheap non-cryptographic hash is enough: nothing here is defending against
+// somebody forging a fingerprint, it is distinguishing one body from another.
+// The backend uses blake2b and does not need to agree with this — a validator
+// is opaque to the client, which only ever compares one to the one it was
+// given by the same server.
+function fingerprint(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `W/"${h.toString(16).padStart(8, "0")}${text.length.toString(16)}"`;
+}
+
+/**
+ * Wrap a 200 in a conditional answer, the way the ETagRoute on /posts/ does.
+ * @param {Response} response  what the route would have returned
+ * @param {string | null} presented  the request's If-None-Match
+ */
+async function conditional(response, presented) {
+  if (response.status !== 200) return response;
+  const body = await response.clone().text();
+  const tag = fingerprint(body);
+  const offered = (presented || "").split(",").map((v) => v.trim()).filter(Boolean);
+
+  // Vary, like the real one: this endpoint answers differently depending on
+  // who is asking, and nothing in between may treat the two as one.
+  const headers = { ETag: tag, Vary: "Authorization" };
+  if (offered.includes("*") || offered.includes(tag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+}
 
 const invalid = (loc, msg, type = "value_error") =>
   json(422, { detail: [{ loc, msg, type }] });
@@ -279,6 +330,20 @@ function searchRank(row, terms) {
  *   have no such key, which reads as null everywhere it is asked.
  */
 /**
+/**
+ * Somebody addressed you. Mirrors models.Notification: who it is for, who did
+ * it, which comment, and whether it has been seen.
+ * @typedef {object} DemoNotification
+ * @property {number} id
+ * @property {string} user_email   who it is for
+ * @property {string} actor_email  who did it
+ * @property {number} comment_id
+ * @property {"reply" | "comment"} kind
+ * @property {string} created_at
+ * @property {string | null} read_at
+ */
+
+/**
  * @typedef {object} DemoState
  * @property {number} version
  * @property {DemoUser[]} users
@@ -294,9 +359,11 @@ function searchRank(row, terms) {
  * @property {DemoPost[]} posts
  * @property {string[]} votes                 "email\0postId"
  * @property {DemoComment[]} comments
+ * @property {DemoNotification[]} notifications
  * @property {number} nextUserId
  * @property {number} nextPostId
  * @property {number} nextCommentId
+ * @property {number} nextNotificationId
  * @property {{ method: string, path: string, status: number, detail?: string,
  *             network?: boolean }[]} [failures]
  */
@@ -312,9 +379,11 @@ function emptyState() {
     posts: [],
     votes: [], // ["email\u0000postId", ...]
     comments: [],
+    notifications: [],
     nextUserId: 1,
     nextPostId: 1,
     nextCommentId: 1,
+    nextNotificationId: 1,
   };
 }
 
@@ -661,6 +730,11 @@ export function createDemoBackend({
       const [email, postId] = v.split("\u0000");
       return email !== viewer && !mine.has(Number(postId));
     });
+    // Both ways round — what was said to you and what you said to anyone —
+    // and then anything left pointing at a comment that has just gone.
+    dropNotifications({ email: viewer });
+    const alive = new Set(state.comments.map((c) => c.id));
+    state.notifications = state.notifications.filter((n) => alive.has(n.comment_id));
     state.users = state.users.filter((row) => row.email !== viewer);
     for (const [family, row] of Object.entries(state.sessions)) {
       if (row.email === viewer) delete state.sessions[family];
@@ -687,6 +761,81 @@ export function createDemoBackend({
       if (row.email === viewer && !row.revoked) row.revoked = true;
     }
     state.cookie = null;
+    save();
+    return json(204, null);
+  }
+
+  // Mirrors backend/app/routers/notification.py. Newest first, yours only, and
+  // the unread *count* comes through this same route: `?unread=true&
+  // page_size=1`, and the answer is the envelope's `total`.
+  const EXCERPT_CHARS = 140;
+
+  function excerptOf(content) {
+    const text = content.split(/\s+/).filter(Boolean).join(" ");
+    if (text.length <= EXCERPT_CHARS) return text;
+    const cut = text.slice(0, EXCERPT_CHARS).replace(/\s+\S*$/, "");
+    return `${cut || text.slice(0, EXCERPT_CHARS)}…`;
+  }
+
+  function listNotifications(params, viewer) {
+    const page = Number(params.get("page") || 1);
+    const pageSize = Number(params.get("page_size") || 20);
+    if (!Number.isInteger(page) || page < 1) return json(422, { detail: "bad page" });
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
+      return json(422, { detail: "bad page_size" });
+    }
+    const unread = params.get("unread") === "true";
+
+    const rows = state.notifications
+      .filter((n) => n.user_email === viewer && !(unread && n.read_at))
+      .sort((a, b) =>
+        a.created_at === b.created_at
+          ? b.id - a.id
+          : a.created_at < b.created_at
+          ? 1
+          : -1
+      );
+
+    const total = rows.length;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const start = (page - 1) * pageSize;
+
+    const items = [];
+    for (const row of rows.slice(start, start + pageSize)) {
+      const comment = state.comments.find((c) => c.id === row.comment_id);
+      // Cannot happen — the cascade takes them together — and if it ever does,
+      // drop the row rather than draw a line pointing at nothing.
+      if (!comment) continue;
+      const post = postById(comment.post_id);
+      if (!post) continue;
+      items.push({
+        id: row.id,
+        kind: row.kind,
+        created_at: row.created_at,
+        read_at: row.read_at,
+        actor: publicUser(row.actor_email),
+        post: { id: post.id, title: post.title },
+        excerpt: excerptOf(comment.content),
+        comment_id: row.comment_id,
+      });
+    }
+
+    return json(200, {
+      items,
+      total,
+      page,
+      page_size: pageSize,
+      pages,
+      has_next: page < pages,
+      has_prev: page > 1,
+    });
+  }
+
+  function markNotificationsRead(viewer) {
+    const stamp = nowIso();
+    for (const row of state.notifications) {
+      if (row.user_email === viewer && !row.read_at) row.read_at = stamp;
+    }
     save();
     return json(204, null);
   }
@@ -1006,6 +1155,11 @@ export function createDemoBackend({
     }
     state.posts = state.posts.filter((p) => p.id !== id);
     // ON DELETE CASCADE, by hand — the real schema has Postgres do this.
+    dropNotifications({
+      commentIds: new Set(
+        state.comments.filter((c) => c.post_id === id).map((c) => c.id)
+      ),
+    });
     state.comments = state.comments.filter((c) => c.post_id !== id);
     state.votes = state.votes.filter((v) => !v.endsWith(`\u0000${id}`));
     save();
@@ -1092,8 +1246,52 @@ export function createDemoBackend({
       created_at: nowIso(),
     };
     state.comments.push(row);
+    notify(row, email);
     save();
     return json(201, commentOut(row));
+  }
+
+  // Mirrors backend/app/routers/notification.py::notify. One comment, at most
+  // one notification: a reply addresses whoever it answers, a top-level comment
+  // addresses the post's author, and talking to yourself is not an event. A
+  // vote makes none, which is a decision rather than an omission — see the note
+  // on models.Notification.
+  function notify(comment, actorEmail) {
+    let recipient;
+    let kind;
+    if (comment.parent_id != null) {
+      const parent = state.comments.find((c) => c.id === comment.parent_id);
+      if (!parent) return;
+      recipient = parent.author_email;
+      kind = "reply";
+    } else {
+      const post = postById(comment.post_id);
+      if (!post) return;
+      recipient = post.author_email;
+      kind = "comment";
+    }
+    if (recipient === actorEmail) return;
+
+    state.notifications.push({
+      id: state.nextNotificationId++,
+      user_email: recipient,
+      actor_email: actorEmail,
+      comment_id: comment.id,
+      kind,
+      created_at: nowIso(),
+      read_at: null,
+    });
+  }
+
+  // The three cascades, by hand — comments.id, and the recipient and actor
+  // both being users.id. In the real schema each is one ON DELETE CASCADE.
+  /** @param {{ commentIds?: Set<number>, email?: string }} [what] */
+  function dropNotifications({ commentIds, email } = {}) {
+    state.notifications = state.notifications.filter(
+      (n) =>
+        !(commentIds && commentIds.has(n.comment_id)) &&
+        !(email && (n.user_email === email || n.actor_email === email))
+    );
   }
 
   function deleteComment(id, email) {
@@ -1107,6 +1305,7 @@ export function createDemoBackend({
     // The cascade the database does for comments.parent_id, done here too.
     const gone = new Set([id, ...repliesTo(id).map((r) => r.id)]);
     state.comments = state.comments.filter((c) => !gone.has(c.id));
+    dropNotifications({ commentIds: gone });
     save();
     return json(204, null);
   }
@@ -1186,7 +1385,12 @@ export function createDemoBackend({
   async function handle(path, init) {
     const url = new URL(path, "http://demo.invalid");
     const method = (init.method || "GET").toUpperCase();
-    const route = url.pathname;
+    // Taken off here so that every route below is written the way the backend
+    // writes it — `/posts/`, not `/api/v1/posts/`. config.js puts it on, this
+    // takes it off, and the forty lines in between never mention the version.
+    const route = url.pathname.startsWith(API_PREFIX)
+      ? url.pathname.slice(API_PREFIX.length)
+      : url.pathname;
 
     const failures = state.failures || (state.failures = []);
     for (let i = 0; i < failures.length; i++) {
@@ -1221,6 +1425,12 @@ export function createDemoBackend({
     if (route === "/users/me" && method === "GET") return me(viewer);
     if (route === "/login" && method === "POST") return login(form());
     if (route === "/auth/refresh" && method === "POST") return refresh(csrfHeader);
+    if (route === "/notifications/" && method === "GET") {
+      return requireAuth() || listNotifications(url.searchParams, viewer);
+    }
+    if (route === "/notifications/read" && method === "POST") {
+      return requireAuth() || markNotificationsRead(viewer);
+    }
     if (route === "/auth/logout" && method === "POST") return logout(csrfHeader);
     if (route === "/auth/logout-all" && method === "POST") {
       return requireAuth() || logoutEverywhere(viewer);
@@ -1244,7 +1454,10 @@ export function createDemoBackend({
     if (profileOnly && method === "GET") return profile(profileOnly[1]);
 
     if (route === "/posts/" && method === "GET") {
-      return listPosts(url.searchParams, viewer);
+      return conditional(
+        listPosts(url.searchParams, viewer),
+        init.headers?.["If-None-Match"] || null
+      );
     }
     if (route === "/posts/" && method === "POST") {
       return requireAuth() || createPost(body(), viewer);
@@ -1270,7 +1483,12 @@ export function createDemoBackend({
     const match = route.match(/^\/posts\/(\d+)$/);
     if (match) {
       const id = Number(match[1]);
-      if (method === "GET") return getPost(id, viewer);
+      if (method === "GET") {
+        return conditional(
+          getPost(id, viewer),
+          init.headers?.["If-None-Match"] || null
+        );
+      }
       if (method === "PUT") {
         return requireAuth() || updatePost(id, body(), viewer, { partial: false });
       }

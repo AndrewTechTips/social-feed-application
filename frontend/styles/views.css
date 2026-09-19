@@ -1256,3 +1256,65 @@
   color: var(--text-dim);
   font-size: var(--fs-ui);
 }
+
+/* — said to you -----------------------------------------------------------------
+   A list of lines rather than a list of cards. Each one is short — a name, what
+   they did, the first thing they said, and where — so a card's padding and
+   border would make five notifications into a whole screen of furniture.
+
+   The unread mark is a rule down the left rather than a background tint: a
+   tinted row reads as selected, and these are not selected, they are new. */
+.notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notice {
+  border-bottom: 1px solid var(--border);
+}
+.notice:last-child {
+  border-bottom: 0;
+}
+.notice__link {
+  display: block;
+  padding: var(--s-4) var(--s-3);
+  border-left: 2px solid transparent;
+  color: inherit;
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .notice__link:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+  }
+}
+.notice--unread .notice__link {
+  border-left-color: var(--border-strong);
+}
+.notice__who {
+  font-size: var(--fs-ui);
+  margin-bottom: var(--s-2);
+}
+.notice--unread .notice__who {
+  color: var(--text);
+}
+/* What they actually said, in the reading face, because it is the one part of
+   the line that is somebody's words rather than the app's. Clamped to two
+   lines: long enough to decide by, short enough that five of these fit. */
+.notice__said {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--s-2);
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: 1.45;
+}
+.notice__where {
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+}
+.notice__post {
+  color: var(--text-dim);
+}

@@ -1,7 +1,7 @@
 {
   "components": {
     "schemas": {
-      "Body_login_login_post": {
+      "Body_login_api_v1_login_post": {
         "properties": {
           "client_id": {
             "anyOf": [
@@ -57,7 +57,7 @@
           "username",
           "password"
         ],
-        "title": "Body_login_login_post",
+        "title": "Body_login_api_v1_login_post",
         "type": "object"
       },
       "CommentCreate": {
@@ -267,6 +267,134 @@
           "username"
         ],
         "title": "MeUpdate",
+        "type": "object"
+      },
+      "NotificationKind": {
+        "enum": [
+          "reply",
+          "comment"
+        ],
+        "title": "NotificationKind",
+        "type": "string"
+      },
+      "NotificationOut": {
+        "description": "One line of \"somebody addressed you\".\n\nIt carries the sentence's three parts — who, what kind, and where — plus a\nshort piece of what they actually said. The excerpt is the reason this is\nreadable rather than a list of links: \"bea replied to you\" tells you\nnothing you can act on, and the first few words of the reply tell you\nwhether to bother.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "comment_id": {
+            "title": "Comment Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "excerpt": {
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotificationKind"
+          },
+          "post": {
+            "$ref": "#/components/schemas/NotificationPost"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "created_at",
+          "actor",
+          "post",
+          "excerpt",
+          "comment_id"
+        ],
+        "title": "NotificationOut",
+        "type": "object"
+      },
+      "NotificationPage": {
+        "description": "The same envelope as posts and comments, for the same reason: a client\nthat can walk one list can walk them all.\n\n`total` is also how the unread count is asked for — `?unread=true&\npage_size=1` and read the number — which is the trick the \"new posts\" pill\nalready uses against `/posts/`. One endpoint, no second shape to keep in\nstep, and a poll that costs one row.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "NotificationPage",
+        "type": "object"
+      },
+      "NotificationPost": {
+        "description": "Where the notification points. Just enough to draw the line and link it —\nnot a whole PostOut, which would drag the body, the vote count and the\nauthor of every post into a list that is about somebody else entirely.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NotificationPost",
         "type": "object"
       },
       "PostCreate": {
@@ -664,7 +792,7 @@
         "flows": {
           "password": {
             "scopes": {},
-            "tokenUrl": "login"
+            "tokenUrl": "api/v1/login"
           }
         },
         "type": "oauth2"
@@ -686,10 +814,10 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/auth/logout": {
+    "/api/v1/auth/logout": {
       "post": {
         "description": "End the session this cookie belongs to, and clear the cookie.\n\nRevokes server-side rather than only clearing the cookie, which is most of\nwhy the sessions are in a table at all: clearing a cookie ends a session on\none machine, revoking it ends the session.",
-        "operationId": "logout_auth_logout_post",
+        "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
           "204": {
             "description": "Signed out. Answered whether or not there was a session to end — a caller asking to leave should never be told no."
@@ -701,10 +829,10 @@
         ]
       }
     },
-    "/auth/logout-all": {
+    "/api/v1/auth/logout-all": {
       "post": {
         "description": "End every session this account has, including this one.\n\nAuthenticated with the *access* token rather than the refresh cookie, which\nis the difference between this and `/logout`. Signing out one browser is\nsomething a browser asks for and needs no proof beyond holding the cookie;\nsigning out every browser is something a person asks for, and it should\ntake more than having once been handed a cookie to do it.\n\nThat is also why there is a `refresh_sessions` table at all. A stateless\nrefresh token cannot be taken back, so this would have been a button that\ncleared one cookie and lied about the rest.",
-        "operationId": "logout_everywhere_auth_logout_all_post",
+        "operationId": "logout_everywhere_api_v1_auth_logout_all_post",
         "responses": {
           "204": {
             "description": "Every session ended, on every machine."
@@ -731,10 +859,10 @@
         ]
       }
     },
-    "/auth/refresh": {
+    "/api/v1/auth/refresh": {
       "post": {
         "description": "Rotate the session.\n\nEvery call invalidates the token that was presented and issues the next\none, so a copied cookie is detectable: the copy eventually presents a\nsecret that has already been rotated away, and the whole session is ended\nrather than guessing which of the two holders is the thief.\n\nSend the `csrf_token` from the last `/login` or `/auth/refresh` response in\nan `X-CSRF-Token` header. Without it this answers 401 even with a perfectly\ngood cookie.",
-        "operationId": "refresh_auth_refresh_post",
+        "operationId": "refresh_api_v1_auth_refresh_post",
         "responses": {
           "200": {
             "content": {
@@ -773,10 +901,10 @@
         ]
       }
     },
-    "/comments/{id}": {
+    "/api/v1/comments/{id}": {
       "delete": {
         "description": "Yours to remove, and nobody else's.\n\nNote what this deliberately isn't: the author of the *post* can't delete\ncomments on it. Moderation is a feature with a scope of its own — who may\nremove what, whether the person who wrote it is told, whether it leaves a\ntombstone — and quietly granting it to post authors here would be a policy\ndecision smuggled in as an ownership check.",
-        "operationId": "delete_comment_comments__id__delete",
+        "operationId": "delete_comment_api_v1_comments__id__delete",
         "parameters": [
           {
             "in": "path",
@@ -844,44 +972,15 @@
         ]
       }
     },
-    "/healthz": {
-      "get": {
-        "description": "Answers as long as the process is serving.\n\nDeliberately does *not* touch the database: a health check that fails when\nPostgres is slow turns one degraded dependency into a restart loop.",
-        "operationId": "healthz_healthz_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "status": "ok"
-                },
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Healthz Healthz Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Liveness probe",
-        "tags": [
-          "Health"
-        ]
-      }
-    },
-    "/login": {
+    "/api/v1/login": {
       "post": {
         "description": "Exchange an email and a password for an access token and a refresh cookie.\n\nThe form field is called `username` because that is what the OAuth2\npassword flow calls it, and `/docs` builds its form from the same spec.\nThis API signs people in by **email** — the username is the public identity\nand is not a credential.",
-        "operationId": "login_login_post",
+        "operationId": "login_api_v1_login_post",
         "requestBody": {
           "content": {
             "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_login_login_post"
+                "$ref": "#/components/schemas/Body_login_api_v1_login_post"
               }
             }
           },
@@ -935,10 +1034,143 @@
         ]
       }
     },
-    "/posts/": {
+    "/api/v1/notifications/": {
+      "get": {
+        "description": "Newest first, because a notification is about what just happened.\n\nYours only, and that is not a filter a caller can lift: the `user_id`\npredicate is applied here and there is no parameter that changes it.",
+        "operationId": "list_notifications_api_v1_notifications__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only the ones you haven't seen. With `page_size=1` this is also how you ask for the unread *count*: the answer is the envelope's `total`.",
+            "in": "query",
+            "name": "unread",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only the ones you haven't seen. With `page_size=1` this is also how you ask for the unread *count*: the answer is the envelope's `total`.",
+              "title": "Unread",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "has_next": false,
+                  "has_prev": false,
+                  "items": [
+                    {
+                      "actor": {
+                        "created_at": "2026-08-30T17:45:11.002Z",
+                        "id": 9,
+                        "username": "tessaward"
+                      },
+                      "comment_id": 31,
+                      "created_at": "2026-09-09T07:14:30.881Z",
+                      "excerpt": "I've walked past that wall a hundred times and never once thought about it.",
+                      "id": 4,
+                      "kind": "reply",
+                      "post": {
+                        "id": 12,
+                        "title": "The library that stays open all night"
+                      }
+                    }
+                  ],
+                  "page": 1,
+                  "page_size": 10,
+                  "pages": 1,
+                  "total": 4
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "What has been said to you",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/read": {
+      "post": {
+        "description": "Mark every unread notification of yours as seen.\n\nAll of them, rather than the ones a client happens to have drawn. The badge\nexists to say \"there is something new\", and a badge that goes on saying so\nafter you have looked is a badge people stop believing.\n\nOne UPDATE, not a read-then-write loop: the rows are not wanted back.",
+        "operationId": "mark_all_read_api_v1_notifications_read_post",
+        "responses": {
+          "204": {
+            "description": "Seen. Answered whether or not there was anything."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Mark everything as seen",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/v1/posts/": {
       "get": {
         "description": "The feed, and the search over it.\n\nSearching covers the title *and* the body: the old title-only ``LIKE``\nmeant a post about repairing a kettle couldn't be found by the word\n\"kettle\" unless it happened to be in the heading, which is not what anyone\ntyping into a search box expects.",
-        "operationId": "get_posts_posts__get",
+        "operationId": "get_posts_api_v1_posts__get",
         "parameters": [
           {
             "in": "query",
@@ -1072,7 +1304,7 @@
       },
       "post": {
         "description": "Create a post, attributed to the token's owner.\n\n`published: false` saves it as a draft — which is an access rule, not a\ndisplay hint: it is returned to you and to nobody else.",
-        "operationId": "create_posts_posts__post",
+        "operationId": "create_posts_api_v1_posts__post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1135,10 +1367,10 @@
         ]
       }
     },
-    "/posts/{id}": {
+    "/api/v1/posts/{id}": {
       "delete": {
         "description": "Delete a post of yours.\n\nThe comments and votes on it go too, by `ON DELETE CASCADE` at the\ndatabase, so it holds whoever issues the DELETE.",
-        "operationId": "delete_post_posts__id__delete",
+        "operationId": "delete_post_api_v1_posts__id__delete",
         "parameters": [
           {
             "in": "path",
@@ -1207,7 +1439,7 @@
       },
       "get": {
         "description": "One post, with its vote count.\n\nPublic, like the feed — a token is optional and only changes whether your\nown drafts are reachable.",
-        "operationId": "get_post_posts__id__get",
+        "operationId": "get_post_api_v1_posts__id__get",
         "parameters": [
           {
             "in": "path",
@@ -1274,7 +1506,7 @@
       },
       "patch": {
         "description": "Change part of a post of yours.\n\nOnly the fields actually present in the body move. An empty body is a 400\nrather than a no-op 200: it almost always means the caller built the\nrequest wrong.",
-        "operationId": "patch_post_posts__id__patch",
+        "operationId": "patch_post_api_v1_posts__id__patch",
         "parameters": [
           {
             "in": "path",
@@ -1379,7 +1611,7 @@
       },
       "put": {
         "description": "Replace a post of yours, in full.\n\nEvery field of the body is applied, so anything you leave out goes back to\nits default. `PATCH` is the one that changes only what you send.",
-        "operationId": "update_post_posts__id__put",
+        "operationId": "update_post_api_v1_posts__id__put",
         "parameters": [
           {
             "in": "path",
@@ -1473,10 +1705,10 @@
         ]
       }
     },
-    "/posts/{post_id}/comments": {
+    "/api/v1/posts/{post_id}/comments": {
       "get": {
         "description": "One page of a post's conversations, **oldest first**, each with whatever\nwas said back to it.\n\nThe feed runs newest-first because you arrive at it to see what's new. A\ncomment thread is read top to bottom like a conversation, so it runs the\nother way — and the page size is larger, because twenty short lines is\nabout one screen where ten posts is several.\n\n**The page is over top-level comments, and replies come with their\nparent.** Paging the two together would eventually put a page boundary\nthrough the middle of an exchange, which is the one place a boundary must\nnot fall; and a reply can only ever belong to something on the same page as\nitself, so the alternative buys nothing. `total` therefore counts\nconversations — it is what `pages` is computed from — and `total_replies`\nsays how many messages hang off them, so a heading can report the size of\nthe conversation without walking it.",
-        "operationId": "get_comments_posts__post_id__comments_get",
+        "operationId": "get_comments_api_v1_posts__post_id__comments_get",
         "parameters": [
           {
             "in": "path",
@@ -1565,7 +1797,7 @@
       },
       "post": {
         "description": "Add a comment to a post you can see, or a reply to one of its comments.\n\nWhitespace is trimmed and an empty comment is a 422 — the cap is enforced\nhere and not only in the form, because this is the field a script would\npoint at first.\n\n`parent_id` makes it a reply, and there are exactly two ways that can be\nrefused. A parent that isn't a comment on *this* post is a 404 rather than\na 400: from here it does not exist, and saying otherwise would confirm the\nexistence of comments on a draft somebody hasn't published. A parent that\nis itself a reply is a 400, because the request is well-formed and simply\nasks for something this app does not do.",
-        "operationId": "create_comment_posts__post_id__comments_post",
+        "operationId": "create_comment_api_v1_posts__post_id__comments_post",
         "parameters": [
           {
             "in": "path",
@@ -1655,10 +1887,10 @@
         ]
       }
     },
-    "/users/": {
+    "/api/v1/users/": {
       "post": {
         "description": "Register.\n\nThe username is folded to lower case and must match\n`^[a-z][a-z0-9_-]{2,19}$` — starting with a letter, so a username can never\nbe mistaken for an id in a URL. A handful of names the API needs for itself\n(`me`, `admin`, `api`, `root`, `commons`) are refused.\n\nThe response is a `UserOut` and carries no email. Registering does not sign\nyou in: `POST /login` does that.",
-        "operationId": "create_user_users__post",
+        "operationId": "create_user_api_v1_users__post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1715,10 +1947,10 @@
         ]
       }
     },
-    "/users/me": {
+    "/api/v1/users/me": {
       "delete": {
         "description": "Delete your account and everything attached to it.\n\nEverything means everything: posts, the comments on them, the comments you\nleft elsewhere, your votes, and every session you have open. None of that\nis spelled out here — each one is an `ON DELETE CASCADE` declared on the\ncolumn that points at you, so it holds whoever issues the DELETE and cannot\ndrift from what this function happens to remember to clean up.\n\nThe refresh cookie is cleared on the way out. It names a session row that\nno longer exists, so the browser would recover on its own the next time it\ntried; leaving somebody holding a credential for an account that is gone is\nnevertheless not a tidy way to say goodbye.",
-        "operationId": "delete_me_users_me_delete",
+        "operationId": "delete_me_api_v1_users_me_delete",
         "responses": {
           "204": {
             "description": "Gone, along with everything you wrote."
@@ -1746,7 +1978,7 @@
       },
       "get": {
         "description": "Who the caller is.\n\nLogging in takes an email and a password and hands back a token, which\ntells the client nothing about the person it just signed in. That was\nsurvivable while posts carried their author's email and the client could\nmatch on it; now that the public identity is a username and the email never\nleaves this endpoint, something has to close the gap. Without it a browser\nwith no local history can sign in successfully and still not know which\nposts are its own.",
-        "operationId": "get_me_users_me_get",
+        "operationId": "get_me_api_v1_users_me_get",
         "responses": {
           "200": {
             "content": {
@@ -1787,7 +2019,7 @@
       },
       "patch": {
         "description": "Change the name everybody else sees.\n\nOnly the username. The email and the password are the credential half of an\naccount and changing either is a flow with a confirmation in it, not a text\nbox on a settings screen.\n\nA name that is taken is a 409 with a sentence, the same answer registering\ngives — and for the same reason it is caught from the database rather than\nchecked first: two people asking for the same free name in the same moment\nboth pass a lookup and one of them still has to lose.\n\nNothing else moves. Posts, comments and votes are joined by id, and the id\nis the half of an identity that was always meant to be the durable one.",
-        "operationId": "update_me_users_me_patch",
+        "operationId": "update_me_api_v1_users_me_patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1850,10 +2082,10 @@
         ]
       }
     },
-    "/users/{username}": {
+    "/api/v1/users/{username}": {
       "get": {
         "description": "One person, by username. Case-insensitive, because names are stored\nfolded and nobody types their own capitals the same way twice.",
-        "operationId": "get_user_users__username__get",
+        "operationId": "get_user_api_v1_users__username__get",
         "parameters": [
           {
             "in": "path",
@@ -1908,10 +2140,10 @@
         ]
       }
     },
-    "/users/{username}/posts": {
+    "/api/v1/users/{username}/posts": {
       "get": {
         "description": "Everything by one person — same page shape as the feed, same rules.\n\nIncluding the draft rule: their unpublished posts are theirs, so this shows\nthem to the author and to nobody else.",
-        "operationId": "get_user_posts_users__username__posts_get",
+        "operationId": "get_user_posts_api_v1_users__username__posts_get",
         "parameters": [
           {
             "in": "path",
@@ -2003,10 +2235,10 @@
         ]
       }
     },
-    "/vote/": {
+    "/api/v1/vote/": {
       "post": {
         "description": "Add or remove your upvote.\n\nOne vote per person per post, enforced by the composite primary key on\n`votes` rather than by the check below — which is what makes two requests\nracing each other a 409 instead of a 500.\n\nYou can't vote on a draft you aren't allowed to see, and that is reported\nas missing rather than forbidden, exactly as reading it would be.",
-        "operationId": "vote_vote__post",
+        "operationId": "vote_api_v1_vote__post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2028,7 +2260,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Vote Vote  Post",
+                  "title": "Response Vote Api V1 Vote  Post",
                   "type": "object"
                 }
               }
@@ -2077,6 +2309,35 @@
         "summary": "Upvote a post, or take it back",
         "tags": [
           "Vote"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Answers as long as the process is serving.\n\nDeliberately does *not* touch the database: a health check that fails when\nPostgres is slow turns one degraded dependency into a restart loop.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok"
+                },
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "Health"
         ]
       }
     }

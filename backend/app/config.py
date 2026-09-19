@@ -7,6 +7,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # directory you launch uvicorn / pytest / alembic from.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
+# Every route the app serves lives under this, and nothing else does.
+#
+# A constant rather than a setting, because it is not configurable: it is part
+# of the contract, and a deployment that could change it would be a deployment
+# that could break every client by editing an environment variable.
+#
+# What is *not* under it: `/` and `/healthz`. A liveness probe is asked for by
+# the thing running the container rather than by a client of the API, and it
+# has to keep answering across a version bump — which is the whole point of
+# there being versions.
+#
+# It is worth knowing what this cost, once, at the moment it was added: the
+# refresh cookie's Path moves with it, so every browser holding a cookie issued
+# at `/auth` stopped sending it and had to sign in again. That is the cheapest
+# this change will ever be, which is the argument for doing it now rather than
+# when somebody's script depends on the old paths.
+API_PREFIX = "/api/v1"
+
 
 class Settings(BaseSettings):
     database_hostname: str

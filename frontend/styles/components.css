@@ -1315,3 +1315,44 @@
   border-left: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
+
+/* The lamp, and the one number in the header.
+   The shelf link deliberately has no count — a number in the corner of a header
+   is a notification badge whatever you call it — and this is the exception that
+   proves it: this one *is* an inbox.
+
+   No amber. The accent is spent on a vote, on warmth and on where you are; an
+   unread count is none of those. It is said in the neutrals, and what carries
+   it is weight and a filled shape, the same way the shelf's saved state does. */
+.lamp {
+  position: relative;
+}
+.lamp--lit {
+  --btn-fg: var(--text);
+}
+.lamp__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  margin-left: calc(var(--s-1) * -1);
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+/* On a narrow screen the label is hidden and the button is a 44px icon, so the
+   count comes off the end of the row and sits on the lamp instead. */
+@media (max-width: 640px), (pointer: coarse) {
+  .lamp__count {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    margin-left: 0;
+  }
+}

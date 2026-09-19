@@ -36,6 +36,7 @@ origin to hang a cookie on.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import secrets
@@ -61,13 +62,28 @@ ACCESS_TTL_SECONDS = 15 * 60
 # stays acceptable, so that two tabs reloading together don't look like a
 # replay and revoke the session.
 ROTATION_GRACE = timedelta(seconds=15)
+# Mirrors API_PREFIX in backend/app/config.py. Every route below is written
+# without it and _route strips it off on the way in, so this file reads against
+# backend/app/routers/ rather than against a decorated copy of it.
+API_PREFIX = "/api/v1"
+
 REFRESH_COOKIE = "commons_refresh"
-REFRESH_COOKIE_PATH = "/auth"
+REFRESH_COOKIE_PATH = f"{API_PREFIX}/auth"
 CSRF_HEADER = "X-CSRF-Token"
 
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _excerpt(content: str) -> str:
+    """Mirrors _excerpt in backend/app/routers/notification.py: cut on a word,
+    marked with an ellipsis, so a line reads as abbreviated rather than broken."""
+    text = " ".join(content.split())
+    if len(text) <= State.EXCERPT_CHARS:
+        return text
+    cut = text[: State.EXCERPT_CHARS].rsplit(" ", 1)[0]
+    return f"{cut or text[: State.EXCERPT_CHARS]}…"
 
 
 def now_iso(offset_seconds: int = 0) -> str:
@@ -232,9 +248,12 @@ class State:
         self.posts: dict[int, dict] = {}  # id -> post row
         self.votes: set[tuple[str, int]] = set()  # (email, post_id)
         self.comments: dict[int, dict] = {}  # id -> comment row
+        # id -> {user_email, actor_email, comment_id, kind, created_at, read_at}
+        self.notifications: dict[int, dict] = {}
         self.next_user_id = 1
         self.next_post_id = 1
         self.next_comment_id = 1
+        self.next_notification_id = 1
         self.fail_next: list[dict] = []
 
     # — users / auth ------------------------------------------------------------
@@ -384,6 +403,17 @@ class State:
         self.tokens = {
             tok: pair for tok, pair in self.tokens.items() if pair[0] != email
         }
+        # Both ways round — what was said to you, and what you said to anyone —
+        # and then anything left pointing at a comment that has just gone. In
+        # the real schema all three are one line of ON DELETE CASCADE each; here
+        # they are three predicates, which is why the rule is stated rather than
+        # the removals listed.
+        self.drop_notifications(email=email)
+        self.notifications = {
+            nid: row
+            for nid, row in self.notifications.items()
+            if row["comment_id"] in self.comments
+        }
         self.users.pop(email, None)
 
     def close_session(self, raw: str | None, csrf: str | None) -> None:
@@ -482,6 +512,55 @@ class State:
         rows.sort(key=lambda r: (r["created_at"], r["id"]))
         return rows
 
+    # — notifications ------------------------------------------------------
+    # Mirrors backend/app/routers/notification.py::notify and the cascades
+    # declared on models.Notification. One comment, at most one notification;
+    # a reply addresses whoever it answers, a top-level comment addresses the
+    # post's author, and talking to yourself is not an event. Votes make none.
+    EXCERPT_CHARS = 140
+
+    def notify(self, comment: dict, actor_email: str) -> None:
+        if comment.get("parent_id") is not None:
+            parent = self.comments.get(comment["parent_id"])
+            if parent is None:
+                return
+            recipient = parent["author_email"]
+            kind = "reply"
+        else:
+            post = self.posts.get(comment["post_id"])
+            if post is None:
+                return
+            recipient = post["author_email"]
+            kind = "comment"
+
+        if recipient == actor_email:
+            return
+
+        nid = self.next_notification_id
+        self.notifications[nid] = {
+            "id": nid,
+            "user_email": recipient,
+            "actor_email": actor_email,
+            "comment_id": comment["id"],
+            "kind": kind,
+            "created_at": now_iso(offset_seconds=nid),
+            "read_at": None,
+        }
+        self.next_notification_id += 1
+
+    def drop_notifications(self, *, comment_ids=None, email=None) -> None:
+        """The three cascades, by hand. A dict has no foreign keys, which is
+        why the list is worth reading against models.py rather than memory."""
+        self.notifications = {
+            nid: row
+            for nid, row in self.notifications.items()
+            if not (comment_ids is not None and row["comment_id"] in comment_ids)
+            and not (
+                email is not None
+                and email in (row["user_email"], row["actor_email"])
+            )
+        }
+
     def add_comment(
         self,
         post_id: int,
@@ -516,15 +595,20 @@ class State:
 
     def drop_replies_to(self, comment_id: int) -> None:
         """What the ON DELETE CASCADE on comments.parent_id does."""
-        for rid in [r["id"] for r in self.replies_to(comment_id)]:
+        gone = [r["id"] for r in self.replies_to(comment_id)]
+        for rid in gone:
             self.comments.pop(rid, None)
+        # And the notifications about them, which cascade from comments.id.
+        self.drop_notifications(comment_ids=set(gone))
 
     def drop_comments_on_post(self, post_id: int) -> None:
         """ON DELETE CASCADE, by hand. The real schema does this in Postgres;
         here it has to be remembered, which is exactly why there's a test for
         it on both sides."""
-        for cid in [c["id"] for c in self.comments.values() if c["post_id"] == post_id]:
+        gone = [c["id"] for c in self.comments.values() if c["post_id"] == post_id]
+        for cid in gone:
             del self.comments[cid]
+        self.drop_notifications(comment_ids=set(gone))
 
 
 ST = State()
@@ -555,8 +639,47 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header(
             "Access-Control-Allow-Headers",
-            f"Authorization, Content-Type, {CSRF_HEADER}",
+            f"Authorization, Content-Type, {CSRF_HEADER}, If-None-Match",
         )
+        # Without this the browser keeps the validator to itself and
+        # `res.headers.get("ETag")` is null — the conditional request then
+        # silently never happens and everything goes on working. Mirrors
+        # expose_headers in backend/app/main.py.
+        self.send_header("Access-Control-Expose-Headers", "ETag")
+
+    def _send_conditional(self, payload) -> None:
+        """A 200 with an ETag, or a 304 if the caller already has this one.
+
+        Mirrors the ETagRoute on backend/app/routers/post.py — see
+        backend/app/etag.py, including the note on what it does not save. The
+        hash need not agree with the backend's: a validator is opaque, and a
+        client only ever compares one to the one the same server gave it.
+        """
+        body = json.dumps(payload).encode()
+        tag = f'W/"{hashlib.blake2b(body, digest_size=16).hexdigest()}"'
+        offered = [
+            v.strip()
+            for v in self.headers.get("If-None-Match", "").split(",")
+            if v.strip()
+        ]
+
+        if "*" in offered or tag in offered:
+            self.send_response(304)
+            self._cors()
+            self.send_header("ETag", tag)
+            # This endpoint answers differently depending on who is asking.
+            self.send_header("Vary", "Authorization")
+            self.end_headers()
+            return
+
+        self.send_response(200)
+        self._cors()
+        self.send_header("ETag", tag)
+        self.send_header("Vary", "Authorization")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _send(self, status: int, payload, cookie: str | None = None) -> None:
         body = b"" if payload is None else json.dumps(payload).encode()
@@ -694,6 +817,8 @@ class Handler(BaseHTTPRequestHandler):
     # — the routing table --------------------------------------------------------
     def _route(self, method: str) -> None:
         path = urlparse(self.path).path
+        if path.startswith(API_PREFIX):
+            path = path[len(API_PREFIX) :] or "/"
         query = parse_qs(urlparse(self.path).query)
 
         # Before anything can answer, and before anything can decline to. See
@@ -762,6 +887,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._login(self._form())
         if path == "/auth/refresh" and method == "POST":
             return self._refresh()
+        if path == "/notifications/" and method == "GET":
+            return self._list_notifications(query)
+        if path == "/notifications/read" and method == "POST":
+            return self._mark_notifications_read()
         if path == "/auth/logout" and method == "POST":
             return self._logout()
         if path == "/auth/logout-all" and method == "POST":
@@ -925,6 +1054,81 @@ class Handler(BaseHTTPRequestHandler):
             return
         ST.close_all_sessions(email)
         self._send(204, None, cookie=self._cleared_cookie())
+
+    # — notifications --------------------------------------------------------
+    # Mirrors backend/app/routers/notification.py. Newest first, yours only, and
+    # the unread *count* is asked for through this same route with
+    # `?unread=true&page_size=1` — the envelope's `total` is the answer.
+    def _list_notifications(self, query: dict) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        try:
+            page = int(query.get("page", ["1"])[0])
+            page_size = int(query.get("page_size", ["20"])[0])
+        except ValueError:
+            return self._send(422, {"detail": "bad pagination"})
+        if page < 1 or not (1 <= page_size <= 50):
+            return self._send(422, {"detail": "bad pagination"})
+        unread = query.get("unread", ["false"])[0] == "true"
+
+        rows = [
+            r
+            for r in ST.notifications.values()
+            if r["user_email"] == email and not (unread and r["read_at"] is not None)
+        ]
+        rows.sort(key=lambda r: (r["created_at"], r["id"]), reverse=True)
+
+        total = len(rows)
+        pages = max(1, -(-total // page_size))
+        start = (page - 1) * page_size
+
+        items = []
+        for row in rows[start : start + page_size]:
+            comment = ST.comments.get(row["comment_id"])
+            if comment is None:
+                # Cannot happen: the cascade takes them together. If it ever
+                # does, drop the row rather than render a line pointing at
+                # nothing — which is the thing the cascade exists to prevent.
+                continue
+            post = ST.posts.get(comment["post_id"])
+            if post is None:
+                continue
+            items.append(
+                {
+                    "id": row["id"],
+                    "kind": row["kind"],
+                    "created_at": row["created_at"],
+                    "read_at": row["read_at"],
+                    "actor": ST.public_user(row["actor_email"]),
+                    "post": {"id": post["id"], "title": post["title"]},
+                    "excerpt": _excerpt(comment["content"]),
+                    "comment_id": row["comment_id"],
+                }
+            )
+
+        self._send(
+            200,
+            {
+                "items": items,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": pages,
+                "has_next": page < pages,
+                "has_prev": page > 1,
+            },
+        )
+
+    def _mark_notifications_read(self) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        stamp = now_iso()
+        for row in ST.notifications.values():
+            if row["user_email"] == email and row["read_at"] is None:
+                row["read_at"] = stamp
+        self._send(204, None)
 
     def _profile(self, username: str) -> None:
         user = ST.user_by_username(username)
@@ -1111,18 +1315,21 @@ class Handler(BaseHTTPRequestHandler):
         items = [
             ST.post_out(r, viewer, terms) for r in rows[start : start + page_size]
         ]
-        self._send(
-            200,
-            {
-                "items": items,
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "pages": pages,
-                "has_next": page < pages,
-                "has_prev": page > 1,
-            },
-        )
+        envelope = {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": pages,
+            "has_next": page < pages,
+            "has_prev": page > 1,
+        }
+        # The feed and one post are fingerprinted; a profile's page is not,
+        # because in the backend it is served by the user router, which does
+        # not carry the ETag route class.
+        if only_author is None:
+            return self._send_conditional(envelope)
+        self._send(200, envelope)
 
     def _get_post(self, pid: int) -> None:
         viewer = ST.email_for(self._token())
@@ -1130,7 +1337,7 @@ class Handler(BaseHTTPRequestHandler):
         if not row or not self._may_see(row, viewer):
             # Someone else's draft is 404, not 403 — a 403 would confirm it exists.
             return self._send(404, {"detail": f"Post with id: {pid} was not found"})
-        self._send(200, ST.post_out(row, viewer))
+        self._send_conditional(ST.post_out(row, viewer))
 
     def _create_post(self, data: dict) -> None:
         email = self._require_auth()
@@ -1320,6 +1527,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"detail": "Replies go one level deep"})
 
         row = ST.add_comment(pid, email, content, parent_id)
+        ST.notify(row, email)
         self._send(201, ST.comment_out(row))
 
     def _delete_comment(self, cid: int) -> None:
@@ -1338,6 +1546,7 @@ class Handler(BaseHTTPRequestHandler):
         # The cascade the database does, done here too.
         ST.drop_replies_to(cid)
         del ST.comments[cid]
+        ST.drop_notifications(comment_ids={cid})
         self._send(204, None)
 
     def _vote(self, data: dict) -> None:

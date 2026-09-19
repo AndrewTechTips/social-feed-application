@@ -142,6 +142,24 @@ COMMENT_EXAMPLE = {
 }
 
 
+NOTIFICATION_EXAMPLE = {
+    "id": 4,
+    "kind": "reply",
+    "created_at": "2026-09-09T07:14:30.881Z",
+    "read_at": None,
+    "actor": {
+        "id": 9,
+        "username": "tessaward",
+        "created_at": "2026-08-30T17:45:11.002Z",
+    },
+    "post": {"id": 12, "title": "The library that stays open all night"},
+    "excerpt": (
+        "I've walked past that wall a hundred times and never once thought " "about it."
+    ),
+    "comment_id": 31,
+}
+
+
 def page(item: dict[str, Any], total: int = 14) -> dict[str, Any]:
     """The paging envelope around one worked item.
 

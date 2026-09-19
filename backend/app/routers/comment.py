@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2, docs
 from ..database import get_db
+from .notification import notify
 from .post import visible_to
 
 router = APIRouter(tags=["Comments"])
@@ -173,7 +174,7 @@ def create_comment(
     is itself a reply is a 400, because the request is well-formed and simply
     asks for something this app does not do.
     """
-    get_visible_post(db, post_id, current_user)
+    post = get_visible_post(db, post_id, current_user)
 
     if payload.parent_id is not None:
         parent = db.scalar(
@@ -200,6 +201,11 @@ def create_comment(
         parent_id=payload.parent_id,
     )
     db.add(comment)
+    # The comment needs an id before anything can point at it, and the
+    # notification has to be in the same transaction as the comment it is
+    # about — a flush gives us the first without giving up the second.
+    db.flush()
+    notify(db, comment=comment, post=post, actor=current_user)
     db.commit()
     db.refresh(comment)
     return comment

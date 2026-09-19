@@ -12,7 +12,7 @@ this repo owns and the part a refactor can quietly get wrong.
 """
 
 from backend.app import main
-from backend.app.oauth2 import CSRF_HEADER, REFRESH_COOKIE
+from backend.app.oauth2 import CSRF_HEADER, REFRESH_COOKIE, REFRESH_COOKIE_PATH
 
 ALLOWED = "http://localhost:5173"
 STRANGER = "https://evil.example"
@@ -83,12 +83,16 @@ def test_the_refresh_cookie_is_never_sent_to_a_content_route(client, test_user):
     """The property that keeps this a bearer-header API with a cookie bolted
     on, rather than a cookie API. `Path=/auth` is what enforces it, and the
     cookie jar in the test client applies paths the same way a browser does —
-    so this asserts the behaviour, not the flag."""
+    so this asserts the behaviour, not the flag.
+
+    The path is read from oauth2 rather than written out: it moved once already,
+    when the API gained its /api/v1 prefix, and a test holding its own copy of
+    it would have gone on passing against a cookie the app no longer sets."""
     client.post(
         "/login",
         data={"username": test_user["email"], "password": test_user["password"]},
     )
-    assert client.cookies.get(REFRESH_COOKIE, path="/auth")
+    assert client.cookies.get(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
 
     # A write without a Bearer token is a 401 even though the browser is
     # holding a live session, because the session is not something this route

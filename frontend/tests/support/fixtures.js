@@ -36,6 +36,13 @@ const { pathToFileURL } = require("url");
 
 const API_PORT = process.env.API_PORT || "8000";
 const API_ORIGIN = `http://localhost:${API_PORT}`;
+// Mirrors API_PREFIX in js/config.js. The app's own requests get it from there;
+// these are the fixture's *own* calls, which go straight to the mock without
+// passing through the app.
+//
+// The `__`-prefixed test helpers stay outside it on purpose — they are not part
+// of the API and should not look as though a version bump could move them.
+const API_V = `${API_ORIGIN}/api/v1`;
 
 // Specs identify people by email because that's what you sign in with. A
 // username is required now too, so derive a legal one when a spec doesn't care
@@ -383,7 +390,7 @@ const test = base.test.extend({
         }),
       failNext: (rule) => post("/__fail_next", rule),
       register: (email, password, username) =>
-        ctx.post(`${API_ORIGIN}/users/`, {
+        ctx.post(`${API_V}/users/`, {
           data: { email, password, username: username || usernameFor(email) },
         }),
       // There *is* a network here, so the bluntest possible outage: drop the
@@ -398,7 +405,7 @@ const test = base.test.extend({
         // mock sets lands where a person's would, so everything after this
         // point — the boot refresh, the silent recovery, signing out — runs
         // against a real cookie with real flags rather than a planted string.
-        const res = await target.request.post(`${API_ORIGIN}/login`, {
+        const res = await target.request.post(`${API_V}/login`, {
           form: { username: email, password },
         });
         if (!res.ok()) throw new Error(`mock /login refused a login for ${email}`);
@@ -406,7 +413,7 @@ const test = base.test.extend({
 
         // The same second call the app makes: a token says nothing about who
         // it signed in.
-        const me = await target.request.get(`${API_ORIGIN}/users/me`, {
+        const me = await target.request.get(`${API_V}/users/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!me.ok()) throw new Error(`mock /users/me refused a token for ${email}`);

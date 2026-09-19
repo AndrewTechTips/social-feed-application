@@ -10,8 +10,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2, docs
 from ..database import get_db
+from ..etag import ETagRoute
 
-router = APIRouter(prefix="/posts", tags=["Posts"])
+# The feed is the one response in this API big enough for a conditional request
+# to be worth anything — ten posts of prose, several kilobytes, asked for again
+# every time somebody comes back to it. See app/etag.py, including the note on
+# what this does *not* save.
+router = APIRouter(prefix="/posts", tags=["Posts"], route_class=ETagRoute)
 
 
 def _attach_counts(

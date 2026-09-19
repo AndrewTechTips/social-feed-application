@@ -3,15 +3,15 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import APIRouter, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from .config import settings
+from .config import settings, API_PREFIX
 from .limiter import limiter
 from .logging_config import configure_logging
-from .routers import post, user, auth, vote, comment
+from .routers import post, user, auth, vote, comment, notification
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,16 @@ app.add_middleware(
     # ambient credential from this.
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+    # If-None-Match has to be allowed in, or the preflight refuses the
+    # conditional request before it is ever made.
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "If-None-Match"],
+    # And ETag has to be let back out. A cross-origin response only hands
+    # JavaScript the seven CORS-safelisted headers unless the server names
+    # others here — so without this line the browser receives the validator,
+    # keeps it for its own HTTP cache, and `res.headers.get("ETag")` is null.
+    # The feature then fails silently: every request is unconditional and
+    # everything still works, which is the worst way for it to be broken.
+    expose_headers=["ETag"],
 )
 
 
@@ -208,12 +217,22 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-app.include_router(post.router)
-app.include_router(user.router)
-app.include_router(auth.router)
-app.include_router(auth.auth_router)
-app.include_router(vote.router)
-app.include_router(comment.router)
+# One place that knows where the API lives.
+#
+# The alternative — a prefix argument on each of the six routers — is the same
+# string written six times, and six places for the seventh router somebody adds
+# next year to disagree with. Nesting them under one parent also means the
+# prefix appears once in the OpenAPI document's construction rather than being
+# reassembled from the parts.
+api = APIRouter(prefix=API_PREFIX)
+api.include_router(post.router)
+api.include_router(user.router)
+api.include_router(auth.router)
+api.include_router(auth.auth_router)
+api.include_router(vote.router)
+api.include_router(comment.router)
+api.include_router(notification.router)
+app.include_router(api)
 
 
 @app.get("/", include_in_schema=False)

@@ -244,6 +244,11 @@ class Comment(Base):
     )
 
     user: Mapped["User"] = relationship()
+    # Added for the notification list, which needs the post's title to say
+    # where a comment was left. Nothing else walks it — the comment endpoints
+    # all arrive holding the post already — so it is left lazy rather than
+    # eagerly loaded, and the one query that wants it asks with selectinload.
+    post: Mapped["Post"] = relationship()
     # passive_deletes because the database is already doing it. Without it
     # SQLAlchemy loads every reply in order to delete them one at a time, which
     # is the ORM redoing the work and getting a different answer for any row it
@@ -256,3 +261,71 @@ class Comment(Base):
     parent: Mapped["Comment | None"] = relationship(
         back_populates="replies", remote_side="Comment.id"
     )
+
+
+class Notification(Base):
+    """Somebody addressed you: a reply to your comment, or a comment on your post.
+
+    ── what is in here, and what deliberately isn't ────────────────────────
+    Votes are not. A vote is a number moving, and "three people upvoted you" is
+    the mechanic this app's design thesis spends a page arguing against — a
+    notification with nothing behind it and nowhere to go. Everything here is a
+    person having said something to you, which means every row has somewhere to
+    take you and something to answer.
+
+    ── one comment, at most one notification ──────────────────────────────
+    A reply notifies the person it answers. A top-level comment notifies the
+    post's author. Those are the only two rules, and they do not overlap: a
+    reply on your own post notifies whoever was replied to, not you as well.
+    The alternative — everybody with a stake in the thread hears about
+    everything — is how a notification list becomes something people mute.
+
+    ── kind is stored rather than derived ─────────────────────────────────
+    It could be worked out from ``comment.parent_id``, and storing it is still
+    the right call: a row here is a record that something *happened*, and a
+    record that recomputes itself from the current state of other rows is not a
+    record. It also means the list endpoint needs no branch to know which
+    sentence to build.
+
+    ── everything cascades, and it has to ─────────────────────────────────
+    Delete the comment and the notification about it goes: a line that says
+    "bea replied to you" pointing at nothing is worse than silence. Delete
+    either person — the reader or the actor — and it goes too. All three at the
+    database, for the reason the rest of this file gives.
+    """
+
+    __tablename__ = "notifications"
+
+    __table_args__ = (
+        # The only question asked of this table: "mine, newest first" — and,
+        # with read_at IS NULL added, "how many have I not seen". One index
+        # answers both, because the filter is the leading column either way.
+        Index("ix_notifications_user_id_created_at", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Who it is for.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Who did the thing. Deleting them takes the notification with them, which
+    # is right: "somebody replied to you" about an account that no longer
+    # exists is a dead end wearing a name.
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE")
+    )
+    # "reply" or "comment". Not an enum column: a CHECK constraint on two
+    # values buys a migration every time a third is imagined, and the two
+    # values are written down in schemas.NotificationKind where the API can
+    # see them.
+    kind: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+    # Null until seen. A timestamp rather than a boolean because it costs the
+    # same and answers "when" as well as "whether".
+    read_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+    actor: Mapped["User"] = relationship(foreign_keys=[actor_id])
+    comment: Mapped["Comment"] = relationship()

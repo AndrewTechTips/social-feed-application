@@ -164,9 +164,14 @@ def test_signing_out_everywhere_ends_every_session(client, test_user, session):
     three machines: three separate refresh families for one account.
     """
     from fastapi.testclient import TestClient
+    from backend.app.config import API_PREFIX
     from backend.app.main import app
 
-    others = [TestClient(app), TestClient(app)]
+    # Based at the prefix, like the conftest's client — these stand in for two
+    # more machines, and a machine that talked to the unprefixed paths would be
+    # talking to nothing.
+    base = f"http://testserver{API_PREFIX}"
+    others = [TestClient(app, base_url=base), TestClient(app, base_url=base)]
     sign_in(client, test_user)
     for other in others:
         sign_in(other, test_user)

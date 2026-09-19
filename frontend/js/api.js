@@ -98,6 +98,37 @@ export function forgetPendingRefresh() {
   inFlight = null;
 }
 
+// — what we already have, and the fingerprint that proves it ------------------
+//
+// The API puts an `ETag` on the feed. Hand it back as `If-None-Match` and an
+// unchanged feed answers `304` with no body at all, which on a phone is the
+// difference between a few kilobytes and a few hundred bytes. See
+// backend/app/etag.py, including the honest note about what it does *not*
+// save: the server does all the same work either way.
+//
+// Keyed by the full path, query string and all, because `?page=2` and
+// `?search=x` are different answers. Capped, because a session that searches
+// all afternoon would otherwise accumulate one entry per keystroke.
+//
+// Held in memory only. It is a cache of responses that can contain the
+// reader's own drafts, and the one thing worse than not having it would be
+// leaving it on a shared machine.
+const CONDITIONAL_MAX = 24;
+/** @type {Map<string, { etag: string, data: unknown }>} */
+const conditional = new Map();
+
+/**
+ * Forget every cached response. Called when the session changes.
+ *
+ * Strictly it is belt and braces: the server fingerprints the body it *would*
+ * send, so a signed-out reader presenting a signed-in validator is answered
+ * with a fresh 200 rather than a 304. But "the server will catch it" is a poor
+ * reason to keep somebody's drafts in memory after they have signed out.
+ */
+export function forgetConditional() {
+  conditional.clear();
+}
+
 /**
  * @param {string} path
  * @param {object} [options]
@@ -108,6 +139,9 @@ export function forgetPendingRefresh() {
  * @param {boolean} [options.credentials]  send and accept cookies — /auth only
  * @param {boolean} [options.csrf]     attach X-CSRF-Token — /auth only
  * @param {boolean} [options.recover]  try a refresh-and-retry on a 401
+ * @param {boolean} [options.background]  nobody asked for this request, so its
+ *   failure must not be narrated. A 401 here means "not signed in", not "you
+ *   have been signed out" — see the note at the 401 branch.
  * @param {AbortSignal} [options.signal]
  */
 async function request(
@@ -120,6 +154,7 @@ async function request(
     credentials = false,
     csrf = false,
     recover = true,
+    background = false,
     signal,
   } = {}
 ) {
@@ -154,6 +189,11 @@ async function request(
     if (token) headers["X-CSRF-Token"] = token;
   }
 
+  // Only on a plain GET, and only where we have both halves. A conditional
+  // write would be a very quiet way to drop something on the floor.
+  const held = method === "GET" ? conditional.get(path) : undefined;
+  if (held) headers["If-None-Match"] = held.etag;
+
   let payload;
   if (form) {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
@@ -185,6 +225,11 @@ async function request(
     throw new ApiError(0, "Can't reach the server. Is the backend running?");
   }
 
+  // Before anything reads the body, because there isn't one — and before the
+  // `res.ok` check below, which counts 304 as a failure and would report "that
+  // didn't go through" about a request that went through perfectly.
+  if (res.status === 304 && held) return held.data;
+
   let data = null;
   if (res.status !== 204) {
     const text = await res.text();
@@ -197,9 +242,35 @@ async function request(
     }
   }
 
-  if (res.ok) return data;
+  if (res.ok) {
+    const tag = method === "GET" ? res.headers.get("ETag") : null;
+    if (tag) {
+      // Re-inserted rather than updated, so the Map's insertion order is a
+      // least-recently-used order and the oldest entry is the right one to drop.
+      conditional.delete(path);
+      conditional.set(path, { etag: tag, data });
+      if (conditional.size > CONDITIONAL_MAX) {
+        // The Map is non-empty — we have just inserted into it — so there is
+        // always a first key. The checker cannot see that, and a cast would
+        // be a louder way of saying the same thing than a guard.
+        const oldest = conditional.keys().next().value;
+        if (oldest !== undefined) conditional.delete(oldest);
+      }
+    }
+    return data;
+  }
 
   // — cross-cutting handling ------------------------------------------------
+  //
+  // None of it for a request nobody asked for. A poll that runs on a timer must
+  // never move the reader: on a boot with a dead refresh cookie the poll and
+  // the feed race, and if the poll wins, a visitor who should have landed on
+  // the feed signed out is thrown onto the sign-in screen instead — by a
+  // request they did not make, about a session they were not using. The caller
+  // catches and forgets; the next thing the reader actually does will report a
+  // dead session properly.
+  if (background) throw new ApiError(res.status, readDetail(data, res.status), data);
+
   if (res.status === 401 && intendedAuth) {
     // A token was sent and refused. That is almost always "it expired a moment
     // ago" — the server's clock and ours disagree by a second, or the request

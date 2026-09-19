@@ -11,6 +11,16 @@
     <path d="M12 5 L15 8" />
   </symbol>
 
+  <!-- A pendant lamp, because the header mark is one and this is the same room.
+       Drawn unlit: the light under it is a line, not a glow, so the badge beside
+       it is the only thing that changes when something arrives. -->
+  <symbol id="i-lamp" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M10 2.4 V5" />
+    <path d="M4.8 11.6 L7.6 5 h4.8 l2.8 6.6 Z" />
+    <path d="M7.6 14.6 h4.8" />
+  </symbol>
+
   <symbol id="i-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor"
           stroke-width="1.6" stroke-linecap="round">
     <circle cx="10" cy="10" r="3.6" />

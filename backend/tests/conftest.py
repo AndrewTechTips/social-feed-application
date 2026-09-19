@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app import models
 from backend.app.database import get_db, Base
-from backend.app.config import settings
+from backend.app.config import settings, API_PREFIX
 from backend.app.main import app
 from backend.app.oauth2 import create_access_token
 
@@ -40,7 +40,14 @@ def client(session):
     # next; turn it off so tests are deterministic. The limits themselves are
     # covered in test_limits.py, which turns it back on and resets it by hand.
     app.state.limiter.enabled = False
-    yield TestClient(app)
+    # Based at the API prefix, so a test writes the path it is testing —
+    # `/posts/` — rather than repeating `/api/v1` three hundred times and
+    # having to edit all three hundred the next time the version moves.
+    #
+    # Anything outside the API is still reachable by asking for it absolutely:
+    # `client.get("http://testserver/healthz")`. See test_app.py, which is the
+    # only file that needs to.
+    yield TestClient(app, base_url=f"http://testserver{API_PREFIX}")
     app.dependency_overrides.clear()
 
 
@@ -99,7 +106,7 @@ def anonymous_client(client):
     needs to see what a signed-out visitor sees after acting as a signed-in
     one.
     """
-    return TestClient(app)
+    return TestClient(app, base_url=f"http://testserver{API_PREFIX}")
 
 
 @pytest.fixture

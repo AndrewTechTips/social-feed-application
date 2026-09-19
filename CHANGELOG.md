@@ -23,6 +23,60 @@ about the reader.
 
 ### Added
 
+- **Notifications.** Somebody replies to your comment, or comments on your post,
+  and a count appears on a lamp in the header. `#/notifications` lists them —
+  who, the first words of what they said, and which post — with the whole line
+  as the link. Opening the screen marks everything read, all of it rather than
+  what you happened to scroll past, because a count that depends on how far
+  somebody scrolled is a count nobody can predict.
+
+  **A vote makes no notification.** That is a decision, not an omission: a vote
+  is a number moving, and "three people upvoted you" is precisely the mechanic
+  the design thesis in `UPGRADE_PLAN_V2.md` §4 spends a page arguing against.
+  Everything here is a person having said something, so every line has
+  somewhere to take you and something to answer.
+
+  **One comment, at most one notification.** A reply addresses the person it
+  answers; a top-level comment addresses the post's author. The two rules do not
+  overlap, so a reply on your own post tells whoever was replied to and not you
+  as well — everybody with a stake in a thread hearing about everything in it is
+  how a notification list becomes something people turn off. Talking to yourself
+  produces nothing.
+
+  Three foreign keys, all cascading: delete the comment, the recipient or the
+  actor and the notification goes, because a line saying "bea replied to you"
+  that points at nothing is worse than silence. Each cascade has a test named
+  for it, and each was checked by removing that one `ondelete` and watching
+  that test — and only that test — fail.
+
+  The count and the list are **one endpoint**: `?unread=true&page_size=1`, and
+  the answer is the envelope's `total`. Polled every forty-five seconds, only
+  while the tab is visible, on the same interval as the feed's poll so the two
+  don't drift into talking to the server twice and then not at all.
+
+
+- **Conditional requests on the feed and on a post.** Both carry a weak `ETag`;
+  hand it back as `If-None-Match` and an unchanged answer is a `304` with no
+  body. The client keeps the last two dozen responses in memory, keyed by full
+  path, and clears them whenever the session changes — they can contain the
+  reader's own drafts.
+
+  **What it saves is bytes, not database work**, and the plan's claim that it
+  would make the "new posts" poll almost free was wrong. The fingerprint is
+  taken from the rendered response, so by the time a `304` can be decided on,
+  the query has run and the JSON has been built. The poll asks for
+  `page_size=1` and its body was already tiny. It is applied to the feed
+  because the feed is where the kilobytes are, and `app/etag.py` says so in
+  those words rather than repeating the claim.
+
+  Two details that would each have made it fail silently — every request
+  unconditional, everything still working, nobody any the wiser. `ETag` is not
+  a CORS-safelisted response header, so without `expose_headers` the browser
+  keeps the validator for its own cache and `res.headers.get("ETag")` is null;
+  and `If-None-Match` has to be in `allow_headers` or the preflight refuses the
+  request before it is made. There is a test that fails when either is removed.
+
+
 - **The lights come up.** Changing the theme cross-fades the whole page instead
   of snapping. Every colour is a custom property, so the flip is one attribute
   and the repaint is instantaneous — which is exactly why it read as a glitch.
@@ -322,6 +376,27 @@ about the reader.
   but useless), axe on every screen, and a keyboard-only journey.
 
 ### Changed
+
+- **The API moved to `/api/v1`.** Every route the app serves is under it; `/`
+  and `/healthz` deliberately are not, because a liveness probe is asked for by
+  whatever is running the container and has to keep answering across a version
+  bump. The prefix is a constant in `backend/app/config.py`, attached once by a
+  parent router, and mirrored in `js/config.js`, `tests/mock_api.py` and
+  `js/demo/backend.js` — every path in all four is still written without it.
+
+  **Done now precisely because nothing depends on it yet.** A version in the
+  path buys the ability to change the contract without breaking whoever is
+  already using it, and that option has to be bought before it is needed. Today
+  it cost an afternoon; after one person writes a script against `/posts/` it
+  costs a deprecation window.
+
+  What it actually cost is in [ADR 0009](docs/adr/0009-a-version-in-the-path.md),
+  including the part that is invisible until it happens: the refresh cookie's
+  `Path` moved with the prefix, so every session issued beforehand stopped being
+  sent and everybody signed in once more. Nothing was lost and nothing was
+  insecure — the old cookie simply became unreachable — but on an app with an
+  audience that is a very different afternoon.
+
 
 - **The vote control stopped guessing.** It used to read the filled caret out
   of a set of post ids in `localStorage`, because the API had no way of saying

@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from . import schemas
 from . import database, models
-from .config import settings
+from .config import settings, API_PREFIX
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+# Relative, and so resolved against the doc's own URL — which is why it has
+# no leading slash. It is what the "Authorize" button in /docs posts to.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{API_PREFIX.lstrip("/")}/login")
 
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
@@ -28,7 +30,7 @@ REFRESH_TOKEN_EXPIRE_DAYS = settings.refresh_token_expire_days
 # property a bearer-header API has for free and a cookie API has to be built
 # to keep.
 REFRESH_COOKIE = "commons_refresh"
-REFRESH_COOKIE_PATH = "/auth"
+REFRESH_COOKIE_PATH = f"{API_PREFIX}/auth"
 CSRF_HEADER = "X-CSRF-Token"
 
 # How long the secret a rotation just replaced stays acceptable.

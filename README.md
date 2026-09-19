@@ -104,7 +104,7 @@ cp backend/.env.example .env      # then edit the values
 docker compose up --build
 ```
 
-API on <http://localhost:8000>, interactive docs on <http://localhost:8000/docs>.
+API on <http://localhost:8000/api/v1>, interactive docs on <http://localhost:8000/docs>.
 
 ### Or locally, with your own Postgres
 
@@ -194,6 +194,7 @@ One page, hash routes.
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
 | `#/colophon` | How this was made, inside the thing it describes: the stack in prose, the repository's own measurements, four decisions linked to their records, what's honest about the demo, and a button that opens the palette rather than printing a list of shortcuts that could go wrong. Offered from the masthead and from ⌘K. |
 | `#/shelf` | What you've put aside, newest save first. The feed's column and cards with your saves in it. Saved posts are ids in this browser — the screen asks the API for each one, so a post that has been deleted drops off the shelf rather than sitting there pointing at nothing. |
+| `#/notifications` | What has been said to you: replies to your comments and comments on your posts, newest first, each line carrying who, the first words of what they said, and which post. The whole line is the link. A count sits on the lamp in the header — the one number in this header, because this is the one control that is an inbox — and opening the screen clears it, all of it, not just what you scrolled past. Votes make no notification: a vote is a number moving, and turning that into a notification is the mechanic this app's design refuses. |
 | `#/settings` | Your account: change the name everybody sees, sign out on every device, or delete the account. Renaming keeps your posts, comments and votes, because they were joined to your account rather than to your name. Your email is shown and cannot be changed here — moving an account to a new address means sending a confirmation to it, and this app has no way to send mail, so it says so rather than offering a box that half-works. Deleting asks you to type your own username and takes everything with it. Offered from your own profile and from ⌘K. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, and a count that reads the post back in the terms the card will use — *312 words, about 2 min*, from the same function the card calls. The character count appears only within four hundred characters of the limit. A new post is kept as you type, so a mistyped address doesn't take it with it: come back and the form is as you left it, with a way to start fresh. `POST` to create; `PATCH` with only the changed fields to edit. |
 
@@ -203,6 +204,13 @@ The generated spec is committed at [`docs/openapi.json`](docs/openapi.json) — 
 examples, documented error responses and all — so the contract can be read, diffed or fed
 to a client generator without running anything. CI fails if it drifts from the code.
 
+**Every path below is served under `/api/v1`** — `POST /api/v1/users/`, and so on. The
+prefix is named once, in `backend/app/config.py`, and the paths are written here without it
+for the same reason the code writes them without it. Two routes are deliberately outside it:
+`/` and `/healthz`, which are asked for by whatever is running the container rather than by a
+client of the API, and which have to keep answering across a version bump. That is what the
+versioning is for.
+
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/users/` | – | register — username, email, password (8–72 bytes), 10/hour |
@@ -210,8 +218,8 @@ to a client generator without running anything. CI fails if it drifts from the c
 | `POST` | `/auth/refresh` | cookie | trade the refresh cookie for a new access token, rotating both. Needs `X-CSRF-Token`. 30/min |
 | `POST` | `/auth/logout` | cookie | revoke the session and clear the cookie. Needs `X-CSRF-Token` |
 | `POST` | `/auth/logout-all` | bearer | revoke **every** session for the account. Takes the access token rather than the cookie: holding a cookie ends the session it belongs to, ending everyone else's should take more |
-| `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — full-text search over title and body, drafts only if they're yours |
-| `GET` | `/posts/{id}` | optional | one post + vote count |
+| `GET` | `/posts/` | optional | paginated feed: `?page=&page_size=&search=` — full-text search over title and body, drafts only if they're yours. Carries a weak `ETag`; send `If-None-Match` and an unchanged feed is a `304` |
+| `GET` | `/posts/{id}` | optional | one post + vote count. `ETag` here too |
 | `POST` | `/posts/` | bearer | create |
 | `PUT` | `/posts/{id}` | bearer | full replace (author only) |
 | `PATCH` | `/posts/{id}` | bearer | partial update (author only) |
@@ -220,12 +228,14 @@ to a client generator without running anything. CI fails if it drifts from the c
 | `POST` | `/posts/{id}/comments` | bearer | say something (1–2000 characters, trimmed) |
 | `DELETE` | `/comments/{id}` | bearer | whoever wrote it, and nobody else |
 | `POST` | `/vote/` | bearer | `{post_id, dir}` — `dir` 1 = up, 0 = remove |
+| `GET` | `/notifications/` | bearer | what has been said to you, newest first, paginated. `?unread=true&page_size=1` is also how the unread **count** is asked for — the answer is the envelope's `total` |
+| `POST` | `/notifications/read` | bearer | mark everything as seen |
 | `GET` | `/users/me` | bearer | who the caller is — `{id, username, email}` |
 | `PATCH` | `/users/me` | bearer | change your username — and only that. 409 if it's taken; your own name back is a no-op, not a collision |
 | `DELETE` | `/users/me` | bearer | delete the account. One `DELETE`; the schema's cascades take the posts, the comments under them, the comments left elsewhere, the replies to those, the votes and the sessions |
 | `GET` | `/users/{username}` | – | a public profile: no email, ever |
 | `GET` | `/users/{username}/posts` | optional | everything by one person, paginated like the feed |
-| `GET` | `/healthz` | – | liveness probe |
+| `GET` | `/healthz` | – | liveness probe — **not** under the prefix |
 
 ---
 

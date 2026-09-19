@@ -21,6 +21,15 @@
 
 export const API_BASE = "http://localhost:8000";
 
+// Mirrors API_PREFIX in backend/app/config.py.
+//
+// Every path in this codebase is written without it — `/posts/`, `/users/me` —
+// and apiFetch below is the single place it gets attached. That keeps the
+// version out of forty call sites, and it means the demo adapter can be
+// written against the same paths the rest of the app uses rather than against
+// a decorated copy of them.
+export const API_PREFIX = "/api/v1";
+
 // Where the source is. Named here rather than in the two places that link to
 // it — the demo strip and the colophon — because a repository that moved and
 // took one of them with it would be a broken link on the page whose whole job
@@ -58,8 +67,13 @@ async function demoBackend() {
 }
 
 export async function apiFetch(path, init) {
-  if (IS_DEMO) return (await demoBackend()).fetch(path, init);
-  return fetch(API_BASE + path, init);
+  // Prefixed for both, so that what the demo adapter is handed is what the
+  // network would have carried. The adapter strips it again on the way in —
+  // one line there, in exchange for the two backends being fed identical URLs
+  // and a test that watches requests seeing the same thing either way.
+  const url = API_PREFIX + path;
+  if (IS_DEMO) return (await demoBackend()).fetch(url, init);
+  return fetch(API_BASE + url, init);
 }
 
 // Used by the demo strip's "Reset the demo" control.

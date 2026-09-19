@@ -10,6 +10,7 @@ import {
   currentQuery,
   forgetCurrentScreen,
 } from "./router.js";
+import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
@@ -17,6 +18,7 @@ import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
 import { h, icon } from "./ui.js";
 import { mountPalette, openPalette } from "./components/palette.js";
 import { shelfCount } from "./shelf.js";
+import { unreadCount, startNotifications } from "./notify.js";
 import { wireFeedKeys } from "./components/feedkeys.js";
 import { wireReader } from "./components/reader.js";
 import { wireQuote } from "./components/quote.js";
@@ -26,6 +28,7 @@ import { renderProfile } from "./views/profile.js";
 import { renderShelf } from "./views/shelf.js";
 import { renderColophon } from "./views/colophon.js";
 import { renderSettings } from "./views/settings.js";
+import { renderNotifications } from "./views/notifications.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
@@ -58,6 +61,44 @@ const accountEl = () => document.getElementById("account");
 // No count on it. A number in a corner of a header is a notification badge
 // whatever you call it, and this is a bookshelf, not an inbox. The count is on
 // the shelf, where it is a fact about what you are looking at.
+// The lamp, and the one number in this header.
+//
+// The shelf link a few lines below says, in as many words, that a number in the
+// corner of a header is a notification badge whatever you call it. This is the
+// exception that proves it: this *is* an inbox, so it is the one control here
+// entitled to a count.
+//
+// No amber. The accent is spent on a vote, on warmth, and on where you are, and
+// an unread count is none of those — it is said in the neutrals, with the
+// weight doing the work. `aria-hidden` on the number because the accessible
+// name below already says it in words, and a screen reader should hear
+// "Notifications, three unread" rather than "Notifications 3".
+function notificationsLink() {
+  const n = unreadCount();
+  const link = h(
+    "a",
+    {
+      class: "btn btn--quiet btn--action lamp" + (n ? " lamp--lit" : ""),
+      href: "#/notifications",
+      "aria-label":
+        n === 0
+          ? "Notifications"
+          : n === 1
+          ? "Notifications, one unread"
+          : `Notifications, ${n} unread`,
+      title: "Notifications",
+    },
+    icon("lamp"),
+    h("span", { class: "btn__label" }, "Notifications")
+  );
+  if (n) {
+    link.append(
+      h("span", { class: "lamp__count", "aria-hidden": "true" }, n > 99 ? "99+" : String(n))
+    );
+  }
+  return link;
+}
+
 function shelfLink() {
   const n = shelfCount();
   return h(
@@ -117,7 +158,7 @@ function renderAccount() {
       h("span", { class: "btn__label" }, "Sign out")
     );
     out.addEventListener("click", signOut);
-    kids.push(write, shelf, who, out, themeButton());
+    kids.push(notificationsLink(), write, shelf, who, out, themeButton());
   } else {
     kids.push(
       shelf,
@@ -217,6 +258,7 @@ function syncChrome() {
     "/shelf": "Your shelf · Commons",
     "/colophon": "Colophon · Commons",
     "/settings": "Your account · Commons",
+    "/notifications": "Notifications · Commons",
   };
   document.title = titles[currentPath()] || "Commons";
 }
@@ -237,15 +279,23 @@ route("/u/:username", renderProfile);
 route("/shelf", renderShelf);
 route("/colophon", renderColophon);
 route("/settings", renderSettings);
+route("/notifications", renderNotifications);
 
 subscribe(renderAccount);
 // Saving the first post puts a way into the shelf in the header, and taking the
 // last one off takes it away again. js/shelf.js says so rather than this
 // polling for it.
 addEventListener("commons:shelf", renderAccount);
+// And the lamp, when the count changes under it.
+addEventListener("commons:notifications", renderAccount);
 // Signing in or out changes what every screen shows, so the router mustn't
 // decide the one already on screen is still good enough.
 subscribe(forgetCurrentScreen);
+// And the conditional-request cache goes with it, for the stronger of the two
+// reasons: it holds response bodies that can contain the reader's own drafts.
+// Wired here rather than inside clearSession() because the store cannot import
+// the API client — the client already imports the store.
+subscribe(forgetConditional);
 // Signing in or out moves the notice between the masthead and the band, and a
 // same-route navigate() fires no hashchange — so the store drives this too.
 subscribe(syncDemoStrip);
@@ -262,6 +312,9 @@ paintPaletteHint();
 wireFeedKeys();
 wireReader();
 wireQuote();
+// After the session has been restored, so the first ask is made as somebody
+// rather than as nobody.
+startNotifications();
 
 startRouter();
 

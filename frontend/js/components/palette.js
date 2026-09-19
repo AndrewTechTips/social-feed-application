@@ -18,6 +18,7 @@
 import { h, toast } from "../ui.js";
 import { get, knownPosts } from "../store.js";
 import { otherTheme, toggleTheme, signOut } from "../actions.js";
+import { unreadCount } from "../notify.js";
 import { navigate, currentPath } from "../router.js";
 import { focusCursor, hasCards, hasOnward, readOn, typing } from "./feedkeys.js";
 import { focusIsOn, toggleFocus } from "./reader.js";
@@ -75,6 +76,16 @@ function commands() {
     // Only when there is an account to change. Signed out, the row would lead
     // to a screen that immediately sends you to sign in, which is a promise
     // the palette shouldn't make.
+    // Above "Your account" because it is the one somebody opens repeatedly,
+    // and the label carries the count so the palette answers the question
+    // ("is there anything?") rather than only offering to go and look.
+    signedIn && {
+      id: "notifications",
+      label: unreadCount()
+        ? `Notifications — ${unreadCount()} unread`
+        : "Notifications",
+      run: () => navigate("/notifications"),
+    },
     signedIn && {
       id: "settings",
       label: "Your account",

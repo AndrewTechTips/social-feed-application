@@ -294,3 +294,63 @@ class Vote(BaseModel):
     )
 
     model_config = ConfigDict(json_schema_extra={"example": {"post_id": 12, "dir": 1}})
+
+
+# — notifications ------------------------------------------------------------
+# Somebody said something to you. Two kinds and no more; see models.Notification
+# for why a vote is not one of them.
+class NotificationKind(str, Enum):
+    reply = "reply"
+    comment = "comment"
+
+
+class NotificationPost(BaseModel):
+    """Where the notification points. Just enough to draw the line and link it —
+    not a whole PostOut, which would drag the body, the vote count and the
+    author of every post into a list that is about somebody else entirely."""
+
+    id: int
+    title: str
+
+
+class NotificationOut(BaseModel):
+    """One line of "somebody addressed you".
+
+    It carries the sentence's three parts — who, what kind, and where — plus a
+    short piece of what they actually said. The excerpt is the reason this is
+    readable rather than a list of links: "bea replied to you" tells you
+    nothing you can act on, and the first few words of the reply tell you
+    whether to bother.
+    """
+
+    id: int
+    kind: NotificationKind
+    created_at: datetime
+    # Null until seen. The client draws unread ones differently and counts them;
+    # both want the timestamp rather than a flag.
+    read_at: Optional[datetime] = None
+    actor: UserOut
+    post: NotificationPost
+    # The comment itself, trimmed. Not the whole thing: a 2,000-character reply
+    # would make one row of this list taller than the screen.
+    excerpt: str
+    comment_id: int
+
+
+class NotificationPage(BaseModel):
+    """The same envelope as posts and comments, for the same reason: a client
+    that can walk one list can walk them all.
+
+    `total` is also how the unread count is asked for — `?unread=true&
+    page_size=1` and read the number — which is the trick the "new posts" pill
+    already uses against `/posts/`. One endpoint, no second shape to keep in
+    step, and a poll that costs one row.
+    """
+
+    items: list[NotificationOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    has_next: bool
+    has_prev: bool
