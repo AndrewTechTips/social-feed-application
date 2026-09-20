@@ -24,6 +24,87 @@ that never shipped.
 
 ### Added
 
+- **Commons installs, and now it says so.** It has had a manifest, four
+  maskable icons and a network-first service worker since
+  [ADR 0007](docs/adr/0007-a-network-first-service-worker.md), and it has never
+  had one word anywhere in the app about any of it. `grep -r
+  beforeinstallprompt frontend/` returned nothing: the only route in was
+  Chrome's address-bar icon, which is a feature that lives in the browser and
+  nowhere in the product.
+
+  **The manifest was half-finished in the way that matters.** It had no
+  `screenshots`, which is the single key that decides what the install dialog
+  looks like — without it Chrome shows a cramped mini-infobar on Android and a
+  bare one-liner on the desktop. There are six now, three `wide` and three
+  `narrow`, plus `shortcuts` for the composer, the shelf and notifications,
+  `display_override`, `launch_handler`, `categories`, `lang` and `dir`.
+  `orientation: portrait-primary` is gone: a reading app that refuses landscape
+  on a tablet is worse, not more app-like.
+
+  **The screenshots are generated, not taken.** `docs/make_icons.mjs` already
+  drove Chromium to render the brand mark; it now also starts a static server
+  on an ephemeral port and photographs the running app in demo mode, so a
+  screenshot cannot be six months older than the screen it claims to show. The
+  shortcut glyphs are lifted out of `assets/icons.svg` rather than copied from
+  it, for the same reason. Two bugs surfaced while it was being written and
+  both are worth keeping: `.card` matches the loading skeletons, so the first
+  run nearly committed a photograph of four grey bars; and finding a post by
+  clicking its heading quietly assumes that post is on page one, which the
+  ranking's second gravity stops being true over time. It reaches the post
+  through the app's own search now.
+
+- **An install control with four states, two of which draw nothing.**
+  `beforeinstallprompt` is Chromium's alone — iOS Safari has no prompt and
+  Firefox has no install — so a single "Install" button is dead or lying for a
+  large share of visitors, and the masthead is the first block of type a
+  recruiter reads. So: a button where the event fired, one sentence behind a
+  disclosure on iOS, and **nothing at all** where the app is already installed
+  or the browser cannot install it. Never a disabled control. It is offered in
+  the masthead, in one palette row and on the colophon, and it is the same
+  block in all three. [ADR 0010](docs/adr/0010-an-install-control-with-a-silent-state.md)
+  has the reasoning and the two mechanics that are only learned the hard way:
+  the event has to be caught at boot and `preventDefault()`-ed or Chrome takes
+  the turn itself, and it is single-use, so it is discarded before anything is
+  awaited and the control goes whatever the reader chose.
+
+- **It behaves like an app once it is one.** `navigator.setAppBadge()` puts the
+  unread count on the dock, the home screen or the taskbar — fifteen lines, no
+  server and no permission prompt, wired to the one place in `js/notify.js`
+  where that number changes. It says zero at boot, because a badge is on the
+  icon and the icon is still there tomorrow. The command palette's *Copy a link
+  to this post* becomes *Share this post* where there is a share sheet, and is
+  named after whichever of the two will actually happen. A frameless window
+  gets a slightly heavier bottom edge on the header, because the hairline that
+  reads as "the chrome ends here" reads as nothing when there is no chrome
+  above it.
+
+  **And the title bar follows the reader's theme rather than the operating
+  system's.** `index.html` ships two `<meta name="theme-color">` keyed to
+  `prefers-color-scheme`, which is right until the app has booted and wrong
+  after it: the theme here is a choice in `localStorage` and is allowed to
+  disagree with the desktop. An installed window in light mode on a dark
+  desktop had a dark title bar. Every one of those tags is now set to `--bg`,
+  read off the page rather than typed, so the two cannot drift.
+
+- **The colophon explains the part of the app that is invisible.** A service
+  worker is the piece of work here that most needs explaining to somebody who
+  will never open DevTools, and "It works with the lights off" is where the
+  network-first decision becomes readable prose rather than a comment in a file
+  nobody opens.
+
+  **What the tests can and cannot reach is written down rather than glossed.**
+  Chrome suppresses `beforeinstallprompt` under automation — not with
+  `--enable-automation` dropped, not headed, not in real Chrome; all four were
+  tried — so `tests/install.spec.js` dispatches the event itself and says so at
+  the top of the file, and `tests/offline.spec.js` covers Chrome's side of it by
+  holding the manifest to the criteria that decision is made on: every icon and
+  screenshot resolves 200 and is really a PNG, every declared `sizes` is read
+  back out of the file's own header, and every shortcut points at a route
+  `js/main.js` actually registers. `display-mode` is not emulable either, so the
+  standalone stylesheet is checked inside a real frameless window opened with
+  Chrome's `--app=` flag — on a machine with a display, with a CSSOM check as
+  the floor everywhere else.
+
 - **The shelf is on your account.** It shipped as ids in `localStorage`, which
   is instant, needs no sign-in and went out to the published demo the day it
   was written — and does not follow you to your phone. There is a `saves` table

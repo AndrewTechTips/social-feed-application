@@ -19,3 +19,4 @@ comment nobody reads.
 | [0007](0007-a-network-first-service-worker.md) | The service worker is network-first |
 | [0008](0008-a-ranking-with-two-gravities.md) | A ranking with two gravities |
 | [0009](0009-a-version-in-the-path.md) | A version in the path, and paying for it now |
+| [0010](0010-an-install-control-with-a-silent-state.md) | An install control with a silent state |

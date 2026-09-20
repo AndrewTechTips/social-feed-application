@@ -82,6 +82,52 @@ test("every decision it names has a record that exists", async ({ page }) => {
   }
 });
 
+test("and so does every other record it points at, wherever on the page", async ({
+  page,
+}) => {
+  // The decisions list is not the only thing that links into docs/adr/ any
+  // more — the prose does too. This is the same check widened to the whole
+  // page, so a record referenced from a paragraph cannot rot unnoticed.
+  await page.goto("/#/colophon");
+  await expect(page.locator(".colophon__title")).toBeVisible();
+
+  const files = await page
+    .locator('.colophon a[href*="/docs/adr/"]')
+    .evaluateAll((els) =>
+      els.map((el) => el.getAttribute("href").split("/docs/adr/")[1]).filter(Boolean)
+    );
+
+  // More than the four in the list, or this test is only repeating the one above.
+  expect(files.length).toBeGreaterThan(4);
+  for (const file of files) {
+    expect(
+      fs.existsSync(path.join(repoRoot, "docs", "adr", file)),
+      `the colophon links to docs/adr/${file}, which isn't there`
+    ).toBe(true);
+  }
+});
+
+// ── what it says about being an app ────────────────────────────────────────
+test("it explains the service worker without needing DevTools open", async ({
+  page,
+}) => {
+  await page.goto("/#/colophon");
+  const section = page
+    .locator(".colophon__section")
+    .filter({ hasText: "It works with the lights off" });
+  await expect(section).toHaveCount(1);
+
+  // The three things the section exists to say: what the thing is, which way
+  // round it asks, and what installing buys.
+  await expect(section).toContainText("service worker");
+  await expect(section).toContainText("asks the network");
+  await expect(section).toContainText("without an address bar");
+
+  // And it says why that order, which is the decision rather than the feature.
+  await expect(section.locator('a[href*="0007-"]')).toHaveCount(1);
+  await expect(section.locator('a[href*="0010-"]')).toHaveCount(1);
+});
+
 test("the links off the site open away from it, safely", async ({ page }) => {
   await page.goto("/#/colophon");
   await expect(page.locator(".colophon__title")).toBeVisible();

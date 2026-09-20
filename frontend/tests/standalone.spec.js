@@ -18,7 +18,24 @@
 //
 // Everything else here is exercised for real.
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { chromium } = require("@playwright/test");
 const { test, expect, CARD } = require("./support/fixtures");
+
+// Chrome's --app= opens a genuine frameless window: no address bar, no tab
+// strip, and `display-mode: standalone` really matches inside it. It is the one
+// way to see the stylesheet below actually applied rather than merely parsed.
+//
+// It needs a display. On this project's CI — ubuntu-latest, headless, no X —
+// there isn't one, which is the same situation tests/visual.spec.js is in and
+// gets the same answer: the weaker check runs everywhere, the real one runs
+// where somebody could look at the window it opens.
+const HAS_DISPLAY =
+  process.platform === "darwin" ||
+  process.platform === "win32" ||
+  !!process.env.DISPLAY;
 
 const ADA = "ada@commons.test";
 const BEA = "bea@commons.test";
@@ -382,6 +399,71 @@ test("the standalone rule is one the browser understood", async ({ page, api }) 
   expect(found.condition).toContain("minimal-ui");
   expect(found.declarations.join(" ")).toContain(".site-header");
   expect(found.declarations.join(" ")).toContain("border-bottom-color");
+});
+
+test("and in a real frameless window, the edge is actually drawn", async ({
+  baseURL,
+}, testInfo) => {
+  test.skip(
+    !HAS_DISPLAY,
+    "no display to open a window on — the CSSOM check above is the floor here"
+  );
+  test.skip(
+    testInfo.project.name !== "chromium",
+    "this launches its own browser and never touches the API, so once is enough"
+  );
+
+  // Its own browser, because --app is a launch argument and the page fixture's
+  // was started without it.
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "commons-standalone-"));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: false,
+    args: [`--app=${baseURL}/?demo=1#/`],
+    // An explicit size rather than the window's own: the runner folds the
+    // project's `use` options into every context it makes, and a null viewport
+    // collides with the deviceScaleFactor that comes with Desktop Chrome. The
+    // page size is not what is being tested — display-mode is, and it is a
+    // property of the window, not of the viewport.
+    viewport: { width: 900, height: 700 },
+  });
+  try {
+    let page = ctx.pages()[0];
+    await expect
+      .poll(
+        () => {
+          page = ctx.pages().find((p) => p.url().startsWith("http")) || page;
+          return page?.url() || "";
+        },
+        { timeout: 20_000 }
+      )
+      .toContain("demo=1");
+    await page.waitForSelector(CARD, { timeout: 20_000 });
+
+    const seen = await page.evaluate(() => {
+      const header = document.querySelector(".site-header");
+      const root = getComputedStyle(document.documentElement);
+      const norm = (v) => v.trim().replace(/\s+/g, " ");
+      return {
+        standalone: matchMedia("(display-mode: standalone)").matches,
+        browser: matchMedia("(display-mode: browser)").matches,
+        edge: norm(getComputedStyle(header).borderBottomColor),
+        border: norm(root.getPropertyValue("--border")),
+        strong: norm(root.getPropertyValue("--border-strong")),
+      };
+    });
+
+    // Really a frameless window, not a tab that happens to be maximised.
+    expect(seen.standalone).toBe(true);
+    expect(seen.browser).toBe(false);
+
+    // And the rule applied: one step more definite than the hairline a tab
+    // gets, because in here there is no browser chrome above it doing the job.
+    expect(seen.edge).toBe(seen.strong);
+    expect(seen.edge).not.toBe(seen.border);
+  } finally {
+    await ctx.close();
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
 });
 
 // ── back, with nowhere else to go ──────────────────────────────────────────

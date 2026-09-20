@@ -336,6 +336,13 @@
 .colophon__install {
   margin-top: var(--s-5);
 }
+/* The footnote under the offer. Adjacent-sibling rather than a margin on the
+   note itself, which is also used under the figures where it needs none — and
+   it holds either way: when the offer is display:none the selector still
+   matches, and this margin collapses with the paragraph's own. */
+.colophon__install + .colophon__note {
+  margin-top: var(--s-4);
+}
 
 .colophon__section code {
   font-size: 0.9em;

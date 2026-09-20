@@ -291,6 +291,8 @@ cd frontend && npm install && npx playwright install chromium
 | `shelf.spec.js` | Saving and unsaving, the header link appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. Then the account's half: signing in merging rather than replacing, a save surviving the local mirror being thrown away, signing out taking an account's shelf off a shared machine and leaving one that was never an account's, and a refused save putting the control back. |
 | `visual.spec.js` | Screenshots of the feed in both themes and on a phone, a post, a post in focus mode at the largest text, a post at the narrow measure, and the sign-in form. The only specs that would notice a stylesheet that stopped loading or a token that resolved to nothing. Run with `npm run test:visual`; CI runs them with `--ignore-snapshots`, because macOS and Linux do not rasterise type the same way and a shared baseline would be a permanently failing test rather than a strict one. |
 | `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
+| `install.spec.js` | The four states of the install control: the event caught and cancelled so Chrome doesn't show its own infobar, the offer appearing whether the event arrives before or after the feed draws, a double press prompting exactly once, the control going whatever the reader chose, and **nothing at all** rendered once the app is installed or on a browser that can't. Plus iOS getting a sentence rather than a dead button, at a 44px target, and axe on a masthead carrying the offer. The event itself is dispatched by the test — Chrome suppresses it under automation, and the file says so at the top. |
+| `standalone.spec.js` | What changes when it is an app rather than a tab: the unread count reaching the icon and clearing at boot, sign-out and after a look; the title bar taking the reader's theme rather than the operating system's; the share sheet standing in for the clipboard where there is one, and a cancelled sheet saying nothing; Back still working where there is no address bar. The standalone stylesheet is checked inside a real frameless window opened with Chrome's `--app=` flag, on a machine that has a display. |
 | `colophon.spec.js` | That every figure on the page is one from the committed measurement and nothing was typed in, that every decision it names links to a record that is actually on disk, that it still reads as a page when the measurement can't be fetched, and that the outward links carry `rel=noopener`. |
 | `reader.spec.js` | The panel opening, the text size changing the post and nothing else and surviving a reload, focus mode clearing the page and leaving one way out and not following you off it, the panel's own radios not switching the single-key shortcuts off, and a printed post being ink on paper rather than white on white. |
 | `quote.spec.js` | A selected passage offering to be copied with its title and address, where the control sits, what is too short to be a quote, and the control not existing at all on a touch screen. |
@@ -324,6 +326,7 @@ mind, which is the part that makes it a decision rather than a preference:
 | [0006](docs/adr/0006-lighthouse-without-lhci.md) | Lighthouse runs from a script, not `@lhci/cli` | Sixty lines replaced 331 packages and all ten `npm audit` findings — and fixed an `npm ci` that only failed on CI. |
 | [0007](docs/adr/0007-a-network-first-service-worker.md) | The service worker is network-first | Precaches the shell, then serves the network and falls back to the cache. Cache-first assumes content-hashed filenames, which a project with no build step doesn't have — so the version constant nobody remembers to bump would be the only thing between a reader and a permanently stale app. |
 | [0008](docs/adr/0008-a-ranking-with-two-gravities.md) | A ranking with two gravities | `warm` decays at 0.5 and `discussed` at 0.25, both chosen by measuring against the seeded feed rather than by copying Hacker News — at its 1.8, "warmest" on a feed this quiet collapses into "newest with the unvoted posts pushed to the bottom". A vote is a reaction and it stales; a conversation is a thing you can still join. |
+| [0010](docs/adr/0010-an-install-control-with-a-silent-state.md) | An install control with a silent state | `beforeinstallprompt` is Chromium's alone, iOS Safari has no prompt and Firefox has no install — so one "Install" button is dead or lying for a large share of visitors. Four states instead, two of which render nothing at all, and never a disabled control. |
 | [0005 amendment](docs/adr/0005-offset-pagination.md) | A third trigger, and `as_of` instead of keyset | The original triggers were about volume. A feed that *receives* rows while it is read duplicates a card per row inserted at any write rate, which one `created_at <= :as_of` closes — and keyset is still the answer to depth, not to this. |
 
 And the smaller ones, in place:
@@ -467,14 +470,23 @@ python docs/stats.py            # re-measure
 python docs/stats.py --check    # what CI runs
 ```
 
-**The app works offline, and installs.** A network-first service worker
-([ADR 0007](docs/adr/0007-a-network-first-service-worker.md)) precaches the
-shell and answers from it when there's no network. On the published build that
-means the whole app — the files from the cache, the data from `localStorage`,
-the API from a module that was itself served from the cache. Network-first
-rather than cache-first because there's no build step here and therefore no
-content-hashed filenames, so cache-first would put a version constant between
-readers and every future change.
+**The app works offline, and installs — and now it says so.** A network-first
+service worker ([ADR 0007](docs/adr/0007-a-network-first-service-worker.md))
+precaches the shell and answers from it when there's no network. On the
+published build that means the whole app — the files from the cache, the data
+from `localStorage`, the API from a module that was itself served from the
+cache. Network-first rather than cache-first because there's no build step here
+and therefore no content-hashed filenames, so cache-first would put a version
+constant between readers and every future change.
+
+All of that was true for a while before anything in the app mentioned it: the
+only way in was Chrome's address-bar icon. There is an install offer in the
+masthead now, one row in the command palette and a colophon section explaining
+what a service worker is doing here — and on a browser that cannot install, or
+one where it already has, there is **nothing at all** rather than a control that
+does nothing ([ADR 0010](docs/adr/0010-an-install-control-with-a-silent-state.md)).
+Installed, it puts the unread count on the app icon, takes the title bar from
+the theme you chose, and offers the share sheet in place of the clipboard.
 
 **What you've read never leaves your browser.** `commons.read` and `commons.visit` are two
 keys in `localStorage`, read once at boot by `frontend/js/reading.js`; there is no endpoint

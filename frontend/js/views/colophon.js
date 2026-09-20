@@ -184,29 +184,73 @@ function honest() {
       " is committed and re-checked in CI, and the end-to-end suite runs twice — " +
         "once against this in-browser adapter and once against a real HTTP server " +
         "standing in for the backend."
+    )
+  );
+}
+
+// The part of this app that is completely invisible until the network goes
+// away — which is the problem, because a service worker is the piece of work on
+// this page that most needs explaining to somebody who will never open
+// DevTools.
+function offline() {
+  return h(
+    "section",
+    { class: "colophon__section" },
+    h("h2", {}, "It works with the lights off"),
+    h(
+      "p",
+      { class: "colophon__prose" },
+      "There is a service worker — a small script the browser keeps running " +
+        "beside the page, which gets asked first about every file the app " +
+        "requests. This one asks the network, hands back whatever comes, and " +
+        "keeps a copy. The copy is only read when the network isn't there."
     ),
-    // Somebody reading this page is exactly the person who will install it, so
-    // the offer belongs here as well as on the feed. Empty, and out of the
-    // document's flow entirely, in the two states where there is nothing to
-    // offer — the paragraph goes with the control rather than standing on its
-    // own, because a page that explains how to install and then doesn't let
-    // you is worse than a page that says nothing.
+    h(
+      "p",
+      { class: "colophon__prose" },
+      "That order is the decision, and it is the opposite of the usual advice. " +
+        "Serving from the cache first is safe when a build step has stamped a " +
+        "hash into every filename, because a new build is then a new address " +
+        "and a cached file can never be the wrong one. This app has no build " +
+        "step, so the addresses never change — and cache-first would leave a " +
+        "version number in one file standing between a returning reader and " +
+        "every change made after it. ",
+      out(adr("0007-a-network-first-service-worker.md"), "The record for that"),
+      " says what it costs: a request that an offline-first app would not have " +
+        "made."
+    ),
+    h(
+      "p",
+      { class: "colophon__prose" },
+      "So it installs. Almost nothing is downloaded when you do — the files, " +
+        "the reading face and, in this demo, the posts themselves are already " +
+        "in this browser — so installing mostly means giving them a window of " +
+        "their own and an icon to open it with. After that it opens without an " +
+        "address bar, keeps your unread count on the icon, and what you have " +
+        "already read stays readable on a plane."
+    ),
+    // Somebody reading this far is exactly the person who will install it. The
+    // offer goes with the paragraph that explains it rather than standing on
+    // its own, and it is out of the document entirely in the two states where
+    // there is nothing honest to offer — see the record below.
     installBlock(
       (state) => [
-        h(
-          "p",
-          { class: "colophon__prose" },
-          "It installs, too. Almost nothing is downloaded when you do: the " +
-            "files, the reading face and the data are already in this browser, " +
-            "so installing mostly means giving them a window of their own and " +
-            "an icon to open it with. What you have read stays readable with " +
-            "the connection off."
-        ),
         state === "prompt"
           ? installButton("Install Commons", "btn--ghost")
           : installHowTo(),
       ],
       { class: "colophon__install" }
+    ),
+    h(
+      "p",
+      { class: "colophon__note" },
+      "No button at all on a browser that cannot install, and none on one that " +
+        "already has: a control that does nothing is worse than an absence. ",
+      out(
+        adr("0010-an-install-control-with-a-silent-state.md"),
+        "That is a record too"
+      ),
+      "."
     )
   );
 }
@@ -279,6 +323,7 @@ export async function renderColophon({ isStale }) {
       : null,
     decisions(),
     honest(),
+    offline(),
     keyboard(),
     h(
       "footer",
