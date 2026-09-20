@@ -502,4 +502,48 @@ async function settled(page) {
   );
 }
 
-module.exports = { test, expect: base.expect, API_ORIGIN, CARD, usernameFor, settled };
+// — the account menu ---------------------------------------------------------
+// Signing out used to be one click on a button in the header. It is two now —
+// the avatar, then the row — and about twenty specs do it as a step on the way
+// to testing something else. They go through here rather than each spelling
+// out the same two clicks, so that when the menu changes again there is one
+// place to change.
+//
+// accountmenu.spec.js deliberately does *not* use these: a helper that hides
+// the interaction is the wrong tool for the spec whose subject is the
+// interaction.
+
+/** The header's account button — and, signed in, the proof that you are. */
+const accountButton = (page) => page.getByRole("button", { name: /^Your account/ });
+
+/** Open the menu and wait for it to actually be there. */
+async function openAccountMenu(page) {
+  const panel = page.getByRole("menu");
+  if (!(await panel.isVisible().catch(() => false))) {
+    await accountButton(page).click();
+  }
+  await base.expect(panel).toBeVisible();
+  return panel;
+}
+
+/** The menu row carrying your name, which links to your own posts. */
+const accountWho = (page) => page.locator(".accmenu__who");
+
+/** Sign out the way a person does now: open the menu, choose the row. */
+async function signOutViaMenu(page) {
+  await openAccountMenu(page);
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+}
+
+module.exports = {
+  test,
+  expect: base.expect,
+  API_ORIGIN,
+  CARD,
+  usernameFor,
+  settled,
+  accountButton,
+  accountWho,
+  openAccountMenu,
+  signOutViaMenu,
+};

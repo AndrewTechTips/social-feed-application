@@ -1,7 +1,13 @@
 // The unhappy paths from the brief: wrong password, duplicate email, editing
 // someone else's post, empty fields, backend unreachable.
 
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  usernameFor,
+  accountButton,
+} = require("./support/fixtures");
 
 test("wrong password shows one friendly line and stays on the page", async ({
   page,
@@ -116,7 +122,7 @@ test("a registration whose sign-in fails says so, and moves you to sign in", asy
   // And it really was created, so signing in now works.
   await page.getByLabel("Password", { exact: true }).fill("a-good-passphrase");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(accountButton(page)).toBeVisible();
 });
 
 test("the carried-over address doesn't linger on a later visit", async ({

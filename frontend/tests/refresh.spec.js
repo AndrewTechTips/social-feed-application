@@ -12,9 +12,17 @@
 // its own state instead. The frontend can't tell the two apart, which is the
 // point — it never sees the value either way.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  signOutViaMenu,
+  accountButton,
+} = require("./support/fixtures");
 
-const signedIn = (page) => page.getByRole("button", { name: "Sign out" });
+// The header's proof that you are somebody: the account button only exists
+// when there is an account. Sign out itself is a row inside it now.
+const signedIn = (page) => accountButton(page);
 const signedOut = (page) => page.getByRole("link", { name: "Sign in" });
 
 const stored = (page) =>
@@ -251,7 +259,7 @@ test("signing out ends the session everywhere, not just here", async ({
   await page.goto("/");
   await expect(signedIn(page)).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(signedOut(page)).toBeVisible();
   await expect(page.getByText("Signed out.")).toBeVisible();
 
@@ -285,7 +293,7 @@ test("signing out looks immediate, even when the server is slow about it", async
     route.continue();
   });
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(signedOut(page)).toBeVisible({ timeout: 1500 });
 });
 
@@ -309,7 +317,7 @@ test("signing out takes your votes off the screen with it", async ({ page, api }
   await vote.click();
   await expect(vote).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(signedOut(page)).toBeVisible();
 
   // The next person to look at this page sees an unpressed control.

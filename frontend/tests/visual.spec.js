@@ -52,7 +52,7 @@
 //
 // Update them deliberately, never reflexively:  npm run test:visual:update
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, settled, accountButton } = require("./support/fixtures");
 
 // Only against the mock API. See the note above. As a beforeEach rather than a
 // file-level `test.skip(fn)`, because the file-level form is handed the fixtures
@@ -76,10 +76,40 @@ const SHOT = {
   stylePath: require("path").join(__dirname, "support", "visual.css"),
 };
 
-/** Seed a small, fixed feed and land on it. */
-async function feed(page, api) {
+/**
+ * Pin the theme, rather than trusting the one the page happens to boot in.
+ *
+ * This is here because the pair of shots below were not a pair. Playwright's
+ * Desktop Chrome emulates `prefers-color-scheme: light`, and the bootstrap in
+ * index.html falls back to that when `commons.theme` is empty — which it is in
+ * a fresh context. So the app booted light, "the feed, dark" photographed a
+ * light page, "the feed, light" set light over light, and the two committed
+ * baselines were byte-identical. Two pictures claiming to cover two themes and
+ * covering one, for as long as they have existed.
+ *
+ * Setting it explicitly in both directions is the fix, and it is also what
+ * stops the same thing happening again the day a Playwright device default
+ * changes underneath this file. The shots that do not call this — a post, the
+ * forms — are still whatever the device gives them, which is deterministic,
+ * but they are pictures of layout and type rather than of a palette.
+ */
+const setTheme = (page, theme) =>
+  page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+
+/**
+ * Seed a small, fixed feed and land on it.
+ *
+ * `as` signs in first, for the one shot here that needs an account. It has to
+ * happen before the navigation and not after: api.signIn plants its identity
+ * with addInitScript, which only runs on the next document load. Seeding is
+ * the same either way — the two posts below are what every shot in this file
+ * is a picture of, and a signed-in shot of a different feed would be a
+ * different test wearing this one's name.
+ */
+async function feed(page, api, { as } = {}) {
   await api.seed(1, "ada@commons.test", 0);
   await api.seed(1, "ada@commons.test", 4); // over WARM_AT, so a hairline shows
+  if (as) await api.signIn(page, as, "seedpassword");
   await page.goto("/");
   await expect(page.locator(CARD)).toHaveCount(2);
   // The masthead's type is the largest thing on this screen; waiting for the
@@ -89,12 +119,13 @@ async function feed(page, api) {
 
 test("the feed, dark", async ({ page, api }) => {
   await feed(page, api);
+  await setTheme(page, "dark");
   await expect(page).toHaveScreenshot("feed-dark.png", SHOT);
 });
 
 test("the feed, light", async ({ page, api }) => {
   await feed(page, api);
-  await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+  await setTheme(page, "light");
   await expect(page).toHaveScreenshot("feed-light.png", SHOT);
 });
 
@@ -137,6 +168,26 @@ test("a post at the narrow measure", async ({ page, api }) => {
   await page.evaluate(() => document.fonts.ready);
   await expect(page).toHaveScreenshot("post-narrow.png", SHOT);
 });
+
+// The one screen here that only exists signed in, and the only floating layer
+// in the app with an anchor. Everything else in this file is a page; this is a
+// panel that is positioned by arithmetic, so a picture of it is the only thing
+// that would notice the arithmetic going wrong by ten pixels — which is a
+// distance no assertion in accountmenu.spec.js is going to call a failure.
+//
+// Both themes, because the panel is the app's only use of --panel-bg over
+// arbitrary content, and the light one is where a translucent surface goes
+// wrong first.
+for (const theme of ["dark", "light"]) {
+  test(`the account menu, ${theme}`, async ({ page, api }) => {
+    await feed(page, api, { as: "ada@commons.test" });
+    await setTheme(page, theme);
+    await accountButton(page).click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await settled(page);
+    await expect(page).toHaveScreenshot(`account-menu-${theme}.png`, SHOT);
+  });
+}
 
 test("the sign-in form", async ({ page }) => {
   await page.goto("/#/login");

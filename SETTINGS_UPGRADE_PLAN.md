@@ -1,6 +1,9 @@
 # Commons — the Settings plan
 
-Written 2026-09-20, alongside [`PWA_UPGRADE_PLAN.md`](PWA_UPGRADE_PLAN.md).
+Written 2026-09-20, alongside the PWA plan — which has since shipped and been
+retired; what it decided is in
+[ADR 0007](docs/adr/0007-a-network-first-service-worker.md) and
+[ADR 0010](docs/adr/0010-an-install-control-with-a-silent-state.md).
 
 There is already a `#/settings`. This is about the two things wrong with it and
 the things that genuinely have nowhere else to live.

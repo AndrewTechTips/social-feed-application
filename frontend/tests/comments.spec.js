@@ -6,7 +6,7 @@
 // this project (draft visibility, then usernames), so comments arrive with the
 // mirror already checked rather than checked later.
 
-const { test, expect, usernameFor } = require("./support/fixtures");
+const { test, expect, usernameFor, signOutViaMenu } = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = (tag) =>
@@ -22,7 +22,7 @@ async function register(page, email) {
 }
 
 async function signOut(page) {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 }
 

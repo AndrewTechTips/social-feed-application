@@ -21,18 +21,13 @@ import { mountDemoStrip } from "./demo/strip.js";
 import { mountOfflineBand } from "./offline.js";
 import { takeSharedFromUrl } from "./share.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
-import {
-  currentTheme,
-  otherTheme,
-  toggleTheme,
-  signOut,
-  syncThemeColor,
-} from "./actions.js";
+import { currentTheme, otherTheme, toggleTheme, syncThemeColor } from "./actions.js";
 import { h, icon } from "./dom.js";
 import { toast } from "./toast.js";
 import { mountPalette, openPalette } from "./components/palette.js";
+import { accountMenu } from "./components/accountmenu.js";
 import { shelfCount } from "./shelf.js";
-import { unreadCount, startNotifications } from "./notify.js";
+import { startNotifications } from "./notify.js";
 import { wireFeedKeys } from "./components/feedkeys.js";
 import { wireReader } from "./components/reader.js";
 import { wireQuote } from "./components/quote.js";
@@ -52,16 +47,27 @@ function paintThemeButton(btn) {
   btn.setAttribute("aria-label", `Switch to ${otherTheme()} theme`);
   btn.replaceChildren(icon(currentTheme() === "dark" ? "sun" : "moon"));
 }
+// Built once for the life of the page, and memoised for one reason: it
+// registers a `commons:theme` listener on the window, and renderAccount below
+// is called on every store change. A new button per call would leave the old
+// one's listener behind holding a detached node, once per repaint, for as long
+// as the tab is open.
+let themeBtn = null;
 function themeButton() {
+  if (themeBtn) return themeBtn;
   const btn = h("button", { class: "btn btn--quiet btn--icon", type: "button" });
   paintThemeButton(btn);
   btn.addEventListener("click", toggleTheme);
   // Repaint whoever changed it — the button, or the palette.
   addEventListener("commons:theme", () => paintThemeButton(btn));
+  themeBtn = btn;
   return btn;
 }
 
 // — header account cluster ---------------------------------------------------
+// Three controls signed in, where there used to be six. What moved and why is
+// in js/components/accountmenu.js — this file's job is only to decide which of
+// the two clusters is on the page and to keep it fed.
 const accountEl = () => document.getElementById("account");
 
 // A way in, and only once there is somewhere to go.
@@ -75,48 +81,13 @@ const accountEl = () => document.getElementById("account");
 // No count on it. A number in a corner of a header is a notification badge
 // whatever you call it, and this is a bookshelf, not an inbox. The count is on
 // the shelf, where it is a fact about what you are looking at.
-// The lamp, and the one number in this header.
 //
-// The shelf link a few lines below says, in as many words, that a number in the
-// corner of a header is a notification badge whatever you call it. This is the
-// exception that proves it: this *is* an inbox, so it is the one control here
-// entitled to a count.
-//
-// No amber. The accent is spent on a vote, on warmth, and on where you are, and
-// an unread count is none of those — it is said in the neutrals, with the
-// weight doing the work. `aria-hidden` on the number because the accessible
-// name below already says it in words, and a screen reader should hear
-// "Notifications, three unread" rather than "Notifications 3".
-function notificationsLink() {
-  const n = unreadCount();
-  const link = h(
-    "a",
-    {
-      class: "btn btn--quiet btn--action lamp" + (n ? " lamp--lit" : ""),
-      href: "#/notifications",
-      "aria-label":
-        n === 0
-          ? "Notifications"
-          : n === 1
-            ? "Notifications, one unread"
-            : `Notifications, ${n} unread`,
-      title: "Notifications",
-    },
-    icon("lamp"),
-    h("span", { class: "btn__label" }, "Notifications")
-  );
-  if (n) {
-    link.append(
-      h(
-        "span",
-        { class: "lamp__count", "aria-hidden": "true" },
-        n > 99 ? "99+" : String(n)
-      )
-    );
-  }
-  return link;
-}
-
+// Signed in there is no such link: the shelf is a row in the account menu now,
+// where it is always present because a row in a list costs nothing to carry
+// and a menu that changes shape between visits is a menu you have to re-read.
+// The argument above is about 44 pixels of header, and inside the menu there
+// are none at stake. This is the anonymous reader's shelf, which is local,
+// real, and otherwise has no door at all.
 function shelfLink() {
   const n = shelfCount();
   return h(
@@ -133,59 +104,61 @@ function shelfLink() {
   );
 }
 
+// Write stays on the surface while the shelf and the rest go behind the
+// avatar, by the rule the menu is built on: a one-press action stays out, a
+// destination goes in. It carries its name in aria-label so the narrow-screen
+// rule can hide the word and leave a 44px icon button without costing the
+// accessible name.
+const writeLink = () =>
+  h(
+    "a",
+    {
+      class: "btn btn--quiet btn--action",
+      href: "#/compose",
+      "aria-label": "Write a post",
+      title: "Write a post",
+    },
+    icon("pencil"),
+    h("span", { class: "btn__label" }, "Write")
+  );
+
+// The signed-in cluster, built once and kept.
+//
+// This function is called on every store change, every shelf change and every
+// notification poll — and the menu is a popover that can be open while any of
+// those happen. replaceChildren() on its container takes the panel out of the
+// document, which closes it, which would mean the menu shutting by itself
+// somewhere between one poll and the next. So the cluster is rebuilt only when
+// the person actually changes, and everything else is a repaint in place.
+/** @type {{root: HTMLElement, paint: () => void, close: (o?: object) => void} | null} */
+let menu = null;
+let menuFor = null;
+
 function renderAccount() {
   const box = accountEl();
+  if (!box) return;
   const session = get("session");
-  const kids = [];
-  const shelf = shelfCount() > 0 ? shelfLink() : null;
 
   if (session) {
-    // Both carry their name in aria-label, so the narrow-screen rule can hide
-    // the word and leave a 44px icon button without costing the accessible name
-    // (at 320px the full-width labels used to shove the theme toggle off-screen).
-    const write = h(
-      "a",
-      {
-        class: "btn btn--quiet btn--action",
-        href: "#/compose",
-        "aria-label": "Write a post",
-        title: "Write a post",
-      },
-      icon("pencil"),
-      h("span", { class: "btn__label" }, "Write")
-    );
-    // Your name, linking to your own posts — the same place anyone else's
-    // byline goes.
-    const who = h(
-      "a",
-      {
-        class: "account__email",
-        href: `#/u/${encodeURIComponent(session.username)}`,
-        title: `Everything by ${session.username}`,
-      },
-      session.username
-    );
-    const out = h(
-      "button",
-      {
-        class: "btn btn--quiet btn--action",
-        type: "button",
-        "aria-label": "Sign out",
-        title: "Sign out",
-      },
-      icon("sign-out"),
-      h("span", { class: "btn__label" }, "Sign out")
-    );
-    out.addEventListener("click", signOut);
-    kids.push(notificationsLink(), write, shelf, who, out, themeButton());
-  } else {
-    kids.push(
-      shelf,
-      h("a", { class: "btn btn--quiet", href: "#/login" }, "Sign in"),
-      themeButton()
-    );
+    if (menuFor !== session.username) {
+      menu = accountMenu(session);
+      menuFor = session.username;
+      box.replaceChildren(writeLink(), themeButton(), menu.root);
+    } else {
+      menu?.paint();
+    }
+    return;
   }
-  if (box) box.replaceChildren(...kids.filter(Boolean));
+
+  menu = null;
+  menuFor = null;
+  box.replaceChildren(
+    ...[
+      shelfCount() > 0 ? shelfLink() : null,
+      h("a", { class: "btn btn--quiet", href: "#/login" }, "Sign in"),
+      themeButton(),
+    ].filter(Boolean)
+  );
 }
 
 // — search (feed only) ------------------------------------------------------
@@ -341,7 +314,7 @@ subscribe(renderAccount);
 // last one off takes it away again. js/shelf.js says so rather than this
 // polling for it.
 addEventListener("commons:shelf", renderAccount);
-// And the lamp, when the count changes under it.
+// And the dot on the avatar, when the count changes under it.
 addEventListener("commons:notifications", renderAccount);
 // Signing in or out changes what every screen shows, so the router mustn't
 // decide the one already on screen is still good enough.
@@ -381,6 +354,31 @@ addEventListener("commons:api-error", (event) => {
 // changes when that screen is put on the page — which is what mountView
 // announces, from inside the swap. See the note there.
 addEventListener("commons:screen", syncChrome);
+
+// A menu is a layer over the screen underneath it, so it does not outlive that
+// screen. Choosing a row closes it directly; this is for every other way the
+// address can change under an open panel — the palette, a shortcut, the Back
+// button — where otherwise the reader arrives somewhere new with a menu from
+// the last place still hanging over it.
+//
+// `hashchange` and not `commons:screen`, which is the obvious choice and the
+// wrong one. `commons:screen` is announced from inside the swap, which means
+// *after* the view transition — so a navigation begun a moment ago fires it a
+// moment from now, and a menu opened in that window is closed by a journey it
+// had nothing to do with. It is a small window and it is real: the draft specs
+// open the menu directly after posting and caught it. `hashchange` fires when
+// the address changes, which is the moment a menu stops belonging to the
+// screen it was opened on.
+//
+// A navigate() to the route already on screen fires no hashchange and so
+// closes nothing here — which is correct, because the only way to do that
+// from inside the menu is to choose the row you are already on, and the click
+// handler in the component closes it for exactly that case.
+addEventListener("hashchange", () => menu?.close());
+// And focus mode, which clears the whole header cluster off the page. The
+// panel is drawn in the top layer, so hiding .account does not reliably take
+// it with them.
+addEventListener("commons:focus", () => menu?.close());
 
 renderAccount();
 wireSearch();

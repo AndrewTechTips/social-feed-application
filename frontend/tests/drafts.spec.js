@@ -5,7 +5,13 @@
 // while the UI cheerfully labelled it "Draft". These tests walk that from the
 // outside: write one, then look for it as someone else.
 
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  usernameFor,
+  signOutViaMenu,
+} = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = (tag) => `${tag}-${Date.now()}@commons.test`;
@@ -45,7 +51,7 @@ test("your draft is in your feed but nobody else's", async ({ page, api }) => {
   await expect(draftCard.locator(".tag")).toHaveText("Draft");
 
   // sign out, and it's gone
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await expect(page.locator(CARD).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "A quiet draft" })).toHaveCount(0);
@@ -64,7 +70,7 @@ test("another signed-in person can't reach someone else's draft", async ({
   await register(page, author);
   const draftId = await writeDraft(page, "Still thinking");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await register(page, uniqueEmail("stranger"));
 
   await expect(page.getByRole("heading", { name: "Still thinking" })).toHaveCount(0);
@@ -84,7 +90,7 @@ test("publishing a draft puts it in everyone's feed", async ({ page, api }) => {
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page).toHaveURL(/#\/posts\/\d+$/);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await page.goto("/#/");
   await expect(page.getByRole("heading", { name: "Ready now" })).toBeVisible();
 });

@@ -11,7 +11,7 @@
 // way back to the feed would have evicted the feed. Half of what is below is
 // about the lists not standing on each other.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, signOutViaMenu } = require("./support/fixtures");
 
 const EMAIL = "ada@commons.test";
 const scrollY = (page) => page.evaluate(() => window.scrollY);
@@ -274,7 +274,7 @@ test("what a signed-in reader saw is not replayed to a signed-out one", async ({
   await page.goto("/#/u/ada");
   await expect(page.locator(CARD)).toHaveCount(3);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
   await page.goto("/#/u/ada");
 

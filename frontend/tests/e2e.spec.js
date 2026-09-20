@@ -1,7 +1,14 @@
 // The full journey the brief asks for:
 // register -> sign in -> feed -> create -> vote -> edit -> delete -> sign out.
 
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  usernameFor,
+  accountButton,
+  signOutViaMenu,
+} = require("./support/fixtures");
 
 const password = "hunter2pw";
 const uniqueEmail = () => `person-${Date.now()}@commons.test`;
@@ -30,10 +37,13 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/#\/$/);
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(accountButton(page)).toBeVisible();
   // The header names you by username now. The address is a credential and
   // shouldn't be on screen at all.
-  await expect(page.locator(".account__email")).toHaveText(usernameFor(email));
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, ${usernameFor(email)}\\b`)
+  );
   await expect(page.getByText(email, { exact: true })).toHaveCount(0);
 
   // — create a post ------------------------------------------------------
@@ -90,7 +100,7 @@ test("a person can join, post, vote, edit, delete, and sign out", async ({
   ).toHaveCount(0);
 
   // — sign out; feed still readable ---------------------------------
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await expect(page.locator(CARD).first()).toBeVisible();
 });

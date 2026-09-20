@@ -4,7 +4,7 @@
 // it shows has to work outside the palette too. A hint for a shortcut that
 // doesn't exist is decoration pretending to be documentation.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, accountButton } = require("./support/fixtures");
 
 const open = async (page) => {
   await page.keyboard.press("ControlOrMeta+k");
@@ -145,7 +145,7 @@ test("signing in", async ({ page }) => {
 test("signing out, once there's someone to sign out", async ({ page, api }) => {
   await api.signIn(page, "ada@commons.test", "seedpassword");
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(accountButton(page)).toBeVisible();
 
   await open(page);
   await page.locator(".palette__input").fill("sign");

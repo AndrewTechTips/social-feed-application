@@ -22,7 +22,13 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { chromium } = require("@playwright/test");
-const { test, expect, CARD } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  signOutViaMenu,
+  accountButton,
+} = require("./support/fixtures");
 
 // Chrome's --app= opens a genuine frameless window: no address bar, no tab
 // strip, and `display-mode: standalone` really matches inside it. It is the one
@@ -99,7 +105,7 @@ async function room(page, api, as = ADA) {
 
 /** Sign in as somebody else through the form, so the adapter keeps what happened. */
 async function switchTo(page, email) {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.getByLabel("Email").fill(email);
@@ -135,7 +141,7 @@ test("a fresh boot says zero, so yesterday's badge doesn't survive the night", a
   await expect.poll(() => page.evaluate(() => window.__badge)).toContain(0);
 });
 
-test("the count on the lamp is the count on the icon", async ({ page, api }) => {
+test("the count in the header is the count on the icon", async ({ page, api }) => {
   await watchBadge(page);
   await room(page, api, ADA);
 
@@ -146,11 +152,14 @@ test("the count on the lamp is the count on the icon", async ({ page, api }) => 
   await comment(page, "I walked past it too");
   await switchTo(page, ADA);
 
-  await expect(page.locator(".lamp__count")).toHaveText("1");
+  // The header says it in words on the account button now, and with a dot on
+  // the avatar — see js/components/accountmenu.js. The badge is downstream of
+  // the same number either way, which is what this is really about.
+  await expect(accountButton(page)).toHaveAttribute("aria-label", /, one unread$/);
   await expect.poll(() => page.evaluate(() => window.__badge.at(-1))).toBe(1);
 
   // And it goes out when they have been looked at, in the same movement as the
-  // lamp — markAllSeen announces zero, and the badge is downstream of that.
+  // dot — markAllSeen announces zero, and the badge is downstream of that.
   await page.goto("/#/notifications");
   await expect(page.locator(".notice").first()).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__badge.at(-1))).toBe(0);
@@ -164,7 +173,7 @@ test("signing out takes the badge with it", async ({ page, api }) => {
   await switchTo(page, ADA);
   await expect.poll(() => page.evaluate(() => window.__badge.at(-1))).toBe(1);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
 
   // Nobody's number should be left sitting on the dock of a machine somebody
@@ -174,7 +183,7 @@ test("signing out takes the badge with it", async ({ page, api }) => {
 
 test("a browser with no badge API is not a broken app", async ({ page, api }) => {
   // The guard is the whole feature on Firefox and on desktop Safari. Nothing
-  // should throw, and the lamp should carry on as it always did.
+  // should throw, and the count should carry on as it always did.
   await page.addInitScript(() => {
     delete Navigator.prototype.setAppBadge;
     delete Navigator.prototype.clearAppBadge;
@@ -189,7 +198,7 @@ test("a browser with no badge API is not a broken app", async ({ page, api }) =>
   await comment(page, "Still fine");
   await switchTo(page, ADA);
 
-  await expect(page.locator(".lamp__count")).toHaveText("1");
+  await expect(accountButton(page)).toHaveAttribute("aria-label", /, one unread$/);
   expect(await page.evaluate(() => window.__errors)).toEqual([]);
 });
 

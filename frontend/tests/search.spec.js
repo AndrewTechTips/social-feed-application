@@ -6,7 +6,13 @@
 // where search behaves differently from the API is a demo that lies about the
 // feature it is demonstrating.
 
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  usernameFor,
+  signOutViaMenu,
+} = require("./support/fixtures");
 
 // Every test takes `api` even where it never calls it: asking for that fixture
 // is what wipes the target between tests. Without it the posts written by the
@@ -145,7 +151,7 @@ test("searching never turns up somebody else's draft", async ({ page, api }) => 
   await search(page, "beekeeping");
   await expect(page.locator(CARD)).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await register(page, uniqueEmail("stranger"));
   await write(page, "Something else entirely", "So the feed isn't empty.");

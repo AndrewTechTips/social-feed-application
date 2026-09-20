@@ -21,9 +21,49 @@ now finished; what they contained is here, in `docs/adr/`, and in the history.
 The last of it closed on 2026-09-20 — the findings that had been carried,
 unfixed, from the first audit, the three items of the second plan that never
 shipped, and then the third plan, which was about a feature that was already
-built and that nobody could find.
+built and that nobody could find. A fourth is in progress:
+[`SETTINGS_UPGRADE_PLAN.md`](SETTINGS_UPGRADE_PLAN.md), whose first step is
+below.
 
 ### Added
+
+- **An account menu, and a door to Settings.** The header carried six controls
+  signed in — notifications, write, shelf, username, sign out, theme — and the
+  comment beside them admitted they had been fighting for space at 320px for
+  some time. The narrow-screen rule in `chrome.css` was that fight written
+  down: every label hidden, every button squeezed to a 44px square, and the
+  theme toggle still the first thing over the edge. Meanwhile `#/settings`
+  had exactly one link to it in the whole app — a line of text on your own
+  profile — which is to say a screen nobody could find.
+
+  One change for both. The destinations now live behind the avatar: your
+  posts, the shelf, notifications, settings, sign out. The header is three
+  controls, by a rule worth stating — **a one-press action stays on the
+  surface, a destination goes in the menu** — which is why the theme toggle
+  and Write are still out here and why sign out is not.
+
+  **The unread count moved rather than disappearing.** The lamp earned its
+  badge with an argument worth keeping: the shelf is a bookshelf and gets no
+  number, this is an inbox and gets one. Putting notifications behind a closed
+  door would have quietly thrown that away, because a count nobody can see is
+  not a count. So the avatar takes a dot — *that* something is waiting, not
+  how many — and the number is in the menu row and in the button's accessible
+  name, where a screen reader hears "Your account, ada, three unread".
+
+  **The floating-layer question was answered on purpose**, which the plan
+  asked for specifically. It is a native `popover` with `popovertarget`,
+  positioned by twelve lines of JavaScript, and
+  [ADR 0011](docs/adr/0011-a-popover-menu-positioned-in-javascript.md) says
+  why each of those three is not the obvious choice. The short version: the
+  header has a `backdrop-filter`, which makes it a containing block for fixed
+  descendants, so a hand-rolled panel would have been positioned against the
+  header above 640px and against the viewport below it — a bug that shows up
+  on a phone and not on a laptop. The top layer cannot have that bug.
+  `popovertarget` is what stops the trigger from reopening a menu its own
+  press just light-dismissed. And `place()` anchors the panel by its **right**
+  edge, not its left, because a left anchor needs a width, a closed popover
+  measures zero, and measuring after the open is one frame too late — it
+  flashed at the wrong end of the header before it was fixed.
 
 - **Commons installs, and now it says so.** It has had a manifest, four
   maskable icons and a network-first service worker since

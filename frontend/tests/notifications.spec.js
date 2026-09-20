@@ -9,13 +9,37 @@
 // demo has to have it too.
 
 const AxeBuilder = require("@axe-core/playwright").default;
-const { test, expect, CARD, settled } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  settled,
+  signOutViaMenu,
+  accountButton,
+  openAccountMenu,
+} = require("./support/fixtures");
 
 const ADA = "ada@commons.test";
 const BEA = "bea@commons.test";
 
-const lamp = (page) => page.locator(".lamp");
-const count = (page) => page.locator(".lamp__count");
+// The unread signal moved when the header did, and there is no lamp any more.
+// A dot on the avatar says *that* something is waiting; the account button's
+// own accessible name says how many, in words; the menu row says it again with
+// a number on it. js/components/accountmenu.js has the argument for splitting
+// it that way — a count behind a closed door is not a count.
+//
+// These assert the first two, because those are what the header states without
+// being asked. accountmenu.spec.js covers the row.
+const dot = (page) => page.locator(".accmenu__dot");
+const menuRow = (page) => page.locator(".accmenu__row[href='#/notifications']");
+
+/** What the header is saying about unread notifications, if anything. */
+const says = (page, tail) =>
+  expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, [a-z0-9_-]+${tail}$`)
+  );
+
 const notices = (page) => page.locator(".notice");
 
 /**
@@ -42,7 +66,7 @@ async function room(page, api, as = ADA) {
  * through the adapter the page is actually running.
  */
 async function switchTo(page, email) {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.getByLabel("Email").fill(email);
@@ -68,15 +92,22 @@ async function comment(page, words) {
 }
 
 // ── the count ──────────────────────────────────────────────────────────────
-test("a comment on your post lights the lamp", async ({ page, api }) => {
+test("a comment on your post lights the dot", async ({ page, api }) => {
   await room(page, api, BEA);
   await comment(page, "I walked past it too");
 
   // Ada is the one who was addressed, so sign in as her and look.
   await switchTo(page, ADA);
 
-  await expect(count(page)).toHaveText("1");
-  await expect(lamp(page)).toHaveAttribute("aria-label", "Notifications, one unread");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
+  // And in full, on the row it is about.
+  await openAccountMenu(page);
+  await expect(menuRow(page)).toHaveAttribute(
+    "aria-label",
+    "Notifications, one unread"
+  );
+  await expect(menuRow(page).locator(".accmenu__count")).toHaveText("1");
 });
 
 test("nothing you did to yourself counts", async ({ page, api }) => {
@@ -84,9 +115,10 @@ test("nothing you did to yourself counts", async ({ page, api }) => {
   await comment(page, "Talking to myself");
   await page.goto("/#/");
 
-  await expect(lamp(page)).toBeVisible();
-  await expect(count(page)).toHaveCount(0);
-  await expect(lamp(page)).toHaveAttribute("aria-label", "Notifications");
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
+  await openAccountMenu(page);
+  await expect(menuRow(page)).toHaveAttribute("aria-label", "Notifications");
 });
 
 test("a vote lights nothing", async ({ page, api }) => {
@@ -101,15 +133,18 @@ test("a vote lights nothing", async ({ page, api }) => {
   await switchTo(page, ADA);
   await expect(page.locator(CARD)).toHaveCount(1);
 
-  await expect(count(page)).toHaveCount(0);
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
 });
 
-test("a signed-out visitor has no lamp at all", async ({ page, api }) => {
+test("a signed-out visitor has nothing to be notified about", async ({ page, api }) => {
   await api.seed(1, ADA);
   await page.goto("/");
   await expect(page.locator(CARD)).toHaveCount(1);
 
-  await expect(lamp(page)).toHaveCount(0);
+  // No account, so no account button — and with it no dot and no menu.
+  await expect(accountButton(page)).toHaveCount(0);
+  await expect(dot(page)).toHaveCount(0);
 });
 
 // ── the list ───────────────────────────────────────────────────────────────
@@ -166,17 +201,19 @@ test("a reply says it is a reply", async ({ page, api }) => {
   );
 });
 
-// ── looking at them puts the lamp out ──────────────────────────────────────
+// ── looking at them puts the dot out ───────────────────────────────────────
 test("opening the list clears the count, and it stays clear", async ({ page, api }) => {
   await room(page, api, BEA);
   await comment(page, "Something to answer");
 
   await switchTo(page, ADA);
-  await expect(count(page)).toHaveText("1");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
 
   await page.goto("/#/notifications");
   await expect(notices(page)).toHaveCount(1);
-  await expect(count(page)).toHaveCount(0);
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
 
   // Marked on the server, not only in this tab. A badge that comes back the
   // next time you look is a badge people stop believing.
@@ -189,12 +226,14 @@ test("opening the list clears the count, and it stays clear", async ({ page, api
   // what this is actually about.
   await page.goto("/#/");
   await expect(page.locator(CARD).first()).toBeVisible();
-  await expect(count(page)).toHaveCount(0);
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
 
   await page.goto("/#/notifications");
   await expect(notices(page)).toHaveCount(1);
   await expect(page.locator(".notice--unread")).toHaveCount(0);
-  await expect(count(page)).toHaveCount(0);
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
 });
 
 test("something new after looking counts again", async ({ page, api }) => {
@@ -203,7 +242,8 @@ test("something new after looking counts again", async ({ page, api }) => {
 
   await switchTo(page, ADA);
   await page.goto("/#/notifications");
-  await expect(count(page)).toHaveCount(0);
+  await expect(dot(page)).toBeHidden();
+  await says(page, "");
 
   // Bea says something else while Ada is signed in elsewhere. The read ones
   // stay read; only the new one counts.
@@ -212,7 +252,8 @@ test("something new after looking counts again", async ({ page, api }) => {
 
   await switchTo(page, ADA);
 
-  await expect(count(page)).toHaveText("1");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
   await page.goto("/#/notifications");
   await expect(notices(page)).toHaveCount(2);
   await expect(notices(page).locator(".notice--unread")).toHaveCount(0);
@@ -224,7 +265,8 @@ test("the palette offers it, with the count in the label", async ({ page, api })
   await comment(page, "Look at this");
 
   await switchTo(page, ADA);
-  await expect(count(page)).toHaveText("1");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
 
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".palette__row", { hasText: "Notifications — 1 unread" }).click();
@@ -328,7 +370,8 @@ test("and they are not marked at all if the list never arrives", async ({
   await room(page, api, BEA);
   await comment(page, "Still unread after a failure");
   await switchTo(page, ADA);
-  await expect(count(page)).toHaveText("1");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
 
   // Matched on the path alone — both stand-ins strip the query before testing
   // the rule — so this is queued after the poll has already been and gone,
@@ -339,5 +382,6 @@ test("and they are not marked at all if the list never arrives", async ({
 
   await page.goto("/#/");
   await expect(page.locator(CARD).first()).toBeVisible();
-  await expect(count(page)).toHaveText("1");
+  await expect(dot(page)).toBeVisible();
+  await says(page, ", one unread");
 });

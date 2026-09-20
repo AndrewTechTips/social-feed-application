@@ -64,4 +64,23 @@
           stroke-linecap="round">
     <path d="M5.7 3.6 H14.3 V16.4 L10 13 L5.7 16.4 Z" />
   </symbol>
+
+  <!-- Settings. A gear drawn as a body and eight spokes rather than a single
+       toothed outline: the outline needs curves too small to survive a 1.6
+       stroke at 16px, and goes to mush exactly where this is used. -->
+  <symbol id="i-gear" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="10" cy="10" r="5" />
+    <circle cx="10" cy="10" r="2.1" />
+    <path d="M15 10 H17.2 M2.8 10 H5 M10 15 V17.2 M10 2.8 V5" />
+    <path d="M13.54 13.54 L15.09 15.09 M4.91 4.91 L6.46 6.46
+             M6.46 13.54 L4.91 15.09 M15.09 4.91 L13.54 6.46" />
+  </symbol>
+
+  <!-- The account menu's caret. Same geometry as i-chevron-left, turned a
+       quarter: an avatar on its own does not say that anything opens. -->
+  <symbol id="i-chevron-down" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 7.5 L10 13.5 L16 7.5" />
+  </symbol>
 </svg>

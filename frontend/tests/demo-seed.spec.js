@@ -9,7 +9,13 @@
 // Demo-only, because there is no such thing as "the seed" when the app is
 // talking to a real backend.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  accountButton,
+  openAccountMenu,
+} = require("./support/fixtures");
 const seed = require("../js/demo/seed.json");
 
 test.beforeEach(({}, testInfo) => {
@@ -187,7 +193,7 @@ test("what you write survives a refresh, and Reset puts it back", async ({ page 
 
 // ── somebody who has been here a while ─────────────────────────────────────
 // The published site has one visitor and nobody else awake. You cannot be
-// notified by yourself, so a freshly registered account would find the lamp
+// notified by yourself, so a freshly registered account would find the dot
 // unlit for ever — which would make a feature that works on both backends
 // invisible on the one deployment most people will ever open.
 //
@@ -215,7 +221,10 @@ test("the demo offers to sign you in as one of the people here", async ({ page }
 
   await offer.click();
 
-  await expect(page.locator(".account__email")).toHaveText("jokafor");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, jokafor\\b`)
+  );
   await expect(page).toHaveURL(/#\/$/);
   // And the offer goes, because offering to make you somebody else while you
   // are already someone is a way to lose a half-written post.
@@ -234,9 +243,19 @@ test("that person has the notifications their conversation caused", async ({
   await page.goto("/");
   await expect(page.locator(CARD).first()).toBeVisible();
   await page.getByRole("button", { name: "Sign in as Jo" }).click();
-  await expect(page.locator(".account__email")).toHaveText("jokafor");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, jokafor\\b`)
+  );
 
-  await expect(page.locator(".lamp__count")).toHaveText(String(expected.length));
+  // The count is in the menu now, and the dot on the avatar is what says
+  // there is one without being asked.
+  await expect(page.locator(".accmenu__dot")).toBeVisible();
+  await openAccountMenu(page);
+  await expect(
+    page.locator(".accmenu__row[href='#/notifications'] .accmenu__count")
+  ).toHaveText(String(expected.length));
+  await page.keyboard.press("Escape");
 
   await page.goto("/#/notifications");
   await expect(page.locator(".notice")).toHaveCount(expected.length);
@@ -263,7 +282,10 @@ test("they are derived, not invented — nobody is notified by themselves", asyn
   await page.goto("/");
   await expect(page.locator(CARD).first()).toBeVisible();
   await page.getByRole("button", { name: "Sign in as Jo" }).click();
-  await expect(page.locator(".account__email")).toHaveText("jokafor");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, jokafor\\b`)
+  );
   await page.goto("/#/notifications");
 
   const said = await page.locator(".notice__said").allTextContents();

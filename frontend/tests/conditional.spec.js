@@ -9,7 +9,7 @@
 // unchanged feed would have looked like a failed request. And a client that
 // answers a 304 out of the wrong cache entry shows one reader another's posts.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, signOutViaMenu } = require("./support/fixtures");
 
 const EMAIL = "ada@commons.test";
 
@@ -101,7 +101,7 @@ test("what one reader had is not served to the next", async ({ page, api }) => {
   await page.goto("/#/");
   await expect(page.locator(CARD)).toHaveCount(3);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
   await page.goto("/#/");
 

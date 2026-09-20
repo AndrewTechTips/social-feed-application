@@ -10,10 +10,23 @@
 // the one where a reader could lose something.
 
 const AxeBuilder = require("@axe-core/playwright").default;
-const { test, expect, CARD, settled } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  settled,
+  signOutViaMenu,
+  accountButton,
+  openAccountMenu,
+} = require("./support/fixtures");
 
 const SAVE = ".shelved";
+// Signed out, the shelf is a link that comes and goes with the first and last
+// saved post — see the note on shelfLink in main.js. Signed in it is a row in
+// the account menu instead, always present, and MENU_SHELF is how those tests
+// ask about it.
 const HEADER_SHELF = ".account a[href='#/shelf']";
+const MENU_SHELF = ".accmenu__row[href='#/shelf']";
 
 const shelfIds = (page) =>
   page.evaluate(() => {
@@ -198,8 +211,15 @@ test("a post that has been deleted drops off the shelf", async ({ page, api }) =
     "Nothing here yet. Open a post and press Save to keep it for later."
   );
   expect(await shelfIds(page)).toEqual([]);
-  // And the header stops offering a shelf that has nothing on it.
-  await expect(page.locator(HEADER_SHELF)).toHaveCount(0);
+  // And the menu says so. Signed in the row is always there — a menu that
+  // changes shape between visits is a menu you have to re-read — so what has
+  // to have moved is what it says, not whether it exists.
+  await openAccountMenu(page);
+  await expect(page.locator(MENU_SHELF)).toHaveAttribute(
+    "aria-label",
+    "Your shelf, empty"
+  );
+  await expect(page.locator(`${MENU_SHELF} .accmenu__count`)).toBeHidden();
 });
 
 test("one missing post does not take the page with it", async ({ page, api }) => {
@@ -252,17 +272,26 @@ test.describe("at 320px", () => {
 
     await openCard(page, 0);
     await page.locator(SAVE).click();
-    await expect(page.locator(HEADER_SHELF)).toHaveCount(1);
 
-    // The widest the signed-in header ever gets: Write, Shelf, Sign out, theme.
+    // The widest the signed-in header ever gets, which is now three controls
+    // rather than six: Write, theme, account. The shelf is behind the last of
+    // them and costs the row nothing.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
-    const box = await page.locator(HEADER_SHELF).boundingBox();
+    const box = await accountButton(page).boundingBox();
     expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.width).toBeGreaterThanOrEqual(44);
+
+    // And the shelf is still one press away, with the save on it.
+    await openAccountMenu(page);
+    await expect(page.locator(MENU_SHELF)).toHaveAttribute(
+      "aria-label",
+      "Your shelf, one post saved"
+    );
+    await page.keyboard.press("Escape");
 
     // And the save control keeps its word beside the vote count.
     await expect(page.locator(SAVE)).toHaveText("Saved");
@@ -332,7 +361,7 @@ async function signInWithForm(page, { email, password }) {
 }
 
 async function signOut(page) {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 }
 

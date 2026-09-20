@@ -6,7 +6,7 @@
 // `PostOut.voted` replaced it, and these are the things the replacement has to
 // get right that the guess could not.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, signOutViaMenu } = require("./support/fixtures");
 
 const firstVote = (page) =>
   page.locator(`.feed__list ${CARD}`).first().locator(".vote");
@@ -67,7 +67,7 @@ test("a signed-out visitor sees the count but not a pressed caret", async ({
   await firstVote(page).click();
   await expect(firstVote(page)).toContainText("1");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
   await expect(page.locator(CARD)).toHaveCount(2);
 
@@ -83,7 +83,7 @@ test("somebody else's vote is not yours", async ({ page, api }) => {
   await expect(firstVote(page)).toHaveAttribute("aria-pressed", "true");
   await writeLanded(page);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
 
   // Bea signs in through the form rather than through the fixture. In demo

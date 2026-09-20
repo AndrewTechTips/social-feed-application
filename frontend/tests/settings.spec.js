@@ -12,7 +12,15 @@
 // demo does what the API does.
 
 const AxeBuilder = require("@axe-core/playwright").default;
-const { test, expect, CARD, settled } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  settled,
+  accountButton,
+  accountWho,
+  openAccountMenu,
+} = require("./support/fixtures");
 
 const EMAIL = "ada@commons.test";
 
@@ -84,10 +92,16 @@ test("changing your name changes it everywhere it is drawn", async ({ page, api 
   await saveName(page).click();
 
   await expect(page.locator(".toast")).toHaveText("You're adalovelace now.");
-  // The header is drawn from the store, so it has to have moved too.
-  const who = page.locator(".account__email");
-  await expect(who).toHaveText("adalovelace");
-  await expect(who).toHaveAttribute("href", "#/u/adalovelace");
+  // The header is drawn from the store, so it has to have moved too — both
+  // halves of it: the name the account button answers to, and the row behind
+  // it that points at your own posts.
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    /^Your account, adalovelace\b/
+  );
+  await openAccountMenu(page);
+  await expect(accountWho(page)).toHaveAttribute("href", "#/u/adalovelace");
+  await expect(accountWho(page)).toContainText("adalovelace");
 });
 
 test("a rename keeps your posts", async ({ page, api }) => {
@@ -123,7 +137,10 @@ test("a name somebody else has comes back as an error on the field", async ({
   // Still signed in as who you were, and the box still holds what you tried —
   // a form that clears itself on a rejection makes you type it twice to find
   // out it was wrong twice.
-  await expect(page.locator(".account__email")).toHaveText("ada");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, ada\\b`)
+  );
   await expect(name(page)).toHaveValue("bea");
 });
 
@@ -214,7 +231,10 @@ test("deleting takes typing your own name, and can be backed out of", async ({
   await expect(page.getByRole("button", { name: "Delete your account" })).toBeVisible();
   await expect(page.locator("#settings-confirm")).toHaveCount(0);
   // Nothing happened: still signed in, still here.
-  await expect(page.locator(".account__email")).toHaveText("ada");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, ada\\b`)
+  );
 });
 
 test("deleting an account takes everything that was attached to it", async ({
@@ -270,7 +290,10 @@ test("the name is free again once the account is gone", async ({ page, api }) =>
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/#\/$/);
-  await expect(page.locator(".account__email")).toHaveText("ada");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, ada\\b`)
+  );
 });
 
 // ── the shape of it ────────────────────────────────────────────────────────

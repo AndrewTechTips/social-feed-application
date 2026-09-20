@@ -6,7 +6,14 @@
 // as, or it can't tell your posts from anyone else's — and it would find out by
 // showing you an Edit button that 403s.
 
-const { test, expect, CARD, usernameFor } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  usernameFor,
+  signOutViaMenu,
+  accountButton,
+} = require("./support/fixtures");
 
 const PW = "hunter2pw";
 const unique = (tag) => `${tag}-${Date.now()}@commons.test`;
@@ -75,7 +82,10 @@ test("nobody's address is on screen", async ({ page, api }) => {
   for (const name of authors) expect(name).not.toContain("@");
 
   // and the header names you, not your address
-  await expect(page.locator(".account__email")).toHaveText("writerhere");
+  await expect(accountButton(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Your account, writerhere\\b`)
+  );
   await expect(page.getByText(email, { exact: true })).toHaveCount(0);
 });
 
@@ -130,7 +140,7 @@ test("a profile keeps that person's drafts to themselves", async ({ page, api })
   await expect(page.getByRole("heading", { name: "Not finished" })).toBeVisible();
 
   // ...and a stranger doesn't
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await page.goto("/#/u/drafterhere");
   await expect(page.getByRole("heading", { name: "Not finished" })).toHaveCount(0);

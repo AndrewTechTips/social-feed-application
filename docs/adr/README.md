@@ -20,3 +20,4 @@ comment nobody reads.
 | [0008](0008-a-ranking-with-two-gravities.md) | A ranking with two gravities |
 | [0009](0009-a-version-in-the-path.md) | A version in the path, and paying for it now |
 | [0010](0010-an-install-control-with-a-silent-state.md) | An install control with a silent state |
+| [0011](0011-a-popover-menu-positioned-in-javascript.md) | A popover menu, positioned in JavaScript |

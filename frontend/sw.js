@@ -100,6 +100,7 @@ const SHELL = [
   "./js/components/vote.js",
   "./js/components/card.js",
   "./js/components/palette.js",
+  "./js/components/accountmenu.js",
   "./js/components/comments.js",
   "./js/components/feedkeys.js",
   "./js/components/reader.js",

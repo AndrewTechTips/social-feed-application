@@ -4,7 +4,7 @@
 // "the feed" — which is why it names where it came from, why it survives two
 // steps in a row, and why it isn't there at all for somebody who pasted a link.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const { test, expect, CARD, signOutViaMenu } = require("./support/fixtures");
 
 const ONWARD = ".onward";
 const NEXT = ".onward__item--next";
@@ -258,7 +258,7 @@ test("signing out takes the list with it", async ({ page, api }) => {
   await expect(page.locator(".palette__row")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
 
   await page.keyboard.press("ControlOrMeta+k");

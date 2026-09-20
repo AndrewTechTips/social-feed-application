@@ -4,7 +4,13 @@
 // demo mode it carries the demo notice — so the notice has to be said exactly
 // once on that screen, not twice in two stacked banners.
 
-const { test, expect, CARD } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  accountButton,
+  signOutViaMenu,
+} = require("./support/fixtures");
 
 const feed = async (page) => {
   await page.goto("/");
@@ -38,7 +44,7 @@ test("it's the page's h1, and the posts sit under it", async ({ page }) => {
 test("gone once you've signed in", async ({ page, api }) => {
   await api.signIn(page, "ada@commons.test", "seedpassword");
   await feed(page);
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(accountButton(page)).toBeVisible();
   await expect(page.locator(".masthead")).toHaveCount(0);
 });
 
@@ -47,7 +53,7 @@ test("comes back when you sign out again", async ({ page, api }) => {
   await feed(page);
   await expect(page.locator(".masthead")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutViaMenu(page);
   await expect(page.locator(CARD).first()).toBeVisible();
   await expect(page.locator(".masthead")).toBeVisible();
 });

@@ -1,8 +1,8 @@
 /* ============================================================================
    chrome.css — the frame the app is drawn inside.
    The header and everything that lives in it (the search, the account cluster,
-   the lamp), the reading progress line, toasts, the command palette, and the
-   demo notice.
+   the account menu), the reading progress line, toasts, the command palette,
+   and the demo notice.
 
    Split out of components.css, which had become the file everything landed in.
    The line between the two is what a rule belongs to rather than how big it
@@ -14,8 +14,8 @@
    were separated, which is what made the split safe: nothing here overrides
    anything there, so the order they load in cannot change what anybody sees.
    The order in index.html is still components first, because this file's
-   `.lamp` sets a button custom property and used to sit below `.btn--quiet` in
-   the single file.
+   `.accmenu` rules draw on `.avatar`, which components.css owns, and the lamp
+   they replaced used to sit below `.btn--quiet` in the single file.
    ========================================================================== */
 
 /* — header ------------------------------------------------------------------- */
@@ -251,6 +251,255 @@
 @media (hover: hover) {
   .account__email:hover {
     color: var(--text);
+  }
+}
+
+/* — the account menu -----------------------------------------------------------
+   The avatar, and the panel that hangs off it. See
+   js/components/accountmenu.js for why this is a popover, why it is positioned
+   from JavaScript and not with CSS anchor positioning, and why the unread
+   count became a dot.
+
+   Nothing here positions the panel. Its left/top/max-height are written by
+   place() on every open, because they depend on a rectangle only the browser
+   knows; this file owns what it looks like and the module owns where it is.
+   -------------------------------------------------------------------------- */
+.accmenu {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The trigger. 44px tall like every other control in this row, and the avatar
+   sits inside it rather than being it — a 28px circle is a lovely mark and an
+   unkind target. */
+.accmenu__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  /* Both, not just the height. The avatar is 28px and the caret 12, which is a
+     38px target once the caret goes at 640px — under the floor every other
+     control in this row is held to by .btn--action. */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--s-1) 0 var(--s-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+@media (hover: hover) {
+  .accmenu__trigger:hover {
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    color: var(--text-dim);
+  }
+}
+/* Open is a state worth drawing: the panel is detached in the top layer, so
+   without this the button it belongs to looks no different from its
+   neighbours and the menu reads as having come from nowhere. */
+.accmenu__trigger[aria-expanded="true"] {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text-dim);
+}
+.accmenu__trigger .icon {
+  transition: transform var(--t-fast) var(--ease);
+}
+.accmenu__trigger[aria-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+
+/* The dot the lamp's badge turned into. Absolutely placed on the avatar, with
+   a ring in the header's own background so it reads as sitting on top of the
+   circle rather than being part of it. Drawn from --text, like the count it
+   replaces: the accent is spent elsewhere. */
+.accmenu__dot {
+  position: absolute;
+  top: 8px;
+  left: 28px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--glass-bg-fallback);
+}
+
+/* — the panel ------------------------------------------------------------- */
+/* :where() so this costs no specificity over the popover UA sheet, which sets
+   inset/margin/border/padding of its own — those are reset below rather than
+   fought with !important. */
+.accmenu__panel {
+  position: fixed;
+  /* The UA stylesheet gives an open popover `inset: 0` and `margin: auto`,
+     which centres it in the viewport. place() writes top and right, so the
+     rest of the inset has to be let go of or it stays stretched across the
+     screen — and `bottom: auto` in particular, or the height is decided by
+     the two insets and the max-height never gets a say. */
+  inset: auto;
+  margin: 0;
+  z-index: 70; /* only reached in the no-popover path; the top layer is above every z-index */
+  width: min(17rem, calc(100vw - 2 * var(--s-2)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  backdrop-filter: blur(var(--blur-strong)) saturate(var(--saturate));
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+}
+.accmenu__panel:not([popover]) {
+  /* The fallback path has no top layer and no UA sheet to undo. */
+  display: block;
+}
+.accmenu__panel[popover]:not(:popover-open) {
+  display: none;
+}
+/* Coming from under the trigger it hangs off, not from nowhere. base.css
+   flattens every animation-duration under reduced motion, so this needs no
+   query of its own — it simply arrives. */
+.accmenu__panel:popover-open,
+.accmenu__panel:not([popover]) {
+  animation: accmenu-in var(--t-fast) var(--ease) both;
+}
+@keyframes accmenu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* — who it belongs to ------------------------------------------------------ */
+.accmenu__who {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2);
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  color: inherit;
+}
+.accmenu__who-text {
+  display: grid;
+  min-width: 0;
+}
+.accmenu__name {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.accmenu__sub {
+  font-size: var(--fs-micro);
+  color: var(--text-faint);
+}
+
+.accmenu__rule {
+  height: 1px;
+  margin: var(--s-1) var(--s-2);
+  border: 0;
+  background: var(--border);
+}
+
+/* — the rows --------------------------------------------------------------- */
+.accmenu__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--s-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-ui);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.accmenu__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Focus is the selection here, the way aria-selected is in the palette: the
+   keyboard moves focus row to row, so one rule covers both pointers and keys
+   and they cannot disagree about which row is live. The ring from base.css
+   still lands on top of it for :focus-visible. */
+.accmenu__row:focus,
+.accmenu__who:focus {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .accmenu__row:hover,
+  .accmenu__who:hover {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    color: var(--text);
+  }
+}
+/* The row the dot on the avatar was about. */
+.accmenu__row--lit {
+  color: var(--text);
+}
+.accmenu__row--out {
+  color: var(--text-faint);
+}
+@media (hover: hover) {
+  .accmenu__row--out:hover {
+    color: var(--danger);
+  }
+}
+.accmenu__count {
+  flex: none;
+  min-width: 1.35em;
+  padding: 0 0.4em;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  text-align: center;
+}
+.accmenu__row--lit .accmenu__count {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* Same trade the header and the toasts make at this width: a blurred layer
+   over a scrolling page is the one effect on a phone that costs a frame, and
+   an opaque panel is indistinguishable once it is over content. */
+@media (max-width: 640px) {
+  .accmenu__panel {
+    background: var(--panel-bg-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* The row is already only three controls wide here, and the caret is the
+     part that can go: at 320px it is 12px spent saying what pressing the
+     avatar would teach in one press. */
+  .accmenu__trigger {
+    padding-inline: var(--s-1);
+  }
+  .accmenu__trigger > .icon {
+    display: none;
+  }
+  .accmenu__dot {
+    left: 24px;
   }
 }
 
@@ -661,45 +910,4 @@
    a change of layout. */
 .palette__ordinal--none {
   visibility: hidden;
-}
-
-/* The lamp, and the one number in the header.
-   The shelf link deliberately has no count — a number in the corner of a header
-   is a notification badge whatever you call it — and this is the exception that
-   proves it: this one *is* an inbox.
-
-   No amber. The accent is spent on a vote, on warmth and on where you are; an
-   unread count is none of those. It is said in the neutrals, and what carries
-   it is weight and a filled shape, the same way the shelf's saved state does. */
-.lamp {
-  position: relative;
-}
-.lamp--lit {
-  --btn-fg: var(--text);
-}
-.lamp__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35em;
-  height: 1.35em;
-  margin-left: calc(var(--s-1) * -1);
-  padding: 0 0.35em;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--bg);
-  font-size: var(--fs-micro);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  line-height: 1;
-}
-/* On a narrow screen the label is hidden and the button is a 44px icon, so the
-   count comes off the end of the row and sits on the lamp instead. */
-@media (max-width: 640px), (pointer: coarse) {
-  .lamp__count {
-    position: absolute;
-    top: 4px;
-    right: 2px;
-    margin-left: 0;
-  }
 }

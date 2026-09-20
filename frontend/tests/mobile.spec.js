@@ -11,7 +11,13 @@
 
 const fs = require("fs");
 const path = require("path");
-const { test, expect, CARD } = require("./support/fixtures");
+const {
+  test,
+  expect,
+  CARD,
+  accountButton,
+  openAccountMenu,
+} = require("./support/fixtures");
 
 const PHONE_WIDTHS = [320, 360, 375, 390, 414];
 const STYLE_DIR = path.join(__dirname, "..", "styles");
@@ -403,15 +409,18 @@ test.describe("the header fits while signed in", () => {
     await page.goto("/");
     await expect(page.locator(CARD).first()).toBeVisible();
 
-    // The regression: at 320px the labelled Write / Sign out buttons pushed the
-    // theme toggle clean off the right edge, where it could not be tapped.
+    // The regression this was written for: at 320px the labelled Write / Sign
+    // out buttons pushed the theme toggle clean off the right edge, where it
+    // could not be tapped. Sign out is behind the account button now and the
+    // row is three controls wide instead of six, so the pressure is off — but
+    // the assertion is about the edge, not about the count, and it stays.
     const controls = [
       [
         "the theme toggle",
         page.getByRole("button", { name: /switch to (light|dark) theme/i }),
       ],
       ["Write a post", page.getByRole("link", { name: "Write a post" })],
-      ["Sign out", page.getByRole("button", { name: "Sign out" })],
+      ["the account button", accountButton(page)],
     ];
     for (const [name, control] of controls) {
       await expect(control).toBeVisible();
@@ -423,6 +432,16 @@ test.describe("the header fits while signed in", () => {
       expect(box.height, `${name} is too small to tap`).toBeGreaterThanOrEqual(44);
       expect(box.width, `${name} is too narrow to tap`).toBeGreaterThanOrEqual(44);
     }
+
+    // The panel is positioned from JavaScript, so the narrowest screen is
+    // where that arithmetic has to be checked rather than assumed.
+    await openAccountMenu(page);
+    const panel = await page.getByRole("menu").boundingBox();
+    expect(panel.x, "the menu starts off the left edge").toBeGreaterThanOrEqual(0);
+    expect(
+      panel.x + panel.width,
+      "the menu runs past the right edge"
+    ).toBeLessThanOrEqual(320);
 
     await context.close();
   });
