@@ -545,6 +545,27 @@ export function renderFeed({ query, isStale }) {
     }
   }
 
+  // Asked before the instance we are replacing has had its say, and that
+  // ordering is load-bearing.
+  //
+  // A feed writes its list and its scroll position into the cache as it leaves,
+  // and the teardown that does it runs on the next line. For every ordinary
+  // journey that is harmless, because the outgoing screen and the incoming one
+  // are different lists under different keys — leaving `#/` to draw
+  // `#/?sort=warm` writes `new:` and reads `warm:`.
+  //
+  // There is exactly one case where they are the same key: the feed being
+  // redrawn as itself, which is what the brand does. Read after, and the answer
+  // is always yes — the entry found is the one deposited a line earlier, by the
+  // very screen being replaced. "Give me a fresh feed" would restore the list
+  // it was asked to throw away, and dropFeedCache() could not prevent it
+  // because the write happens after the drop.
+  //
+  // So the question is asked first: what was stored for this key *before* this
+  // render began. The teardown still deposits its snapshot, which is still the
+  // right thing to have there for whoever comes back next.
+  const cached = readFeedCache(key);
+
   if (activeTeardown) activeTeardown(); // clean up a feed instance we're replacing
   activeTeardown = teardown;
   const stopLeaving = onLeavingScreen(teardown);
@@ -621,7 +642,6 @@ export function renderFeed({ query, isStale }) {
     setupObserver();
   }
 
-  const cached = readFeedCache(key);
   if (cached) {
     // The anchor comes back with the rest of it: without it, the next page
     // fetched after a cache restore would be counted from a feed that had

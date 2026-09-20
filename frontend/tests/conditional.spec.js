@@ -26,10 +26,13 @@ const feedRequests = (page) => {
 // reader presses when they want the feed *fresh*: it drops the snapshot, so the
 // feed is fetched again rather than restored.
 //
-// It has to be pressed from somewhere else. The brand is an `<a href="#/">`,
-// and clicking it while the hash is already `#/` fires no hashchange and
-// therefore renders nothing — so this steps onto a post first, which is what a
-// reader would have been doing anyway.
+// It used to *have* to be pressed from somewhere else: the brand is an
+// `<a href="#/">`, and pressing it while the hash was already `#/` fired no
+// hashchange, so the router never heard and nothing was drawn. It goes through
+// navigate() now and works from either side — see the brand tests in
+// returning.spec.js. This still steps onto a post first, because that is what
+// a reader would have been doing anyway, and because the journey back is the
+// one that puts a conditional request on the wire.
 const freshFeed = async (page) => {
   await page.locator(`${CARD} .card__link`).first().click();
   await expect(page.locator(".detail__title")).toBeVisible();

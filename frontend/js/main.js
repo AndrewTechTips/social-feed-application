@@ -268,9 +268,42 @@ function syncChrome() {
 }
 
 // — brand: a click always means "fresh feed" -----------------------------
-document
-  .querySelector(".brand")
-  ?.addEventListener("click", () => dropFeedCache());
+//
+// It drops the cached lists, and then it navigates — and the second half is the
+// half that was missing. The brand is an `<a href="#/">`, so from anywhere else
+// the browser's own navigation was doing the work and this only had to empty
+// the cache first. From the feed itself there was nothing for the browser to
+// do: the hash was already `#/`, no hashchange fired, and the router never
+// heard about it. The cache was emptied and the refetch happened the *next*
+// time the reader came back to the feed, which is not what pressing it looks
+// like it means.
+//
+// navigate() covers both, because it is the one path that does not depend on
+// the address changing: it resolves directly when the hash already matches
+// (see the note above resolveIfChanged in router.js, which has always said so)
+// and sets the hash when it doesn't. Exactly one render either way.
+//
+// preventDefault is what makes that "exactly one" true rather than nearly
+// true. Without it the browser follows the href as well, and whether that
+// costs a second history entry is a question about the browser rather than
+// about this app. The modifier keys are let through untouched: ⌘-click and
+// friends mean "open this somewhere else", and that is the browser's to answer.
+document.querySelector(".brand")?.addEventListener("click", (e) => {
+  const event = /** @type {MouseEvent} */ (e);
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  dropFeedCache();
+  navigate("/");
+});
 
 // — routes -------------------------------------------------------------------
 route("/", renderFeed);

@@ -65,6 +65,137 @@ test("the feed comes back where you left it", async ({ page, api }) => {
   await restoredTo(page, y);
 });
 
+// ── the way out of the cache ───────────────────────────────────────────────
+//
+// Everything above is the snapshot doing its job. The brand is how a reader
+// says they would rather have the feed than the snapshot of it, and it has to
+// work from the feed itself — which is where somebody standing on a stale list
+// actually is. It used to be the one place it didn't: an `<a href="#/">`
+// pressed while the hash is already `#/` fires no hashchange, so the router
+// never heard, and the cache was emptied for *next* time instead of this one.
+
+/**
+ * Put a post into the backend while a screen is already up.
+ *
+ * seedLive, not seed. Against the mock the two are the same request, but in
+ * demo mode api.seed writes to the Node-side snapshot and re-registers the init
+ * script that carries it — so nothing reaches the page until the next document
+ * load, which is exactly wrong for a test about something arriving while the
+ * reader is looking at a list. seedLive goes to the adapter the page is
+ * actually running. live.spec.js and anchor.spec.js do the same.
+ */
+async function postArrivesUnseen(page, api) {
+  await api.seedLive(page, 1, "zoe@commons.test");
+}
+
+test("the brand fetches the feed again, from the feed", async ({ page, api }) => {
+  await api.seed(3, EMAIL);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(3);
+
+  // Something the feed on screen cannot know about. If pressing the brand only
+  // emptied the cache, the count would stay at three.
+  await postArrivesUnseen(page, api);
+  await page.locator(".brand").click();
+  await expect(page.locator(CARD)).toHaveCount(4);
+});
+
+test("pressing it from the feed is one render, not a journey", async ({ page, api }) => {
+  await api.seed(3, EMAIL);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(3);
+
+  await page.evaluate(() => {
+    window.__seen = { renders: 0, transitions: 0, skeletons: 0 };
+    const view = document.getElementById("view");
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target === view && record.addedNodes.length) window.__seen.renders++;
+      }
+    }).observe(view, { childList: true });
+    new MutationObserver(() => {
+      window.__seen.skeletons = Math.max(
+        window.__seen.skeletons,
+        document.querySelectorAll(".card--skeleton").length
+      );
+    }).observe(view, { childList: true, subtree: true });
+    const original = document.startViewTransition?.bind(document);
+    if (original) {
+      document.startViewTransition = (callback) => {
+        window.__seen.transitions++;
+        return original(callback);
+      };
+    }
+  });
+
+  await postArrivesUnseen(page, api);
+  await page.locator(".brand").click();
+  await expect(page.locator(CARD)).toHaveCount(4);
+
+  const seen = await page.evaluate(() => window.__seen);
+  // Once. preventDefault stops the browser following the href as well, so
+  // navigate() is the only thing that moves.
+  expect(seen.renders).toBe(1);
+  // Nobody went anywhere, so nothing travels, and the list already on screen
+  // holds the same posts — so it is held rather than replaced by grey bars.
+  // See the `reordering` note in js/views/feed.js.
+  expect(seen.transitions).toBe(0);
+  expect(seen.skeletons).toBe(0);
+});
+
+test("pressing it from a post is a journey, and still only one render", async ({
+  page,
+  api,
+}) => {
+  await api.seed(3, EMAIL);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(3);
+
+  await page.locator(`${CARD} .card__link`).first().click();
+  await expect(page.locator(".detail__title")).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__renders = 0;
+    const view = document.getElementById("view");
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target === view && record.addedNodes.length) window.__renders++;
+      }
+    }).observe(view, { childList: true });
+  });
+
+  await postArrivesUnseen(page, api);
+  await page.locator(".brand").click();
+  await expect(page.locator(CARD)).toHaveCount(4);
+
+  // The href would have fired a hashchange here all by itself. navigate() must
+  // not add a second one on top of it.
+  expect(await page.evaluate(() => window.__renders)).toBe(1);
+});
+
+test("a fresh feed is the newest feed, not the one you had sorted", async ({
+  page,
+  api,
+}) => {
+  await api.seed(3, EMAIL);
+  await page.goto("/#/?sort=warm");
+  await expect(page.locator(CARD)).toHaveCount(3);
+
+  await page.locator(".brand").click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator(".sortbar__option[aria-current]")).toHaveText("Newest");
+});
+
+test("it takes you back to the top", async ({ page, api }) => {
+  await api.seed(14, EMAIL);
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(10);
+  await scrollDown(page);
+
+  await page.locator(".brand").click();
+  await expect.poll(() => scrollY(page)).toBe(0);
+});
+
 test("and so does a profile", async ({ page, api }) => {
   await watchPress(page);
   await api.seed(14, EMAIL);
