@@ -229,6 +229,25 @@ function offline() {
         "address bar, keeps your unread count on the icon, and what you have " +
         "already read stays readable on a plane."
     ),
+    h(
+      "p",
+      { class: "colophon__prose" },
+      "Installed on Android it turns up in the system share sheet too. Send it " +
+        "a link or a paragraph from anywhere else on the phone and the composer " +
+        "opens with that already in it, added to whatever you had half-written " +
+        "rather than on top of it. There is still no server in any of this: a " +
+        "share target can be a plain navigation carrying query parameters, and " +
+        "this one is."
+    ),
+    h(
+      "p",
+      { class: "colophon__prose" },
+      "And it says when the network has gone, which it never used to. One line " +
+        "under the header rather than a notice per flap of a bad connection — " +
+        "it is a state, not an event. In the composer it says the other half: " +
+        "what you have typed is in this browser already, and it will be there " +
+        "when you come back."
+    ),
     // Somebody reading this far is exactly the person who will install it. The
     // offer goes with the paragraph that explains it rather than standing on
     // its own, and it is out of the document entirely in the two states where

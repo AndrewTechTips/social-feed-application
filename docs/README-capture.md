@@ -30,9 +30,11 @@ python docs/make_gif.py        # needs Pillow: pip install Pillow
 | --- | --- |
 | `seed_demo.py` | Empties the database and writes the demo content back through the public API, then spreads `created_at` out so the feed shows a plausible range of ages. Refuses to run against a database named `fastapi`, `social_feed` or `postgres`. |
 | `capture.mjs` | Drives Chromium through Playwright (borrowed from `frontend/node_modules`). Takes the five stills, then ~80 numbered frames for the tour. Disables animation first so nothing is caught mid-transition. |
-| `make_gif.py` | Assembles the frames into `tour.gif`. Pillow is a docs-time dependency only and is deliberately not in `backend/requirements*.txt`. |
+| `make_gif.py` | Assembles a directory of frames into a GIF. `--frames` and `--out` are both relative to `docs/media/` and default to the tour's. Pillow is a docs-time dependency only and is deliberately not in `backend/requirements*.txt`. |
+| `capture-pwa.mjs` | The second GIF: the install offer, the network going, and a post still reading. Needs none of the setup above — it serves `frontend/` itself (`serve.mjs`) and drives the demo build, so there is no database and no backend in it. One command: `node docs/capture-pwa.mjs && python docs/make_gif.py --frames .frames-pwa --out pwa.gif` |
+| `serve.mjs` | A static file server on an ephemeral port, for the two scripts that need the app running without asking you to start it. |
 
-`docs/media/.frames/` is scratch and is gitignored; the PNGs and the GIF beside
+`docs/media/.frames*/` is scratch and is gitignored; the PNGs and the GIF beside
 it are committed, because a README that only renders after you run a build step
 isn't much of a README.
 

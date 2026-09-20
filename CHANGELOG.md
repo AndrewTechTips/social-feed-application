@@ -16,11 +16,12 @@ here on: one concern per commit, written by hand.
 
 ## Unreleased
 
-Everything since `v0.2.0`. Two upgrade plans went into this and both are now
-finished and deleted; what they contained is here, in `docs/adr/`, and in the
-history. The last of it closed on 2026-09-20 — the findings that had been
-carried, unfixed, from the first audit, plus the three items of the second plan
-that never shipped.
+Everything since `v0.2.0`. Three upgrade plans went into this and all three are
+now finished; what they contained is here, in `docs/adr/`, and in the history.
+The last of it closed on 2026-09-20 — the findings that had been carried,
+unfixed, from the first audit, the three items of the second plan that never
+shipped, and then the third plan, which was about a feature that was already
+built and that nobody could find.
 
 ### Added
 
@@ -85,6 +86,44 @@ that never shipped.
   disagree with the desktop. An installed window in light mode on a dark
   desktop had a dark title bar. Every one of those tags is now set to `--bg`,
   read off the page rather than typed, so the two cannot drift.
+
+- **Share something into Commons, and the composer opens with it.** Installed
+  on Android, the app is in the system share sheet. A share target is normally
+  a POST to an endpoint, which is exactly the thing this project does not have
+  — but `method: "GET"` makes it a plain navigation carrying query parameters,
+  so GitHub Pages serves a file and `js/share.js` reads `location.search`. The
+  same trick demo mode plays, for the same reason.
+
+  No two apps agree on which of `title`, `text` and `url` to fill, so it takes
+  whatever it was given and never drops any of it — and a link already inside
+  the text is not pasted twice. **It is merged into the composer, never
+  substituted:** a half-written post is somebody's work, so the title is only
+  taken when there isn't one and the body is added to the end. What arrives is
+  kept under its own key rather than written into the draft, which is what lets
+  it survive a share that lands while nobody is signed in — a draft is stamped
+  with who wrote it, and at that point nobody has.
+
+- **It says when the network has gone, which it never used to.** The app has
+  worked offline since the service worker shipped and has never mentioned it,
+  and that is the difference between working offline and *looking* like it
+  does: a reader whose train enters a tunnel got the same screen either way and
+  no reason to think the second one was deliberate.
+
+  One line under the header, and on the published build it sits under the demo
+  notice — two true sentences rather than a collision. Not a toast: `online`
+  and `offline` fire on every flap of a bad connection, and one notice per
+  event would be the app shouting about its own plumbing. It is a state and it
+  reads like one. `navigator.onLine` is only trustworthy in one direction —
+  false means there is no interface at all, true means nothing much — so it
+  only ever speaks up for the half it can prove. The composer says the other
+  half of it, which is that what you have typed is already in this browser;
+  `js/draft.js` has been true for a while and now says so at the moment it
+  matters.
+
+  The self-cleaning live block both of these needed is in `js/live.js` now
+  rather than written twice. A watcher names the element it belongs to and is
+  dropped when that element leaves the document, so leaving the DOM *is* the
+  unsubscribe and no screen has to remember a teardown.
 
 - **The colophon explains the part of the app that is invisible.** A service
   worker is the piece of work here that most needs explaining to somebody who

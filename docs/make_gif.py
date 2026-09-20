@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Assemble docs/media/.frames/*.png into docs/media/tour.gif.
+"""Assemble a directory of numbered PNGs into an animated GIF.
 
 Needs Pillow (`pip install Pillow`) — a docs-time tool only, deliberately not
 in backend/requirements*.txt, which is for things the API needs to run.
 
-    node docs/capture.mjs && python docs/make_gif.py
+Two sequences use it, and the defaults are the first one's:
+
+    node docs/capture.mjs      && python docs/make_gif.py
+    node docs/capture-pwa.mjs  && python docs/make_gif.py --frames .frames-pwa --out pwa.gif
+
+Both paths are taken relative to docs/media/, because that is the only place
+either of them has ever pointed.
 """
 
 from __future__ import annotations
 
+import argparse
 import pathlib
 import sys
 
@@ -18,17 +25,30 @@ except ImportError:
     sys.exit("Pillow is needed to build the GIF:  pip install Pillow")
 
 HERE = pathlib.Path(__file__).resolve().parent
-FRAMES = HERE / "media" / ".frames"
-OUT = HERE / "media" / "tour.gif"
+MEDIA = HERE / "media"
 
 TARGET_WIDTH = 640
 MS_PER_FRAME = 110
 
 
 def main() -> int:
-    files = sorted(FRAMES.glob("*.png"))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--frames",
+        default=".frames",
+        help="directory of numbered PNGs, relative to docs/media/",
+    )
+    parser.add_argument(
+        "--out", default="tour.gif", help="the GIF to write, relative to docs/media/"
+    )
+    args = parser.parse_args()
+
+    frames_dir = MEDIA / args.frames
+    out = MEDIA / args.out
+
+    files = sorted(frames_dir.glob("*.png"))
     if not files:
-        sys.exit(f"no frames in {FRAMES} — run `node docs/capture.mjs` first")
+        sys.exit(f"no frames in {frames_dir} — run the matching capture script first")
 
     frames = []
     for f in files:
@@ -42,7 +62,7 @@ def main() -> int:
 
     first, rest = frames[0], frames[1:]
     first.save(
-        OUT,
+        out,
         save_all=True,
         append_images=rest,
         duration=MS_PER_FRAME,
@@ -50,8 +70,8 @@ def main() -> int:
         optimize=True,
         disposal=2,
     )
-    size_mb = OUT.stat().st_size / 1_000_000
-    print(f"wrote {OUT.relative_to(HERE.parent)}  "
+    size_mb = out.stat().st_size / 1_000_000
+    print(f"wrote {out.relative_to(HERE.parent)}  "
           f"({len(frames)} frames, {first.width}px, {size_mb:.1f} MB)")
     if size_mb > 5:
         print("  warning: over 5 MB — trim frames or drop TARGET_WIDTH", file=sys.stderr)

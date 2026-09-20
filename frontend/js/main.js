@@ -18,6 +18,8 @@ import {
 import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
+import { mountOfflineBand } from "./offline.js";
+import { takeSharedFromUrl } from "./share.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
 import {
   currentTheme,
@@ -392,7 +394,21 @@ wireQuote();
 // rather than as nobody.
 startNotifications();
 
+// Something shared into the app from the system share sheet arrives as a plain
+// navigation carrying query parameters — see js/share.js for why that works on
+// a host with no server. Taken out of the URL *before* the router starts, so
+// the address the router reads is the one it will keep, and the composer is
+// asked for by the fragment like any other screen.
+if (takeSharedFromUrl()) {
+  location.replace(`${location.pathname}${location.search}#/compose`);
+}
+
 startRouter();
+
+// After the router, so that syncDemoStrip has already built the demo band if
+// there is going to be one and this can sit underneath it. It is hidden until
+// the network actually goes, so it costs an empty div the rest of the time.
+mountOfflineBand();
 
 // — offline ---------------------------------------------------------------------
 // The published build has no server behind it, so there is nothing about this

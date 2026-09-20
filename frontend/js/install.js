@@ -36,6 +36,7 @@
 // to, and the control comes back on its own when it does.
 
 import { h } from "./dom.js";
+import { live } from "./live.js";
 
 /**
  * The stashed `beforeinstallprompt`. Untyped because the event is Chromium's
@@ -109,31 +110,10 @@ export function installState() {
 
 // — who is watching -----------------------------------------------------------
 // The state changes after the screen is drawn: Chrome decides to fire the event
-// some time after load, and `appinstalled` can arrive at any point. So whatever
-// is on the page has to be repainted rather than built once.
-//
-// Each watcher names the element it belongs to, and a watcher whose element has
-// left the document is dropped. That is the whole of the cleanup: the feed
-// rebuilds its masthead on every render and none of those renders has to
-// remember to unsubscribe, which is the kind of bookkeeping that is always
-// right until the one path that forgets it.
-/** @type {Set<{ el: Element, paint: () => void }>} */
-const watchers = new Set();
-
-function sweep() {
-  for (const w of watchers) if (!w.el.isConnected) watchers.delete(w);
-}
-
-function notify() {
-  sweep();
-  for (const w of watchers) {
-    try {
-      w.paint();
-    } catch (e) {
-      /* one broken painter is not worth taking the others down with it */
-    }
-  }
-}
+// some time after load, and `appinstalled` can arrive at any point. js/live.js
+// is the machinery for that, and the note at the top of it is why it exists in
+// a file of its own rather than twice.
+const board = live(installState);
 
 // — the event -----------------------------------------------------------------
 addEventListener("beforeinstallprompt", (event) => {
@@ -141,7 +121,7 @@ addEventListener("beforeinstallprompt", (event) => {
   // never get a turn.
   event.preventDefault();
   deferred = event;
-  notify();
+  board.notify();
 });
 
 addEventListener("appinstalled", () => {
@@ -149,13 +129,13 @@ addEventListener("appinstalled", () => {
   // It has been used. Holding on to it would mean offering to install an app
   // that is already installed.
   deferred = null;
-  notify();
+  board.notify();
 });
 
 // Installing from the browser's own menu can move this very window into an app
 // window, with no navigation and no `appinstalled` in this tab.
 const standalone = matchMedia("(display-mode: standalone)");
-standalone.addEventListener?.("change", notify);
+standalone.addEventListener?.("change", board.notify);
 
 /**
  * Show the browser's install dialog, once.
@@ -186,7 +166,7 @@ export async function promptToInstall() {
     // control is about to disappear either way, which is the honest report.
     return null;
   } finally {
-    notify();
+    board.notify();
   }
 }
 
@@ -263,22 +243,9 @@ export function installHowTo(summary = "Add it to your home screen") {
  * to offer — which is two of the four states, and the reason this hands back a
  * container that can be empty rather than a button that can be dead.
  *
- * It stays in the document while empty rather than being removed, so that the
- * event arriving late has somewhere to put the control.
- *
  * @param {(state: "prompt" | "manual") => (Node | string | null)[]} build
  * @param {Record<string, any>} [props]
  */
 export function installBlock(build, props) {
-  const el = h("div", props);
-  const paint = () => {
-    const state = installState();
-    el.replaceChildren();
-    el.hidden = !state;
-    if (state) el.append(...build(state).filter((n) => n != null));
-  };
-  paint();
-  sweep();
-  watchers.add({ el, paint });
-  return el;
+  return board.block(build, props);
 }

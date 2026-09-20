@@ -55,6 +55,18 @@ feed. Reading is public; writing needs a token.
 </tr>
 </table>
 
+<p align="center">
+  <img alt="The app offering to install, then the network going, then a post still reading" src="docs/media/pwa.gif" width="720" />
+</p>
+
+<sub>And the other half of it: the install offer in the masthead and in the
+command palette, the network switched off, and the reading carrying on —
+files from the service worker's cache, answers from a module that was itself
+served out of it. The network really is off in that recording. What isn't
+shown is the app in its own frameless window, because a screenshot is of a
+page and a tab and an installed window make identical pixels; the difference
+is the browser chrome around it, which belongs to the operating system.</sub>
+
 <sub>Every image here is a real capture of the running app —
 see <a href="docs/README-capture.md">docs/README-capture.md</a> to regenerate them.</sub>
 
@@ -293,6 +305,8 @@ cd frontend && npm install && npx playwright install chromium
 | `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
 | `install.spec.js` | The four states of the install control: the event caught and cancelled so Chrome doesn't show its own infobar, the offer appearing whether the event arrives before or after the feed draws, a double press prompting exactly once, the control going whatever the reader chose, and **nothing at all** rendered once the app is installed or on a browser that can't. Plus iOS getting a sentence rather than a dead button, at a 44px target, and axe on a masthead carrying the offer. The event itself is dispatched by the test — Chrome suppresses it under automation, and the file says so at the top. |
 | `standalone.spec.js` | What changes when it is an app rather than a tab: the unread count reaching the icon and clearing at boot, sign-out and after a look; the title bar taking the reader's theme rather than the operating system's; the share sheet standing in for the clipboard where there is one, and a cancelled sheet saying nothing; Back still working where there is no address bar. The standalone stylesheet is checked inside a real frameless window opened with Chrome's `--app=` flag, on a machine that has a display. |
+| `share.spec.js` | The share target, which on a host with no server is a `method: "GET"` navigation and nothing else: the composer opening with what was shared in it whichever of `title`, `text` and `url` the sending app chose to fill, a link already inside the text not being pasted twice, the parameters coming back out of the address so a reload cannot deliver the same share again — and everything else in the query surviving that, `?demo=1` included. Plus the two it must never get wrong: a half-written post is added to rather than replaced, and a share that arrives while signed out is still there after signing in. |
+| `network.spec.js` | Saying so when the network has gone, with the network really switched off: one line under the header and not one toast however much the connection flaps, the line surviving a navigation because it belongs to no screen, the demo notice and this one stacking rather than colliding, and the composer's half — that what you typed is in storage, and is still in the form after a reload with the network still off. |
 | `colophon.spec.js` | That every figure on the page is one from the committed measurement and nothing was typed in, that every decision it names links to a record that is actually on disk, that it still reads as a page when the measurement can't be fetched, and that the outward links carry `rel=noopener`. |
 | `reader.spec.js` | The panel opening, the text size changing the post and nothing else and surviving a reload, focus mode clearing the page and leaving one way out and not following you off it, the panel's own radios not switching the single-key shortcuts off, and a printed post being ink on paper rather than white on white. |
 | `quote.spec.js` | A selected passage offering to be copied with its title and address, where the control sits, what is too short to be a quote, and the control not existing at all on a touch screen. |
@@ -486,7 +500,13 @@ what a service worker is doing here — and on a browser that cannot install, or
 one where it already has, there is **nothing at all** rather than a control that
 does nothing ([ADR 0010](docs/adr/0010-an-install-control-with-a-silent-state.md)).
 Installed, it puts the unread count on the app icon, takes the title bar from
-the theme you chose, and offers the share sheet in place of the clipboard.
+the theme you chose, and offers the share sheet in place of the clipboard. It
+appears in Android's share sheet as a destination, too: send it a link and the
+composer opens with it already in — a `method: "GET"` share target, which is a
+navigation carrying query parameters and therefore the one kind of share a host
+with no server can honestly answer. And it now *says* when the network has gone,
+in one line, which is the difference between working offline and looking like
+it does.
 
 **What you've read never leaves your browser.** `commons.read` and `commons.visit` are two
 keys in `localStorage`, read once at boot by `frontend/js/reading.js`; there is no endpoint

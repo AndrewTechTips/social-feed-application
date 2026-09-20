@@ -219,6 +219,6 @@ __marimo__/
 
 # Screenshot capture intermediates (docs/capture.mjs); the PNGs and the GIF
 # next to them are committed, the raw frames are not.
-docs/media/.frames/
+docs/media/.frames*/
 
 UPGRADE_PLAN.md

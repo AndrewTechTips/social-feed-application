@@ -11,6 +11,11 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "launch_handler": { "client_mode": "navigate-existing" },
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
   "background_color": "#0c1315",
   "theme_color": "#0c1315",
   "icons": [

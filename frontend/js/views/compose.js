@@ -11,6 +11,8 @@ import { readingMinutes } from "../reading.js";
 import { get, isMine, dropFeedCache } from "../store.js";
 import { navigate, onLeavingScreen } from "../router.js";
 import { readDraft, saveDraft, clearDraft } from "../draft.js";
+import { draftIsSafeNote } from "../offline.js";
+import { consumeShare } from "../share.js";
 
 const TITLE_MAX = 120;
 const CONTENT_MAX = 5000;
@@ -113,6 +115,10 @@ function buildForm({ mode, post }) {
   // one slot is for the thing that has nowhere else to be.
   const who = get("session")?.id ?? null;
   const restored = editing ? null : readDraft(who);
+  // Something shared into the app from the system share sheet, if this visit
+  // arrived that way. Consumed here: reading it is what spends it, so a second
+  // trip to the composer is an empty one.
+  const shared = editing ? null : consumeShare();
   const notice = h("div", { class: "compose__resumed", hidden: true });
 
   if (restored) {
@@ -120,6 +126,29 @@ function buildForm({ mode, post }) {
     content.value = restored.content;
     pub.checked = restored.published;
     pubText.textContent = pub.checked ? "Publish now" : "Save as a draft";
+  }
+
+  if (shared) {
+    // Merged, never substituted. A half-written post is somebody's work, and
+    // replacing it with a shared link would be the worst thing this feature
+    // could do — so the title is only taken when there isn't one, and the body
+    // is added to the end of whatever is already there. Nothing is lost, and
+    // what the reader deliberately sent is on the screen they sent it to.
+    if (!title.value.trim()) title.value = shared.title;
+    content.value = content.value.trim()
+      ? `${content.value.trimEnd()}\n\n${shared.content}`
+      : shared.content;
+    // Straight to storage rather than waiting for the first keystroke: a share
+    // that arrives and is then abandoned without typing should still be there
+    // tomorrow, and the debounce below only ever runs on input.
+    saveDraft(who, {
+      title: title.value,
+      content: content.value,
+      published: pub.checked,
+    });
+  }
+
+  if (restored || shared) {
     paintCounter();
 
     const fresh = h(
@@ -138,10 +167,16 @@ function buildForm({ mode, post }) {
     // Said plainly and without apology: something happened *for* the reader,
     // and the only question is whether they want it. role=status rather than
     // alert — it is good news about a form, not an error in one.
-    notice.append(
-      h("p", { class: "compose__resumed-line" }, "Picked up where you left off."),
-      fresh
-    );
+    //
+    // Both sentences when both happened, because two things were done to this
+    // form and a reader looking at a merged body deserves to know why.
+    const line =
+      restored && shared
+        ? "Picked up where you left off, and added what you shared."
+        : shared
+          ? "Added what you shared."
+          : "Picked up where you left off.";
+    notice.append(h("p", { class: "compose__resumed-line" }, line), fresh);
     notice.hidden = false;
     notice.setAttribute("role", "status");
   }
@@ -208,6 +243,11 @@ function buildForm({ mode, post }) {
       "div",
       { class: "compose__panel" },
       notice,
+      // The one screen where losing the network costs something the reader can
+      // lose, and so the one screen that has to say what it has kept. Empty
+      // and out of the flow whenever there is a network, and it appears and
+      // goes on its own — js/offline.js owns that, not this form.
+      draftIsSafeNote(),
       field("post-title", "Title", title, titleErr),
       field("post-content", "Body", content, contentErr),
       h("div", { class: "compose__row" }, toggle, counter, limit),

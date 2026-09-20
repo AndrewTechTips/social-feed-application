@@ -22,10 +22,8 @@
 // node_modules is under frontend/.
 import { chromium } from "../frontend/node_modules/playwright/index.mjs";
 import { mkdir, writeFile, readFile, stat } from "node:fs/promises";
-import { createReadStream } from "node:fs";
-import { createServer } from "node:http";
-import { once } from "node:events";
 import path from "node:path";
+import { serve } from "./serve.mjs";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -181,69 +179,6 @@ const SHORTCUTS = [
   { file: "shortcut-shelf.png", glyph: "bookmark" },
   { file: "shortcut-notifications.png", glyph: "lamp" },
 ];
-
-// ── the static server ──────────────────────────────────────────────────────
-// Enough of one to serve a directory of files that are already static. The
-// only thing here that is not obvious is the MIME table: a module script
-// served as application/octet-stream is a module script the browser refuses,
-// so getting this wrong doesn't degrade, it blanks the page.
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".webmanifest": "application/manifest+json; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".txt": "text/plain; charset=utf-8",
-  ".xml": "application/xml; charset=utf-8",
-};
-
-/** @param {string} root */
-async function serve(root) {
-  const server = createServer((req, res) => {
-    (async () => {
-      let name = decodeURIComponent(
-        new URL(req.url || "/", "http://x").pathname,
-      );
-      if (name.endsWith("/")) name += "index.html";
-      const file = path.join(root, name);
-      // path.join has already normalised away any `..`; this is what catches
-      // one that climbed out of the directory before it did.
-      if (file !== root && !file.startsWith(root + path.sep)) {
-        res.writeHead(403).end();
-        return;
-      }
-      const info = await stat(file);
-      if (!info.isFile()) {
-        res.writeHead(404).end();
-        return;
-      }
-      res.writeHead(200, {
-        "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
-        "Content-Length": info.size,
-        // The app registers a service worker. Nothing here should be answered
-        // out of a cache that a previous run warmed.
-        "Cache-Control": "no-store",
-      });
-      createReadStream(file).pipe(res);
-    })().catch(() => {
-      if (!res.headersSent) res.writeHead(404);
-      res.end();
-    });
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
-  return {
-    origin: `http://127.0.0.1:${port}`,
-    close: () => new Promise((done) => server.close(() => done(undefined))),
-  };
-}
 
 // ── the screenshots ────────────────────────────────────────────────────────
 // Chrome's rich install dialog has rules, and a screenshot that breaks one is

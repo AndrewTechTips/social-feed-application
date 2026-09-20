@@ -813,3 +813,48 @@
   font-size: var(--fs-meta);
   line-height: 1.55;
 }
+
+/* — the network band ----------------------------------------------------------
+   "Offline — what's already here still reads." One line under the header, and
+   on the published build it can sit under the demo notice, which is two true
+   sentences rather than a collision.
+
+   Deliberately plain: no entrance animation, no dismiss control, no accent.
+   `online` and `offline` fire on every flap of a bad connection, so anything
+   that animated in would be a strobe — and the amber is spent on a vote, on
+   warmth and on where you are, none of which this is. It is a state, and it
+   should read like one: it is either there or it isn't.
+   -------------------------------------------------------------------------- */
+.netband {
+  border-bottom: 1px solid var(--border);
+  background: var(--glass-bg-fallback);
+}
+.netband__text {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: var(--s-2) max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
+    max(var(--s-4), env(safe-area-inset-left));
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+/* Weight, not colour — the same way the demo notice names itself. */
+.netband__label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The composer's half of it: what has been kept, said at the moment it matters.
+   Inside the panel and above the fields, so it is read before the first one is
+   touched rather than discovered under the button that wouldn't work. */
+.compose__offline {
+  margin-bottom: var(--s-4);
+  padding-left: var(--s-3);
+  border-left: 2px solid var(--border-strong);
+}
+.compose__offline-line {
+  max-width: 54ch;
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+}
