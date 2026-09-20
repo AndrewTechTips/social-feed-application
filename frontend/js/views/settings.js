@@ -42,6 +42,7 @@ import { toast } from "../toast.js";
 import { mountView } from "../view.js";
 import { get, setSession, clearSession, dropFeedCache } from "../store.js";
 import { navigate, forgetCurrentScreen, onLeavingScreen } from "../router.js";
+import { themeChoice, themeChoices, setThemeChoice } from "../actions.js";
 import {
   inventory,
   anythingToForget,
@@ -49,6 +50,7 @@ import {
   forgetEverything,
 } from "../browserdata.js";
 import { openPalette } from "../components/palette.js";
+import { radioGroup } from "../components/radiogroup.js";
 
 // Mirrors schemas.USERNAME_RE. Case-insensitive, because the server folds what
 // it is given rather than refusing it — so ADA is offered and `ada` is stored,
@@ -561,14 +563,60 @@ function dataPanel() {
 
   paint();
 
-  return group(
-    2,
-    "This browser",
+  return section(
+    "What this browser knows about you",
     "Everything below is on this machine and has never been sent anywhere. " +
       "This is the whole list, and each line can be checked against your " +
       "browser's own storage inspector.",
     list,
     foot
+  );
+}
+
+// ── 2 · this browser: the theme ────────────────────────────────────────────
+//
+// **A preference, on the screen the plan said was not for preferences.** That
+// note is kept everywhere else and overruled here for one reason: the header's
+// toggle is a two-state control and this is a three-state choice. *System* has
+// nowhere else it could live, and without it the toggle is a door that only
+// opens outward — one press, months ago, and a laptop that goes dark at sunset
+// stopped taking Commons with it.
+//
+// So the fast path stays where it is and this is the only place the third
+// state exists. The radios and the toggle draw from the same value and
+// announce with the same event, so neither can go stale while the other is
+// used — press the toggle with this screen open and the selection moves.
+function themeSection() {
+  return section(
+    "Theme",
+    "System follows whatever your device is set to, and keeps following it — " +
+      "including when your device changes it while Commons is open. The " +
+      "toggle in the header is the fast way between light and dark, and " +
+      "pressing it is what moves you off System; this is the way back.",
+    radioGroup({
+      legend: "Theme",
+      hideLegend: true,
+      name: "commons-theme",
+      values: themeChoices(),
+      labels: { system: "System", light: "Light", dark: "Dark" },
+      current: themeChoice,
+      choose: setThemeChoice,
+      event: "commons:theme",
+    })
+  );
+}
+
+// ── 2 · this browser ───────────────────────────────────────────────────────
+// The settings that live on this machine, and then the list of everything it
+// is keeping. In that order: what you can change, then what is there.
+function browserGroup() {
+  return group(
+    2,
+    "This browser",
+    "None of this is on your account — it is on this machine, and it stays " +
+      "here. Another device signed in as you knows none of it.",
+    themeSection(),
+    dataPanel()
   );
 }
 
@@ -662,7 +710,7 @@ export async function renderSettings({ isStale }) {
       sessionsSection(),
       dangerSection(me)
     ),
-    dataPanel(),
+    browserGroup(),
     aboutGroup()
   );
 }

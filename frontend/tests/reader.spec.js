@@ -13,7 +13,9 @@ const PANEL = ".typeset";
 const OPEN = ".typeset__open";
 const FOCUS_OUT = ".focus-out";
 
-const step = (page, label) => page.locator(".typeset__step", { hasText: label });
+// `.choice__step` since the radio group moved out of reader.js and became a
+// shared control — see js/components/radiogroup.js.
+const step = (page, label) => page.locator(".choice__step", { hasText: label });
 
 const rootData = (page, key) =>
   page.evaluate((k) => document.documentElement.dataset[k] || null, key);

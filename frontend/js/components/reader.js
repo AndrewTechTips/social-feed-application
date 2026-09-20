@@ -17,6 +17,7 @@
 // only reason a mode like this can be a dozen lines rather than a component.
 
 import { h } from "../dom.js";
+import { radioGroup } from "./radiogroup.js";
 import {
   textSize,
   setTextSize,
@@ -84,81 +85,35 @@ export function readerControl() {
   panel.id = "typeset-panel";
 
   // — the two settings ---------------------------------------------------------
-  // Real radios rather than buttons with aria-pressed: a set of mutually
-  // exclusive choices is what a radio group is, and it arrives with arrow-key
-  // navigation and the right announcement already built.
-  //
-  // Both settings are the same widget, so it is built once. That is not only
+  // Both are the same widget, built by the same function, and that is not only
   // tidiness: size and measure are offered as one idea — how this is set for
   // you — and two groups drawn by two different pieces of code is how they
-  // stop looking like one.
-  /**
-   * @param {string} legend
-   * @param {string} name a radio group needs its own, or the two merge
-   * @param {string[]} values
-   * @param {Record<string, string>} labels
-   * @param {() => string} current
-   * @param {(value: string) => unknown} choose
-   * @param {string} event the app-wide event that means "this changed"
-   */
-  function group(legend, name, values, labels, current, choose, event) {
-    const steps = h("div", { class: "typeset__steps" });
-    /** @type {HTMLInputElement[]} */
-    const radios = [];
+  // stop looking like one. The theme picker on #/settings is a third of the
+  // same idea, which is why the builder now lives in components/radiogroup.js
+  // rather than in here.
 
-    for (const value of values) {
-      const input = /** @type {HTMLInputElement} */ (
-        h("input", { type: "radio", name, value })
-      );
-      input.checked = value === current();
-      input.addEventListener("change", () => {
-        if (input.checked) choose(value);
-      });
-      radios.push(input);
-      // The visible word *is* the accessible name. An "A" drawn at three sizes
-      // is the conventional mark for this and would have meant a name that
-      // didn't contain the label, which is a rule rather than a preference.
-      steps.append(
-        h("label", { class: "typeset__step" }, input, h("span", {}, labels[value]))
-      );
-    }
-
-    // Changed from somewhere else — the palette, a key, a second copy of this
-    // panel — so redraw rather than assume this control was the one that did it.
-    addEventListener(event, () => {
-      radios.forEach((r) => (r.checked = r.value === current()));
-    });
-
-    return h(
-      "fieldset",
-      { class: "typeset__group" },
-      h("legend", { class: "typeset__legend" }, legend),
-      steps
-    );
-  }
-
-  const sizeGroup = group(
-    "Text size",
-    "commons-text-size",
-    textSizes(),
-    LABELS,
-    textSize,
-    setTextSize,
-    "commons:textsize"
-  );
+  const sizeGroup = radioGroup({
+    legend: "Text size",
+    name: "commons-text-size",
+    values: textSizes(),
+    labels: LABELS,
+    current: textSize,
+    choose: setTextSize,
+    event: "commons:textsize",
+  });
 
   // How far the eye travels back to find the start of the next line. Second
   // because it is the one nobody knows they want until they have tried it, and
   // the size is what people open this panel for.
-  const measureGroup = group(
-    "Line width",
-    "commons-measure",
-    measures(),
-    MEASURE_LABELS,
-    measure,
-    setMeasure,
-    "commons:measure"
-  );
+  const measureGroup = radioGroup({
+    legend: "Line width",
+    name: "commons-measure",
+    values: measures(),
+    labels: MEASURE_LABELS,
+    current: measure,
+    choose: setMeasure,
+    event: "commons:measure",
+  });
 
   // — focus --------------------------------------------------------------------
   const focusInput = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox" }));

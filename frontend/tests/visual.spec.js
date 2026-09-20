@@ -189,26 +189,34 @@ for (const theme of ["dark", "light"]) {
   });
 }
 
-// The data panel, which is the one screen in this file made of rows the app
-// composes out of storage rather than out of the API. A picture of it catches
-// what no assertion in browserdata.spec.js is looking at: the size column
-// falling out of line, a key chip losing its tint, a row's sentence running
-// under its own control at the default width.
+// All of `2 · This browser` — the theme picker and the data panel under it.
+// The one part of the app made of rows composed out of storage rather than
+// out of the API, and a picture of it catches what no assertion in
+// browserdata.spec.js or theme.spec.js is looking at: the size column falling
+// out of line, a key chip losing its tint, a row's sentence running under its
+// own control, the three theme segments drifting apart.
 //
 // Both themes, because the key chips are the one place in the app where text
 // sits on a tinted surface over a card — a stack that was already 4.31:1 in
 // the light theme once, and would be again the next time a neutral moves.
-// Tall enough that the panel fits on one screen, which is not a detail.
-// Playwright captures an element taller than the viewport by scrolling and
-// stitching, and this app has a sticky header — so the first recording of
-// this baseline had a white band of header composited across the middle of
-// the first row. A picture with a capture artifact in it is a baseline that
-// will disagree with itself.
-test.describe("the data panel", () => {
-  test.use({ viewport: { width: 1280, height: 1500 } });
+// Tall enough that the whole part fits on one screen, which is not a detail
+// and has now caught itself out twice. Playwright captures an element taller
+// than the viewport by scrolling and stitching, and this app has a sticky
+// header — so a part that outgrows the viewport comes back with a band of
+// header composited through it. The first recording had it across a row; the
+// second, after the theme picker was added, had it across the blurb.
+//
+// Hence PART_MAX and the assertion below: the next thing added to this part
+// fails the test with a sentence saying what to do, rather than quietly
+// recording a picture with a seam in it.
+const PART_H = 2000;
+const PART_MAX = PART_H - 40;
+
+test.describe("this browser", () => {
+  test.use({ viewport: { width: 1280, height: PART_H } });
 
   for (const theme of ["dark", "light"]) {
-    test(`the data panel, ${theme}`, async ({ page, api }) => {
+    test(`the browser part, ${theme}`, async ({ page, api }) => {
       await api.seed(2, "ada@commons.test");
       await api.signIn(page, "ada@commons.test", "seedpassword");
 
@@ -248,10 +256,18 @@ test.describe("the data panel", () => {
       // baseline anybody can keep stable. The part is a self-contained block
       // with its own heading, so framing it exactly is both possible and what
       // the picture is actually of.
-      await expect(page.locator(".settings__group").nth(1)).toHaveScreenshot(
-        `data-panel-${theme}.png`,
-        SHOT
+      const part = page.locator(".settings__group").nth(1);
+      const tall = await part.evaluate((el) =>
+        Math.ceil(el.getBoundingClientRect().height)
       );
+      expect(
+        tall,
+        `2 · This browser is ${tall}px and the viewport is ${PART_H}px. ` +
+          `Playwright will scroll and stitch, and the sticky header will end up ` +
+          `composited through the picture. Raise PART_H above it.`
+      ).toBeLessThan(PART_MAX);
+
+      await expect(part).toHaveScreenshot(`this-browser-${theme}.png`, SHOT);
     });
   }
 });

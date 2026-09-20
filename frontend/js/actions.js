@@ -49,65 +49,149 @@ export function syncThemeColor() {
   }
 }
 
+// — the theme, in three states ------------------------------------------------
+//
+// ── the gap this closes ───────────────────────────────────────────────────
+// The bootstrap in index.html reads `commons.theme` and falls back to
+// `prefers-color-scheme` when it is absent, so a reader who has never touched
+// the toggle follows their machine. The moment they press it once, a concrete
+// value is written — and there was no way back. Not a preference anybody had
+// thought about; just a door that only opened outward. A laptop that goes
+// dark at sunset stopped taking Commons with it, for ever, because of one
+// press months earlier.
+//
+// ── how "system" is stored, which is: it isn't ────────────────────────────
+// **Following the system is the absence of the key, not the string
+// "system".** The plan this comes from asked for the string, and the reason
+// to do otherwise arrived after it was written: `#/settings` now lists every
+// key this browser holds, with its size, and a control that removes it. Two
+// encodings of one state — no key, and a key reading "system" — would mean
+// that panel showing "6 bytes" for a reader whose position is *I have no
+// preference*, and the panel's Reset landing somewhere subtly different from
+// the radio marked System. One representation keeps both honest.
+//
+// It also leaves the pre-paint bootstrap alone, which is worth something on
+// its own: that inline script is the only code in the app that has to run
+// before the first frame, and `data-theme="system"` matches no rule in
+// tokens.css.
+const CHOICES = ["system", "light", "dark"];
+
+/** What the machine is asking for, right now. */
+const systemTheme = () =>
+  matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+
+/**
+ * Which of the three the reader has asked for — not what is on screen.
+ *
+ * `currentTheme()` answers "what is painted"; this answers "what was chosen",
+ * and under `system` those are different questions with different answers.
+ * @returns {"system" | "light" | "dark"}
+ */
+export function themeChoice() {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    return raw === "light" || raw === "dark" ? raw : "system";
+  } catch (e) {
+    // Storage disabled: nothing can be pinned, so the system is all there is.
+    return "system";
+  }
+}
+
+/** The three, in the order they should be offered. */
+export const themeChoices = () => CHOICES.slice();
+
+/**
+ * Paint a theme and tell everything that draws itself from one.
+ *
+ * `fade` is not decoration. Every colour in the app is a custom property, so
+ * the flip is one attribute and the repaint is instantaneous — which is
+ * exactly the problem. A room does not snap from lamplight to daylight, and
+ * the snap is most of why a theme toggle feels like a setting rather than
+ * like a light switch. Inside a view transition the browser cross-fades the
+ * two paintings of the page for a fifth of a second and it reads as the
+ * lights coming up.
+ *
+ * crossFade answers false where the API is missing or the reader has asked
+ * for less motion, and then the flip still has to happen — unwrapped, which
+ * is what it always was.
+ *
+ * @param {string} theme "light" or "dark" — a painted value, never "system"
+ * @param {{fade?: boolean}} [opts]
+ */
+function paintTheme(theme, { fade = true } = {}) {
+  const apply = () => {
+    document.documentElement.dataset.theme = theme;
+    // The header's toggle draws itself from this, the palette can change it
+    // from the other side of the app, and the settings radios and the data
+    // panel both listen. Announce it rather than letting them go stale.
+    dispatchEvent(new CustomEvent("commons:theme", { detail: theme }));
+    syncThemeColor();
+  };
+  if (!fade || !crossFade(apply)) apply();
+  return theme;
+}
+
+/**
+ * Choose one of the three.
+ *
+ * @param {string} next
+ * @param {{fade?: boolean}} [opts]
+ * @returns {string} the theme now painted, which for "system" is whichever
+ *   one the machine is currently asking for
+ */
+export function setThemeChoice(next, opts) {
+  const choice = CHOICES.includes(next) ? next : "system";
+  try {
+    if (choice === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, choice);
+  } catch (e) {
+    /* storage disabled — the choice holds for this page and no longer */
+  }
+  return paintTheme(choice === "system" ? systemTheme() : choice, opts);
+}
+
 /**
  * Stop having a theme of your own, and go back to following the system.
  *
- * Not `setTheme("dark")`. The difference matters and is the whole reason this
- * is a separate function: the bootstrap in index.html reads the key and falls
- * back to `prefers-color-scheme` only when it is *absent*, so writing a
- * concrete value — even the one the system would have chosen — pins the
- * reader to it for ever. Removing the key is the only way back to "whatever
- * the machine is doing", and re-reading the media query here is what makes
- * that visible now rather than on the next reload.
+ * The same thing as choosing System, reached from the data panel on
+ * `#/settings` rather than from the radios — which is why it is a named
+ * function and not a call site: it is offered there as *forgetting a stored
+ * preference*, which is what removing the key literally is.
  *
- * The cross-fade is deliberately not used. This is reached from a row in a
- * list of things being forgotten, next to three others that take effect
- * instantly, and a theme that dissolved while the rest snapped would read as
- * the reset being half-applied.
+ * No cross-fade, and that is the only difference. It sits in a list of things
+ * being forgotten, beside three others that take effect instantly, and a
+ * theme that dissolved while the rest snapped would read as the reset having
+ * been half-applied.
  */
-export function forgetTheme() {
-  try {
-    localStorage.removeItem(THEME_KEY);
-  } catch (e) {
-    /* storage disabled — there was nothing pinned to begin with */
-  }
-  const system = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  document.documentElement.dataset.theme = system;
-  dispatchEvent(new CustomEvent("commons:theme", { detail: system }));
-  syncThemeColor();
-  return system;
-}
+export const forgetTheme = () => setThemeChoice("system", { fade: false });
 
+/**
+ * The header's fast path: light ↔ dark, one press.
+ *
+ * It writes a concrete value, so pressing it while on `system` is what moves
+ * you off it — which is the behaviour the plan asked for and which falls out
+ * of this rather than needing a branch. There is no third press that would
+ * get you back; System is a destination on the settings screen, because a
+ * two-state control cannot honestly offer three.
+ */
 export function toggleTheme() {
-  const next = otherTheme();
-
-  const apply = () => {
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch (e) {
-      /* storage disabled — the choice just won't survive a reload */
-    }
-    // The header's toggle draws itself from the current theme, and the palette
-    // can change it from the other side of the app. Announce it rather than
-    // letting the button quietly go stale.
-    dispatchEvent(new CustomEvent("commons:theme", { detail: next }));
-    syncThemeColor();
-  };
-
-  // Every colour in the app is a custom property, so the flip is one attribute
-  // and the repaint is instantaneous — which is exactly the problem. A room
-  // does not snap from lamplight to daylight, and the snap is most of why a
-  // theme toggle feels like a setting rather than like a light switch. Inside
-  // a view transition the browser cross-fades the two paintings of the page
-  // for a fifth of a second and it reads as the lights coming up.
-  //
-  // crossFade answers false where the API is missing or the reader has asked
-  // for less motion, and then the flip still has to happen — unwrapped, which
-  // is what it always was.
-  if (!crossFade(apply)) apply();
-  return next;
+  return setThemeChoice(otherTheme());
 }
+
+// — following the machine, while that is what was asked for --------------------
+//
+// Without this, "System" meant "whatever the system was saying when this tab
+// loaded". A laptop going dark at sunset would leave every open Commons tab
+// light until it was reloaded, which is the failure the setting exists to
+// prevent, reintroduced one layer down.
+//
+// Guarded on the choice rather than unregistered and re-registered: the test
+// is one storage read, it runs only when the machine's own setting changes,
+// and a listener that is always attached cannot be attached twice.
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if (themeChoice() !== "system") return;
+  paintTheme(systemTheme());
+});
 
 export function signOut() {
   // Locally first, and without waiting. Signing out is the one action that has

@@ -27,6 +27,45 @@ below.
 
 ### Added
 
+- **The theme has three states, and one of them is "follow my machine".** The
+  bootstrap in `index.html` has always followed `prefers-color-scheme` while
+  `commons.theme` is absent — but the header toggle writes a concrete value,
+  so the **first press pinned you for ever and nothing in the app could put it
+  back**. A laptop that goes dark at sunset stopped taking Commons with it
+  because of one press months earlier. Three radios on `#/settings`, in part 2
+  where the rest of this browser's business lives.
+
+  **"System" is the absence of the key, not the string `"system"`.** The plan
+  asked for the string; the reason to do otherwise arrived after it was
+  written. Part 2 now lists every key this browser holds with its size and a
+  control that removes it, and two encodings of one state would mean that
+  panel reporting six bytes for a reader whose position is *I have no
+  preference*, with its Reset landing somewhere subtly different from the
+  radio marked System. One representation keeps both honest — and leaves the
+  pre-paint bootstrap, the only code that has to run before the first frame,
+  untouched.
+
+  **A `matchMedia` listener, because the interesting half of "System" is what
+  it does an hour later.** Without it the setting quietly meant "whatever the
+  system was saying when this tab loaded", which is the same failure one layer
+  down. It is guarded on the choice, so a reader who asked for dark keeps dark
+  when their machine disagrees.
+
+  The header toggle is unchanged and still the fast path; pressing it is what
+  moves you off System, which falls out of it writing a concrete value rather
+  than needing a branch. The radios, the toggle and the palette all draw from
+  the same value and announce with the same event, so no two of them can
+  disagree — there is a test for each direction.
+
+  **The radio group moved out of `components/reader.js` into
+  `components/radiogroup.js`.** It was a closure shared by the text size and
+  the line width, with a comment beside it saying why one builder rather than
+  two: *"two groups drawn by two different pieces of code is how they stop
+  looking like one."* The theme picker is a third of the same idea, so the
+  argument now reaches across two files and the builder had to as well. The
+  CSS went from `.typeset__*` to `.choice__*` with it — named for what it is
+  rather than for the first screen it appeared on.
+
 - **Settings is three parts now, and the middle one says what this browser
   knows about you.** The screen was four blocks about an account. It is
   `1 · Your account`, `2 · This browser`, `3 · About`, and the division

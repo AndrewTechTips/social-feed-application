@@ -599,7 +599,14 @@
   border-radius: var(--r-md);
   background: var(--card-bg);
 }
-.typeset__group {
+/* — a set of choices, drawn as segments ----------------------------------------
+   Shared by the reader panel's text size and line width and by the theme
+   picker on #/settings — see js/components/radiogroup.js for why one builder
+   rather than three. Named for what it is rather than for the first screen it
+   appeared on, which is why these are `.choice` and not `.typeset__*` any
+   more.
+   -------------------------------------------------------------------------- */
+.choice {
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -607,7 +614,7 @@
   padding: 0;
   border: 0;
 }
-.typeset__legend {
+.choice__legend {
   /* A legend is out of flow by default, which in a flex row leaves it stacked
      above everything instead of beside it. float:none puts it back in. */
   float: none;
@@ -615,11 +622,11 @@
   color: var(--text-dim);
   font-size: var(--fs-ui);
 }
-.typeset__steps {
+.choice__steps {
   display: inline-flex;
   gap: var(--s-1);
 }
-.typeset__step {
+.choice__step {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -635,24 +642,24 @@
     background-color var(--t-mid) var(--ease),
     color var(--t-mid) var(--ease);
 }
-.typeset__step input {
+.choice__step input {
   position: absolute;
   opacity: 0;
   width: 1px;
   height: 1px;
 }
 @media (hover: hover) {
-  .typeset__step:hover {
+  .choice__step:hover {
     color: var(--text);
     border-color: var(--border-strong);
   }
 }
-.typeset__step:has(input:checked) {
+.choice__step:has(input:checked) {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--text);
 }
-.typeset__step:has(input:focus-visible) {
+.choice__step:has(input:focus-visible) {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

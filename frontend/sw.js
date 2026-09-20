@@ -105,6 +105,7 @@ const SHELL = [
   "./js/components/comments.js",
   "./js/components/feedkeys.js",
   "./js/components/reader.js",
+  "./js/components/radiogroup.js",
   "./js/components/quote.js",
   "./js/views/feed.js",
   "./js/views/post.js",

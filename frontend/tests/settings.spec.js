@@ -189,9 +189,14 @@ test("your email is shown, and is not a text box", async ({ page, api }) => {
   await signedIn(page, api);
 
   await expect(page.locator(".settings__value")).toHaveText(EMAIL);
-  // One input on the screen, and it is the username. Nothing here pretends to
-  // change an address, because nothing here can send a confirmation to one.
-  await expect(page.locator(".settings input")).toHaveCount(1);
+  // One text box on the screen, and it is the username. Nothing here pretends
+  // to change an address, because nothing here can send a confirmation to one.
+  //
+  // Text boxes rather than inputs: the theme picker in part 2 is three radios,
+  // which are inputs and are not boxes anybody can type an address into. The
+  // count was a proxy for the claim; this is the claim.
+  await expect(page.locator(".settings input[type='text']")).toHaveCount(1);
+  await expect(page.locator(".settings input[type='email']")).toHaveCount(0);
   await expect(page.locator(".settings__note")).toContainText("no way to send mail");
 });
 
