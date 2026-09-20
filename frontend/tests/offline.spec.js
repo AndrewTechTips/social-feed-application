@@ -145,3 +145,178 @@ test("the app opens with no network at all", async ({
 
   await context.setOffline(false);
 });
+
+// ── the manifest ───────────────────────────────────────────────────────────
+// The same shape of check as the shell list above, for the same reason. A
+// manifest is a set of promises about files, made in a file that nothing type
+// checks and that no screen renders: get a path wrong and the app carries on
+// working perfectly while the install dialog quietly shows a blank card. The
+// only place that can go wrong is here.
+
+/** The manifest, parsed. */
+function manifest() {
+  return JSON.parse(fs.readFileSync(path.join(appDir, "manifest.webmanifest"), "utf8"));
+}
+
+/** Every file the manifest names, as "./path" strings with what named it. */
+function declaredFiles(m) {
+  const out = [];
+  for (const i of m.icons || []) out.push({ src: i.src, where: "icons" });
+  for (const s of m.shortcuts || [])
+    for (const i of s.icons || [])
+      out.push({ src: i.src, where: `shortcuts["${s.name}"]` });
+  for (const s of m.screenshots || []) out.push({ src: s.src, where: "screenshots" });
+  return out;
+}
+
+// The eight bytes every PNG starts with. Compared as bytes, never as a string:
+// the first one is 0x89, and decoding it as ASCII quietly masks the high bit
+// off and turns it into a tab.
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/**
+ * A PNG's real dimensions, straight out of its header — eight bytes of
+ * signature, then an IHDR chunk whose first two fields are the width and the
+ * height as big-endian 32-bit integers. Worth the twelve lines: `sizes` is a
+ * string a human typed, and a browser that finds it disagreeing with the file
+ * does not tell anybody.
+ * @param {string} file
+ */
+function pngSize(file) {
+  const head = Buffer.alloc(24);
+  const fd = fs.openSync(file, "r");
+  try {
+    fs.readSync(fd, head, 0, 24, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (!head.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    throw new Error(`${file} is not a PNG`);
+  }
+  if (head.toString("ascii", 12, 16) !== "IHDR") throw new Error(`${file}: no IHDR`);
+  return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+}
+
+test("the manifest parses, and names only files that exist", () => {
+  const m = manifest();
+
+  // The keys an installable app is nothing without. Asserted by name rather
+  // than by a schema, because what matters is that *these* are present.
+  for (const key of ["name", "start_url", "scope", "display", "icons"]) {
+    expect(m[key], `manifest is missing "${key}"`).toBeTruthy();
+  }
+  // A reading app that refuses landscape on a tablet is worse, not more
+  // app-like. If this ever comes back it should be "any" and deliberate.
+  expect(m.orientation).toBeUndefined();
+
+  const missing = declaredFiles(m).filter(
+    ({ src }) => !fs.existsSync(path.join(appDir, src.replace(/^\.\//, "")))
+  );
+  expect(
+    missing,
+    `the manifest names files that aren't on disk:\n` +
+      missing.map((f) => `  ${f.src}  (${f.where})`).join("\n") +
+      `\nrun: node docs/make_icons.mjs`
+  ).toEqual([]);
+});
+
+test("every file the manifest names is actually served", async ({ request }) => {
+  // On disk is not the same as reachable: a path that is right relative to the
+  // repository and wrong relative to the manifest resolves to a 404 that only
+  // the install dialog would ever see.
+  for (const { src, where } of declaredFiles(manifest())) {
+    const url = src.replace(/^\.\//, "/");
+    const res = await request.get(url);
+    expect(res.status(), `${url} (${where})`).toBe(200);
+
+    // And it is really a PNG, not an HTML error page with a .png on the end —
+    // which is exactly what a static host with a catch-all returns.
+    const body = await res.body();
+    expect(body.subarray(0, 8).equals(PNG_SIGNATURE), `${url} is not a PNG`).toBe(true);
+  }
+});
+
+test("the screenshots are shaped the way the install dialog needs", () => {
+  const shots = manifest().screenshots || [];
+
+  // Without at least one of each, Chrome falls back to the cramped
+  // mini-infobar on Android or a bare one-liner on the desktop — which is the
+  // whole reason these exist.
+  expect(shots.filter((s) => s.form_factor === "wide").length).toBeGreaterThan(0);
+  expect(shots.filter((s) => s.form_factor === "narrow").length).toBeGreaterThan(0);
+
+  /** @type {Record<string, number[]>} */
+  const ratios = {};
+
+  for (const shot of shots) {
+    const file = path.join(appDir, shot.src.replace(/^\.\//, ""));
+    const { width, height } = pngSize(file);
+
+    // Chrome's three rules, each of which it enforces by silently dropping the
+    // screenshot rather than by complaining.
+    expect(
+      Math.min(width, height),
+      `${shot.src} is under 320px`
+    ).toBeGreaterThanOrEqual(320);
+    expect(Math.max(width, height), `${shot.src} is over 3840px`).toBeLessThanOrEqual(
+      3840
+    );
+    expect(
+      Math.max(width, height) / Math.min(width, height),
+      `${shot.src} is more than 2.3x longer than it is wide`
+    ).toBeLessThanOrEqual(2.3);
+
+    // And the declared size is the real one. This is the check that catches a
+    // regenerated screenshot whose viewport moved and whose manifest entry
+    // didn't.
+    expect(shot.sizes, `${shot.src}: "sizes" disagrees with the file`).toBe(
+      `${width}x${height}`
+    );
+    expect(shot.type, `${shot.src}: "type"`).toBe("image/png");
+    // Read out by a screen reader in the install dialog, so not optional.
+    expect(shot.label, `${shot.src} has no label`).toBeTruthy();
+
+    (ratios[shot.form_factor] ||= []).push(width / height);
+  }
+
+  // Same form factor, same shape — a carousel that changes size between slides
+  // is a carousel Chrome declines to show.
+  for (const [form, list] of Object.entries(ratios)) {
+    for (const r of list) {
+      expect(
+        Math.abs(r - list[0]),
+        `the ${form} screenshots aren't all one shape`
+      ).toBeLessThan(0.01);
+    }
+  }
+});
+
+test("every shortcut opens a screen the app actually has", () => {
+  // The routes as main.js registers them. The same trick the shell list uses:
+  // read the source rather than trust that two files still agree.
+  const src = fs.readFileSync(path.join(appDir, "js", "main.js"), "utf8");
+  const routes = [...src.matchAll(/^route\("([^"]+)"/gm)].map((m) => m[1]);
+  expect(routes.length, "found no route() calls in js/main.js").toBeGreaterThan(5);
+
+  const shortcuts = manifest().shortcuts || [];
+  expect(shortcuts.length).toBeGreaterThan(0);
+
+  for (const shortcut of shortcuts) {
+    expect(shortcut.name, "a shortcut with no name").toBeTruthy();
+    // Relative, so it still resolves under /social-feed-application/ on Pages,
+    // where an absolute "/#/compose" would land outside the app's scope and be
+    // dropped.
+    expect(shortcut.url, `${shortcut.name}: url must be relative to the app`).toMatch(
+      /^\.\/#\//
+    );
+    // A shortcut with no icon gets the app icon, which makes three identical
+    // rows in the long-press menu.
+    expect(shortcut.icons?.length, `${shortcut.name} has no icon`).toBeGreaterThan(0);
+
+    const hash = shortcut.url.slice(shortcut.url.indexOf("#") + 1);
+    expect(
+      routes,
+      `${shortcut.name} points at ${hash}, which is not a route`
+    ).toContain(hash);
+  }
+});

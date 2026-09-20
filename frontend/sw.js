@@ -123,7 +123,18 @@ const SHELL = [
   "./assets/icons/icon-512.png",
   "./assets/icons/icon-maskable-192.png",
   "./assets/icons/icon-maskable-512.png",
+  "./assets/icons/shortcut-compose.png",
+  "./assets/icons/shortcut-shelf.png",
+  "./assets/icons/shortcut-notifications.png",
 ];
+
+// What is deliberately *not* above: assets/screenshots/. They are two megabytes
+// of PNG that only the install dialog ever asks for, and the install dialog
+// only ever runs online — precaching them would mean every first visit paying
+// for six pictures of the app in order to be offline-ready for a screen that
+// cannot be reached offline. The shortcut icons are here because they are four
+// kilobytes each and a launcher can ask for them at any time, including a
+// launcher redrawing its menu on a plane.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
