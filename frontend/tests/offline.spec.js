@@ -23,7 +23,9 @@ function shellList() {
 function filesUnder(dir, extensions) {
   const out = [];
   const walk = (rel) => {
-    for (const entry of fs.readdirSync(path.join(appDir, rel), { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(path.join(appDir, rel), {
+      withFileTypes: true,
+    })) {
       const next = `${rel}/${entry.name}`;
       if (entry.isDirectory()) walk(next);
       else if (extensions.some((e) => entry.name.endsWith(e))) out.push(`.${next}`);
@@ -39,7 +41,10 @@ test("the shell list still matches what's on disk", () => {
   // Everything the app is made of. Not assets/ — an icon that isn't listed
   // costs a missing icon offline, whereas a module that isn't listed costs the
   // app, and the difference is worth the rule being about the code.
-  const onDisk = [...filesUnder("js", [".js", ".json"]), ...filesUnder("styles", [".css"])];
+  const onDisk = [
+    ...filesUnder("js", [".js", ".json"]),
+    ...filesUnder("styles", [".css"]),
+  ];
 
   const missing = onDisk.filter((f) => !shell.has(f));
   expect(missing, `add these to SHELL in sw.js:\n${missing.join("\n")}`).toEqual([]);
@@ -99,7 +104,11 @@ test("the API is left alone", async ({ page, api }, testInfo) => {
 });
 
 // ── it works with the network gone ─────────────────────────────────────────
-test("the app opens with no network at all", async ({ page, context, api }, testInfo) => {
+test("the app opens with no network at all", async ({
+  page,
+  context,
+  api,
+}, testInfo) => {
   test.skip(
     testInfo.project.name !== "demo",
     "only the published build is self-contained; against a real API, offline is offline"
@@ -124,7 +133,9 @@ test("the app opens with no network at all", async ({ page, context, api }, test
   await expect(page.locator(CARD).first()).toBeVisible();
   // The reading face too, not just the markup — a font that failed would leave
   // the page readable and wrong.
-  const fontLoaded = await page.evaluate(() => document.fonts.check('1rem "Newsreader"'));
+  const fontLoaded = await page.evaluate(() =>
+    document.fonts.check('1rem "Newsreader"')
+  );
   expect(fontLoaded).toBe(true);
 
   // And navigation still works, because every address here is the same

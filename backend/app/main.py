@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings, API_PREFIX
 from .limiter import limiter
 from .logging_config import configure_logging
-from .routers import post, user, auth, vote, comment, notification
+from .routers import post, user, auth, vote, comment, notification, shelf
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,15 @@ TAGS_METADATA = [
             "sees; the **email** is a credential and leaves the server on "
             "exactly one endpoint, `GET /users/me`, where the caller is the "
             "only person it belongs to."
+        ),
+    },
+    {
+        "name": "Shelf",
+        "description": (
+            "Posts saved to read later. A shelf is a **set**, so saving is "
+            "idempotent — `PUT` and `DELETE` both answer 204 whether or not "
+            "anything changed, and a client never has to treat one of its own "
+            "errors as success."
         ),
     },
     {
@@ -231,6 +240,7 @@ api.include_router(auth.router)
 api.include_router(auth.auth_router)
 api.include_router(vote.router)
 api.include_router(comment.router)
+api.include_router(shelf.router)
 api.include_router(notification.router)
 app.include_router(api)
 

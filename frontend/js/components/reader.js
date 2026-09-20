@@ -16,14 +16,22 @@
 // layout being recomputed in JavaScript and nothing measured — which is the
 // only reason a mode like this can be a dozen lines rather than a component.
 
-import { h } from "../ui.js";
-import { textSize, setTextSize, textSizes } from "../reading.js";
+import { h } from "../dom.js";
+import {
+  textSize,
+  setTextSize,
+  textSizes,
+  measure,
+  setMeasure,
+  measures,
+} from "../reading.js";
 import { typing } from "./feedkeys.js";
 import { currentPath } from "../router.js";
 
 const FOCUS_ATTR = "focus";
 
 const LABELS = { s: "Small", m: "Medium", l: "Large" };
+const MEASURE_LABELS = { normal: "Normal", narrow: "Narrow" };
 
 export const focusIsOn = () => !!document.documentElement.dataset[FOCUS_ATTR];
 
@@ -75,43 +83,85 @@ export function readerControl() {
 
   panel.id = "typeset-panel";
 
-  // — size ---------------------------------------------------------------------
+  // — the two settings ---------------------------------------------------------
   // Real radios rather than buttons with aria-pressed: a set of mutually
   // exclusive choices is what a radio group is, and it arrives with arrow-key
   // navigation and the right announcement already built.
-  const name = "commons-text-size";
-  const steps = h("div", { class: "typeset__steps" });
-  /** @type {HTMLInputElement[]} */
-  const radios = [];
+  //
+  // Both settings are the same widget, so it is built once. That is not only
+  // tidiness: size and measure are offered as one idea — how this is set for
+  // you — and two groups drawn by two different pieces of code is how they
+  // stop looking like one.
+  /**
+   * @param {string} legend
+   * @param {string} name a radio group needs its own, or the two merge
+   * @param {string[]} values
+   * @param {Record<string, string>} labels
+   * @param {() => string} current
+   * @param {(value: string) => unknown} choose
+   * @param {string} event the app-wide event that means "this changed"
+   */
+  function group(legend, name, values, labels, current, choose, event) {
+    const steps = h("div", { class: "typeset__steps" });
+    /** @type {HTMLInputElement[]} */
+    const radios = [];
 
-  for (const size of textSizes()) {
-    const input = /** @type {HTMLInputElement} */ (
-      h("input", { type: "radio", name, value: size })
-    );
-    input.checked = size === textSize();
-    input.addEventListener("change", () => {
-      if (input.checked) setTextSize(size);
+    for (const value of values) {
+      const input = /** @type {HTMLInputElement} */ (
+        h("input", { type: "radio", name, value })
+      );
+      input.checked = value === current();
+      input.addEventListener("change", () => {
+        if (input.checked) choose(value);
+      });
+      radios.push(input);
+      // The visible word *is* the accessible name. An "A" drawn at three sizes
+      // is the conventional mark for this and would have meant a name that
+      // didn't contain the label, which is a rule rather than a preference.
+      steps.append(
+        h("label", { class: "typeset__step" }, input, h("span", {}, labels[value]))
+      );
+    }
+
+    // Changed from somewhere else — the palette, a key, a second copy of this
+    // panel — so redraw rather than assume this control was the one that did it.
+    addEventListener(event, () => {
+      radios.forEach((r) => (r.checked = r.value === current()));
     });
-    radios.push(input);
-    // The visible word *is* the accessible name. An "A" drawn at three sizes is
-    // the conventional mark for this and would have meant a name that didn't
-    // contain the label, which is a rule rather than a preference.
-    steps.append(
-      h("label", { class: "typeset__step" }, input, h("span", {}, LABELS[size]))
+
+    return h(
+      "fieldset",
+      { class: "typeset__group" },
+      h("legend", { class: "typeset__legend" }, legend),
+      steps
     );
   }
 
-  const sizeGroup = h(
-    "fieldset",
-    { class: "typeset__group" },
-    h("legend", { class: "typeset__legend" }, "Text size"),
-    steps
+  const sizeGroup = group(
+    "Text size",
+    "commons-text-size",
+    textSizes(),
+    LABELS,
+    textSize,
+    setTextSize,
+    "commons:textsize"
+  );
+
+  // How far the eye travels back to find the start of the next line. Second
+  // because it is the one nobody knows they want until they have tried it, and
+  // the size is what people open this panel for.
+  const measureGroup = group(
+    "Line width",
+    "commons-measure",
+    measures(),
+    MEASURE_LABELS,
+    measure,
+    setMeasure,
+    "commons:measure"
   );
 
   // — focus --------------------------------------------------------------------
-  const focusInput = /** @type {HTMLInputElement} */ (
-    h("input", { type: "checkbox" })
-  );
+  const focusInput = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox" }));
   focusInput.checked = focusIsOn();
   focusInput.addEventListener("change", () => setFocus(focusInput.checked));
 
@@ -125,8 +175,13 @@ export function readerControl() {
 
   panel.append(
     sizeGroup,
+    measureGroup,
     focusToggle,
-    h("p", { class: "typeset__note" }, "Kept in this browser. Focus mode lasts until you leave the post.")
+    h(
+      "p",
+      { class: "typeset__note" },
+      "Kept in this browser. Focus mode lasts until you leave the post."
+    )
   );
 
   const open = (next) => {
@@ -136,12 +191,10 @@ export function readerControl() {
 
   button.addEventListener("click", () => open(panel.hidden));
 
-  // Changed from the palette, from the key, or from the header's way out.
+  // Changed from the palette, from the key, or from the header's way out. The
+  // two radio groups look after themselves — see group().
   addEventListener("commons:focus", () => {
     focusInput.checked = focusIsOn();
-  });
-  addEventListener("commons:textsize", () => {
-    radios.forEach((r) => (r.checked = r.value === textSize()));
   });
 
   return { button, panel };

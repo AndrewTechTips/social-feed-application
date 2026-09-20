@@ -155,7 +155,10 @@ test("one refresh serves a whole screen's worth of requests", async ({ page, api
 });
 
 // ── the failure cases, which are the ones worth testing ─────────────────────
-test("a refresh cookie that's gone means signed out, cleanly", async ({ page, api }) => {
+test("a refresh cookie that's gone means signed out, cleanly", async ({
+  page,
+  api,
+}) => {
   await api.signIn(page, "ada@commons.test", "seedpassword");
   await page.goto("/");
   await expect(signedIn(page)).toBeVisible();
@@ -232,13 +235,18 @@ test("a network failure is not a sign-out", async ({ page, api }) => {
   await page.locator("#post-content").fill("The network is down, not the session.");
   await page.getByRole("button", { name: "Post" }).click();
 
-  await expect(page.getByText(/Can't reach the server|didn't go through/)).toBeVisible();
+  await expect(
+    page.getByText(/Can't reach the server|didn't go through/)
+  ).toBeVisible();
   await expect(page).not.toHaveURL(/#\/login$/);
   expect((await stored(page)).identity, "still signed in").not.toBeNull();
 });
 
 // ── signing out ─────────────────────────────────────────────────────────────
-test("signing out ends the session everywhere, not just here", async ({ page, api }) => {
+test("signing out ends the session everywhere, not just here", async ({
+  page,
+  api,
+}) => {
   await api.signIn(page, "ada@commons.test", "seedpassword");
   await page.goto("/");
   await expect(signedIn(page)).toBeVisible();

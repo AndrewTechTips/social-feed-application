@@ -1,9 +1,10 @@
-from fastapi import status, HTTPException, Depends, APIRouter
+from fastapi import status, HTTPException, Request, Depends, APIRouter
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import schemas, database, models, oauth2, docs
+from ..limiter import limiter, VOTE
 
 router = APIRouter(prefix="/vote", tags=["Vote"])
 
@@ -35,7 +36,9 @@ router = APIRouter(prefix="/vote", tags=["Vote"])
         **docs.errors(401, 422),
     },
 )
+@limiter.limit(VOTE)
 def vote(
+    request: Request,
     payload: schemas.Vote,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),

@@ -15,7 +15,8 @@ import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
 import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
-import { h, icon } from "./ui.js";
+import { h, icon } from "./dom.js";
+import { toast } from "./toast.js";
 import { mountPalette, openPalette } from "./components/palette.js";
 import { shelfCount } from "./shelf.js";
 import { unreadCount, startNotifications } from "./notify.js";
@@ -84,8 +85,8 @@ function notificationsLink() {
         n === 0
           ? "Notifications"
           : n === 1
-          ? "Notifications, one unread"
-          : `Notifications, ${n} unread`,
+            ? "Notifications, one unread"
+            : `Notifications, ${n} unread`,
       title: "Notifications",
     },
     icon("lamp"),
@@ -93,7 +94,11 @@ function notificationsLink() {
   );
   if (n) {
     link.append(
-      h("span", { class: "lamp__count", "aria-hidden": "true" }, n > 99 ? "99+" : String(n))
+      h(
+        "span",
+        { class: "lamp__count", "aria-hidden": "true" },
+        n > 99 ? "99+" : String(n)
+      )
     );
   }
   return link;
@@ -106,7 +111,8 @@ function shelfLink() {
     {
       class: "btn btn--quiet btn--action",
       href: "#/shelf",
-      "aria-label": n === 1 ? "Your shelf, one post saved" : `Your shelf, ${n} posts saved`,
+      "aria-label":
+        n === 1 ? "Your shelf, one post saved" : `Your shelf, ${n} posts saved`,
       title: "Your shelf",
     },
     icon("bookmark"),
@@ -209,7 +215,8 @@ let demoBand = null;
 function syncDemoStrip() {
   if (!IS_DEMO) return;
   if (!demoBand) demoBand = mountDemoStrip();
-  const mastheadHasIt = !get("session") && currentPath() === "/" && !currentQuery().get("search");
+  const mastheadHasIt =
+    !get("session") && currentPath() === "/" && !currentQuery().get("search");
   demoBand.hidden = mastheadHasIt;
   // The band is built once and kept, so its offer to sign you in as one of the
   // seeded people has to be turned off from out here when you become somebody.
@@ -230,9 +237,7 @@ function paintPaletteHint() {
   );
   const platform = nav.userAgentData?.platform || nav.platform || "";
   const mac = /mac/i.test(platform);
-  hint.replaceChildren(
-    h("kbd", { "aria-hidden": "true" }, mac ? "\u2318K" : "Ctrl K")
-  );
+  hint.replaceChildren(h("kbd", { "aria-hidden": "true" }, mac ? "\u2318K" : "Ctrl K"));
 }
 
 function syncChrome() {
@@ -336,6 +341,29 @@ subscribe(forgetConditional);
 // Signing in or out moves the notice between the masthead and the band, and a
 // same-route navigate() fires no hashchange — so the store drives this too.
 subscribe(syncDemoStrip);
+// What a failed request looks like, in one place.
+//
+// `api.js` used to do this itself — it imported the toast and it assigned to
+// `location.hash` — which put the interface and the router underneath the
+// transport layer. It says what happened now and this decides what that means,
+// which is also why the wording is here: these three sentences are the app
+// talking to a person, and that is this file's job rather than the fetch
+// wrapper's.
+addEventListener("commons:api-error", (event) => {
+  const status = /** @type {CustomEvent<{status: number}>} */ (event).detail.status;
+  if (status === 401) {
+    // The session is already cleared by the time this fires. Sending someone
+    // to the form is only right if they aren't looking at it — arriving at
+    // `#/login` and being sent to `#/login` reads as the page refusing to load.
+    if (!currentPath().startsWith("/login")) navigate("/login");
+    toast("Your session expired.");
+  } else if (status === 403) {
+    toast("You can't edit that.");
+  } else if (status === 429) {
+    toast("You're doing that a bit fast — try again in a minute.");
+  }
+});
+
 // Not `hashchange`. The chrome is part of the screen it belongs to, so it
 // changes when that screen is put on the page — which is what mountView
 // announces, from inside the swap. See the note there.

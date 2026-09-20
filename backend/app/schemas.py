@@ -84,6 +84,11 @@ class PostOut(PostBase):
     # anonymous reader has not voted on anything. Defaulted rather than
     # optional so a client never has to distinguish "no" from "not told".
     voted: bool = False
+    # Whether this post is on the caller's shelf, on the same terms as `voted`
+    # and for the same reason: it is a fact about the pair, so it can't be a
+    # column on the row, and an anonymous reader has an empty shelf rather than
+    # an unknown one.
+    saved: bool = False
     # Null unless the caller searched. The marks around the matching words are
     # two control characters, not HTML — see HEADLINE_* in routers/post.py for
     # why that distinction is the whole safety of the feature.

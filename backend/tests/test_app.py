@@ -107,3 +107,33 @@ def test_the_docs_authorize_button_points_at_the_right_login(anonymous_client):
     spec = anonymous_client.get(f"{ROOT}/openapi.json").json()
     flows = spec["components"]["securitySchemes"]["OAuth2PasswordBearer"]["flows"]
     assert flows["password"]["tokenUrl"] == "api/v1/login"
+
+
+# — the connection URL ---------------------------------------------------------
+# A password is the one part of a URL that people fill with punctuation, and
+# the old f-string handed it to the driver unescaped. These cover the two
+# characters that change what the string *means* rather than merely looking odd.
+
+
+def test_the_database_url_survives_a_password_with_an_at_sign(monkeypatch):
+    from backend.app.config import settings
+
+    monkeypatch.setattr(settings, "database_password", "p@ss:word/x")
+    url = settings.database_url()
+
+    # The parts come back as they went in — the `@` has not moved the host
+    # boundary, which is what the f-string version got wrong.
+    assert url.password == "p@ss:word/x"
+    assert url.host == settings.database_hostname
+    assert url.database == settings.database_name
+
+    # And it is escaped, not merely carried, once rendered for a driver.
+    rendered = url.render_as_string(hide_password=False)
+    assert "p%40ss%3Aword%2Fx" in rendered
+    assert rendered.count("@") == 1  # the one that separates userinfo from host
+
+
+def test_the_test_database_is_the_same_connection_with_a_suffix():
+    from backend.app.config import settings
+
+    assert settings.database_url("_test").database == f"{settings.database_name}_test"

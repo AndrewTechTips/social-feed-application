@@ -260,10 +260,11 @@ const test = base.test.extend({
         // failNext below, and the same control surface.
         seedLive: async (target, count, author, votes) => {
           await target.waitForFunction(() => !!window.__commonsDemo);
-          return target.evaluate(
-            (args) => window.__commonsDemo.seed(args),
-            { count, ...(author ? { author } : {}), ...(votes ? { votes } : {}) }
-          );
+          return target.evaluate((args) => window.__commonsDemo.seed(args), {
+            count,
+            ...(author ? { author } : {}),
+            ...(votes ? { votes } : {}),
+          });
         },
         failNext: async (rule) => {
           // Prefer the adapter the page is actually running. The Node-side
@@ -365,7 +366,8 @@ const test = base.test.extend({
     }
 
     const ctx = await playwright.request.newContext();
-    const post = (p, data) => ctx.post(`${API_ORIGIN}${p}`, data ? { data } : undefined);
+    const post = (p, data) =>
+      ctx.post(`${API_ORIGIN}${p}`, data ? { data } : undefined);
 
     await post("/__reset");
 

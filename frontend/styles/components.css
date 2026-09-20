@@ -30,9 +30,11 @@
   line-height: 1;
   cursor: pointer;
   white-space: nowrap;
-  transition: transform var(--t-fast) var(--ease),
+  transition:
+    transform var(--t-fast) var(--ease),
     background-color var(--t-mid) var(--ease),
-    border-color var(--t-mid) var(--ease), opacity var(--t-mid) var(--ease);
+    border-color var(--t-mid) var(--ease),
+    opacity var(--t-mid) var(--ease);
 }
 .btn:active {
   transform: scale(0.97);
@@ -198,8 +200,10 @@
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--card-bg);
-  transition: transform var(--t-mid) var(--ease),
-    border-color var(--t-mid) var(--ease), box-shadow var(--t-mid) var(--ease),
+  transition:
+    transform var(--t-mid) var(--ease),
+    border-color var(--t-mid) var(--ease),
+    box-shadow var(--t-mid) var(--ease),
     background-color var(--t-mid) var(--ease);
   content-visibility: auto;
   contain-intrinsic-size: 0 168px;
@@ -249,13 +253,48 @@
   inset-block: var(--s-5);
   inset-inline-start: 0;
   width: 2px;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    var(--accent),
-    transparent
-  );
+  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
 }
+
+/* — and when it is *your* vote that does it -------------------------------
+   The hairline usually just exists: you open a feed and four cards have one.
+   The one time it is an event is when your own vote is the third — the press
+   that carries a post from one person's opinion into the room's. Then it
+   draws in from the top instead of appearing.
+
+   This is the whole dopamine budget of the app, spent once, on its own
+   metaphor. Not a confetti burst, not a colour that exists nowhere else: the
+   accent that was going to be there anyway, arriving over 420ms.
+
+   **Keyed on the crossing, not on the class.** The class is toggled
+   optimistically and toggled back on rollback, so a rule that animated
+   `.card--warm` would play this for a vote the server refused — the app
+   celebrating something that didn't happen. js/components/vote.js adds
+   `card--igniting` only on the transition from below the threshold to at it,
+   by this reader, and removes it when the animation ends.
+
+   Scaling the gradient from the top rather than sliding a mask over it: one
+   compositor property, no layout, and the fade at both ends comes along for
+   free because it is the same gradient the whole time. */
+@keyframes warm-ignite {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.card--igniting::before {
+  transform-origin: top;
+  animation: warm-ignite 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+/* Reduced motion gets the fact without the flourish: base.css collapses every
+   animation-duration to 0.01ms, which lands the hairline at full height on the
+   first frame — which is exactly "it simply appears", the behaviour this had
+   before the animation existed. Nothing further is needed here, and saying so
+   is cheaper than someone later adding a rule that breaks it. */
 /* — read -----------------------------------------------------------------------
    A post you have opened draws its title in --text-dim instead of --text, so
    it steps back and what you haven't read is what stands forward. Books you
@@ -279,13 +318,30 @@
   color: var(--text-dim);
 }
 
+/* Hover used to add `backdrop-filter: blur() saturate()` here, and it was the
+   most expensive hover in the app for the least benefit.
+
+   What it cost: a backdrop-filter puts the element on its own compositing
+   layer *and* makes the browser re-sample and re-blur everything behind it for
+   as long as it is hovered. On a long feed that means a live blur running
+   under the pointer while the list scrolls past it — and the one thing we
+   learned chasing the scroll jank in September is that no compositing hint
+   rescues a blur; only not doing the blur does.
+
+   What it bought: almost nothing. A card is nearly opaque already, and since
+   the aurora was cut to a single faint bloom behind the masthead there is
+   usually no texture behind a card to see through to.
+
+   So the hover takes `--glass-bg-fallback`, which is not a compromise but the
+   token that already exists for this exact appearance — it is what every
+   browser without backdrop-filter has always been shown. Same look, no layer,
+   nothing re-blurred per frame. The header keeps its real glass: it is one
+   element, it is always on screen, and it measured at zero dropped frames. */
 @media (hover: hover) {
   .card:hover {
     transform: translateY(-2px);
     border-color: var(--border-strong);
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
-    backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
+    background: var(--glass-bg-fallback);
     box-shadow: var(--shadow-hover);
   }
 }
@@ -402,7 +458,8 @@
   background: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: color var(--t-mid) var(--ease),
+  transition:
+    color var(--t-mid) var(--ease),
     background-color var(--t-mid) var(--ease),
     border-color var(--t-mid) var(--ease);
 }
@@ -489,7 +546,8 @@
   background: var(--surface-solid);
   color: var(--text);
   font-size: var(--fs-field);
-  transition: border-color var(--t-mid) var(--ease),
+  transition:
+    border-color var(--t-mid) var(--ease),
     box-shadow var(--t-mid) var(--ease);
 }
 .input:focus,
@@ -565,7 +623,8 @@
   border-radius: var(--r-pill);
   border: 1px solid var(--border-strong);
   background: color-mix(in srgb, var(--text) 8%, transparent);
-  transition: background-color var(--t-mid) var(--ease),
+  transition:
+    background-color var(--t-mid) var(--ease),
     border-color var(--t-mid) var(--ease);
   flex: none;
 }
@@ -576,7 +635,8 @@
   margin: 2px;
   border-radius: 50%;
   background: var(--text-dim);
-  transition: transform var(--t-mid) var(--ease),
+  transition:
+    transform var(--t-mid) var(--ease),
     background-color var(--t-mid) var(--ease);
 }
 .switch input:checked + .switch__track {
@@ -720,4 +780,3 @@
   border-left: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
-

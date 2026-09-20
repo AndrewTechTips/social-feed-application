@@ -1,0 +1,15 @@
+# Generated, downloaded or measured — none of it is written by hand, and
+# reformatting it would produce a diff nobody can review.
+node_modules/
+tests/.report/
+tests/.artifacts/
+tests/.lighthouse/
+stats.json
+package-lock.json
+
+# The seed is prose with deliberate line breaks in it; prettier would rewrap
+# the JSON and make every future diff to a post look like a rewrite.
+js/demo/seed.json
+
+# Not ours.
+assets/icons.svg

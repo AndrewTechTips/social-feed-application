@@ -14,8 +14,10 @@
 // have since deleted.
 
 import { api, ApiError } from "../api.js";
-import { h, mountView, skeletonCards, postCard } from "../ui.js";
-import { setKnownPosts } from "../store.js";
+import { h, skeletonCards } from "../dom.js";
+import { mountView } from "../view.js";
+import { postCard } from "../components/card.js";
+import { get, setKnownPosts } from "../store.js";
 import { shelfIds, dropFromShelf } from "../shelf.js";
 import { onLeavingScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
@@ -34,16 +36,33 @@ export function renderShelf({ isStale }) {
   const ids = shelfIds();
 
   const list = h("div", { class: "feed__list" });
-  const status = h("p", { class: "feed__status", hidden: true });
+  // A live region, for the reason written down in views/feed.js: a list that
+  // grows under you is only self-announcing if you can see it.
+  const status = h("p", {
+    class: "feed__status",
+    hidden: true,
+    "aria-live": "polite",
+    "aria-atomic": "true",
+  });
   const sentinel = h("div", { class: "feed__sentinel", "aria-hidden": "true" });
 
   const heading = h(
     "header",
     { class: "shelf__head" },
     h("h1", { class: "shelf__title" }, "Your shelf"),
-    // The privacy fact, said where somebody is looking at the thing it applies
-    // to rather than only in a README they will never open.
-    h("p", { class: "shelf__line" }, "Kept in this browser, and nowhere else.")
+    // Said where somebody is looking at the thing it applies to rather than
+    // only in a README they will never open — and it has to say which of the
+    // two it is, because the answer changed when `saves` landed. Signed out
+    // this really is browser-only; signed in it is on the account and follows
+    // you. Printing the stronger claim in both cases would be the one
+    // dishonest sentence in the app.
+    h(
+      "p",
+      { class: "shelf__line" },
+      get("session")
+        ? "On your account, so it follows you between devices."
+        : "Kept in this browser, and nowhere else."
+    )
   );
 
   const root = h(
@@ -57,7 +76,10 @@ export function renderShelf({ isStale }) {
 
   const items = [];
   let cursor = 0;
-  let loading = false, controller = null, observer = null, errorBox = null;
+  let loading = false,
+    controller = null,
+    observer = null,
+    errorBox = null;
 
   const moreToFetch = () => cursor < ids.length;
 
@@ -69,7 +91,10 @@ export function renderShelf({ isStale }) {
 
   function renderTail() {
     if (!items.length && !moreToFetch()) {
-      setStatus("Nothing here yet. Open a post and press Save to keep it for later.", true);
+      setStatus(
+        "Nothing here yet. Open a post and press Save to keep it for later.",
+        true
+      );
     } else if (!moreToFetch()) {
       setStatus("That's everything you've saved.");
     } else {
@@ -92,7 +117,11 @@ export function renderShelf({ isStale }) {
       "div",
       { class: "feed__error" },
       h("p", {}, "Some of your saved posts didn't load."),
-      h("button", { class: "btn btn--ghost", type: "button", onclick: retry }, "Try again")
+      h(
+        "button",
+        { class: "btn btn--ghost", type: "button", onclick: retry },
+        "Try again"
+      )
     );
     root.append(errorBox);
   }
@@ -122,12 +151,10 @@ export function renderShelf({ isStale }) {
         // reads well and then has to be narrowed at every use; this is the
         // same information with one less thing for the reader to carry.
         slice.map((id) =>
-          api
-            .get(`/posts/${id}`, { signal: controller.signal })
-            .then(
-              (post) => ({ post, error: null, id }),
-              (error) => ({ post: null, error, id })
-            )
+          api.get(`/posts/${id}`, { signal: controller.signal }).then(
+            (post) => ({ post, error: null, id }),
+            (error) => ({ post: null, error, id })
+          )
         )
       );
       if (isStale()) return;

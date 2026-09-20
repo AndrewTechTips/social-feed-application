@@ -18,7 +18,9 @@
 // scroll, which is a number nobody can predict and therefore nobody trusts.
 
 import { api, ApiError } from "../api.js";
-import { h, mountView, relativeTime } from "../ui.js";
+import { h } from "../dom.js";
+import { relativeTime } from "../format.js";
+import { mountView } from "../view.js";
 import { get } from "../store.js";
 import { navigate, onLeavingScreen } from "../router.js";
 import { markAllSeen, refreshUnread } from "../notify.js";
@@ -30,8 +32,7 @@ let activeTeardown = null;
 
 /** One line: who, what they did, a piece of what they said, and where. */
 function notificationRow(row) {
-  const said =
-    row.kind === "reply" ? "replied to you" : "commented on your post";
+  const said = row.kind === "reply" ? "replied to you" : "commented on your post";
 
   return h(
     "li",
@@ -45,12 +46,7 @@ function notificationRow(row) {
         // line somebody has to aim at; this way the whole thing is the button,
         // which on a phone is the difference between one tap and three.
       },
-      h(
-        "p",
-        { class: "notice__who" },
-        h("strong", {}, row.actor.username),
-        ` ${said}`
-      ),
+      h("p", { class: "notice__who" }, h("strong", {}, row.actor.username), ` ${said}`),
       // What they actually said. Without it the line is "somebody replied to
       // you", which tells you nothing you can decide anything with — the first
       // few words are what makes it worth opening or not.
@@ -110,7 +106,10 @@ export function renderNotifications({ isStale }) {
     if (total === 0) {
       // An invitation rather than a shrug — and an honest one: the way to be
       // talked to is to say something first.
-      setStatus("Nothing yet. Say something on a post and this is where the answers land.", true);
+      setStatus(
+        "Nothing yet. Say something on a post and this is where the answers land.",
+        true
+      );
     } else if (!hasNext) {
       setStatus("That's everything.");
     } else {

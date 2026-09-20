@@ -4,7 +4,9 @@
 // on the feed able to post — the API hands back a token only from /login.
 
 import { api } from "../api.js";
-import { h, icon, mountView, toast } from "../ui.js";
+import { h, icon } from "../dom.js";
+import { toast } from "../toast.js";
+import { mountView } from "../view.js";
 import { get, setSession, setAccess } from "../store.js";
 import { navigate } from "../router.js";
 
@@ -29,13 +31,23 @@ const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_-]{2,19}$/;
 const USERNAME_HINT = "3–20 characters: letters, digits, - and _";
 
 const MARK = () =>
-  h("svg", { viewBox: "0 0 24 24", width: 26, height: 26, "aria-hidden": "true" },
-    h("circle", { cx: 12, cy: 12, r: 9, fill: "none", stroke: "currentColor", "stroke-width": 1.6 }),
+  h(
+    "svg",
+    { viewBox: "0 0 24 24", width: 26, height: 26, "aria-hidden": "true" },
+    h("circle", {
+      cx: 12,
+      cy: 12,
+      r: 9,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": 1.6,
+    }),
     h("circle", { cx: 12, cy: 10, r: 2.6, fill: "currentColor" }),
     h("path", {
       d: "M10.7 11.6 L9.6 16.2 A0.6 0.6 0 0 0 10.2 17 h3.6 a0.6 0.6 0 0 0 0.6-.8 L13.3 11.6 Z",
       fill: "currentColor",
-    }));
+    })
+  );
 
 /**
  * @param {object} spec
@@ -46,13 +58,27 @@ const MARK = () =>
  * @param {string | null} [spec.hint]  the line under the box, where there is one
  */
 function field({ id, label, type, autocomplete, hint }) {
-  const input = h("input", { id, class: "input", type, autocomplete, "aria-describedby": `${id}-err` });
+  const input = h("input", {
+    id,
+    class: "input",
+    type,
+    autocomplete,
+    "aria-describedby": `${id}-err`,
+  });
   const err = h("p", { class: "field__error", id: `${id}-err`, role: "alert" });
-  const wrap = h("div", { class: "field" }, h("label", { class: "field__label", for: id }, label));
+  const wrap = h(
+    "div",
+    { class: "field" },
+    h("label", { class: "field__label", for: id }, label)
+  );
 
   let mount = input;
   if (type === "password") {
-    const toggle = h("button", { class: "reveal", type: "button", "aria-label": "Show password" });
+    const toggle = h("button", {
+      class: "reveal",
+      type: "button",
+      "aria-label": "Show password",
+    });
     toggle.append(icon("eye"));
     toggle.addEventListener("click", () => {
       const showing = input.type === "text";
@@ -87,20 +113,36 @@ function screen(mode) {
         hint: USERNAME_HINT,
       })
     : null;
-  const email = field({ id: "email", label: "Email", type: "email", autocomplete: "email" });
+  const email = field({
+    id: "email",
+    label: "Email",
+    type: "email",
+    autocomplete: "email",
+  });
   const password = field({
-    id: "password", label: "Password", type: "password",
+    id: "password",
+    label: "Password",
+    type: "password",
     autocomplete: isRegister ? "new-password" : "current-password",
     hint: isRegister ? "At least 8 characters." : null,
   });
 
   const formError = h("p", { class: "form-error", role: "alert" });
-  const submit = h("button", { class: "btn btn--primary btn--block", type: "submit" },
-    isRegister ? "Create account" : "Sign in");
-  const form = h("form", { class: "auth__form", novalidate: true },
+  const submit = h(
+    "button",
+    { class: "btn btn--primary btn--block", type: "submit" },
+    isRegister ? "Create account" : "Sign in"
+  );
+  const form = h(
+    "form",
+    { class: "auth__form", novalidate: true },
     // The name people will see comes first; the address is a credential.
     username ? username.wrap : null,
-    email.wrap, password.wrap, formError, submit);
+    email.wrap,
+    password.wrap,
+    formError,
+    submit
+  );
 
   let pending = false;
 
@@ -113,21 +155,25 @@ function screen(mode) {
         !uv
           ? "Pick a username."
           : !USERNAME_RE.test(uv)
-          ? USERNAME_HINT + ", starting with a letter."
-          : ""
+            ? USERNAME_HINT + ", starting with a letter."
+            : ""
       );
     }
     email.setError(
-      !ev ? "Enter your email." : !EMAIL_RE.test(ev) ? "That doesn't look like an email." : ""
+      !ev
+        ? "Enter your email."
+        : !EMAIL_RE.test(ev)
+          ? "That doesn't look like an email."
+          : ""
     );
     password.setError(
       !pv
         ? "Enter a password."
         : isRegister && pv.length < 8
-        ? "Use at least 8 characters."
-        : isRegister && pv.length > 72
-        ? "That's too long — 72 characters max."
-        : ""
+          ? "Use at least 8 characters."
+          : isRegister && pv.length > 72
+            ? "That's too long — 72 characters max."
+            : ""
     );
     const bad = form.querySelector('[aria-invalid="true"]');
     if (bad) bad.focus();
@@ -212,24 +258,42 @@ function screen(mode) {
           err.status === 401
             ? "That email and password don't match."
             : err.status === 429
-            ? "Too many tries. Give it a minute."
-            : err.status === 0
-            ? "Can't reach the server. Is the backend running?"
-            : "That didn't go through. Try again?";
+              ? "Too many tries. Give it a minute."
+              : err.status === 0
+                ? "Can't reach the server. Is the backend running?"
+                : "That didn't go through. Try again?";
       }
     }
   });
 
-  const card = h("div", { class: "auth__card" },
+  const card = h(
+    "div",
+    { class: "auth__card" },
     h("div", { class: "auth__mark" }, MARK()),
-    h("h1", { class: "auth__title" }, isRegister ? "Make an account." : "Welcome back."),
-    h("p", { class: "auth__sub" },
-      isRegister ? "You just need an email and a password." : "Sign in to post and to upvote."),
+    h(
+      "h1",
+      { class: "auth__title" },
+      isRegister ? "Make an account." : "Welcome back."
+    ),
+    h(
+      "p",
+      { class: "auth__sub" },
+      isRegister
+        ? "You just need an email and a password."
+        : "Sign in to post and to upvote."
+    ),
     form,
-    h("p", { class: "auth__alt" },
+    h(
+      "p",
+      { class: "auth__alt" },
       isRegister ? "Already have one? " : "New here? ",
-      h("a", { href: isRegister ? "#/login" : "#/register" },
-        isRegister ? "Sign in" : "Create an account")));
+      h(
+        "a",
+        { href: isRegister ? "#/login" : "#/register" },
+        isRegister ? "Sign in" : "Create an account"
+      )
+    )
+  );
 
   const carried = isRegister ? "" : takeCarriedEmail();
   if (carried) email.input.value = carried;

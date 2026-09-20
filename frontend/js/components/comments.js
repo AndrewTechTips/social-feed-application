@@ -13,7 +13,9 @@
 // things is a refactor nobody can review.
 
 import { api } from "../api.js";
-import { h, avatar, relativeTime, fullTime, toast, skeletonBar } from "../ui.js";
+import { h, skeletonBar } from "../dom.js";
+import { toast } from "../toast.js";
+import { avatar, fullTime, relativeTime } from "../format.js";
 import { get } from "../store.js";
 
 // Mirrors schemas.COMMENT_MAX. The server is the one that decides; this is so
@@ -61,9 +63,10 @@ const COMMENTS_SKELETON_AFTER = 250;
  */
 export function prefetchComments(id) {
   const qs = new URLSearchParams({ page: "1", page_size: String(COMMENTS_PER_PAGE) });
-  return api
-    .get(`/posts/${encodeURIComponent(id)}/comments?${qs}`)
-    .then((data) => ({ data }), (error) => ({ error }));
+  return api.get(`/posts/${encodeURIComponent(id)}/comments?${qs}`).then(
+    (data) => ({ data }),
+    (error) => ({ error })
+  );
 }
 
 // — the conversation ---------------------------------------------------------
@@ -80,12 +83,15 @@ export function commentsFor(post, isStale, firstComments) {
   const count = h("span", { class: "comments__count" });
   const head = h("h2", { class: "comments__head" }, "Comments", count);
 
-  const root = h("section", { class: "comments", "aria-label": "Comments" },
+  const root = h(
+    "section",
+    { class: "comments", "aria-label": "Comments" },
     head,
     get("session") ? composer() : signInPrompt(),
     list,
     status,
-    tail);
+    tail
+  );
 
   let page = 0;
   // Conversations, which is what the pages are counted in — and separately the
@@ -125,7 +131,10 @@ export function commentsFor(post, isStale, firstComments) {
   let pending = firstComments;
   function firstPage() {
     if (!pending) {
-      const qs = new URLSearchParams({ page: "1", page_size: String(COMMENTS_PER_PAGE) });
+      const qs = new URLSearchParams({
+        page: "1",
+        page_size: String(COMMENTS_PER_PAGE),
+      });
       return api.get(`/posts/${post.id}/comments?${qs}`);
     }
     const claimed = pending;
@@ -179,9 +188,13 @@ export function commentsFor(post, isStale, firstComments) {
       tail.hidden = !data.has_next;
       tail.replaceChildren(
         data.has_next
-          ? h("button", { class: "btn btn--quiet", type: "button", onclick: load },
-              "More comments")
-          : null);
+          ? h(
+              "button",
+              { class: "btn btn--quiet", type: "button", onclick: load },
+              "More comments"
+            )
+          : null
+      );
       setStatus(total === 0 ? empty() : "");
     } catch (err) {
       if (isStale()) return;
@@ -189,10 +202,17 @@ export function commentsFor(post, isStale, firstComments) {
       setStatus("");
       tail.hidden = false;
       tail.replaceChildren(
-        h("div", { class: "feed__error" },
+        h(
+          "div",
+          { class: "feed__error" },
           h("p", {}, "Couldn't load the comments."),
-          h("button", { class: "btn btn--ghost", type: "button", onclick: load },
-            "Try again")));
+          h(
+            "button",
+            { class: "btn btn--ghost", type: "button", onclick: load },
+            "Try again"
+          )
+        )
+      );
     } finally {
       if (skeleton) clearTimeout(skeleton);
       loading = false;
@@ -211,19 +231,34 @@ export function commentsFor(post, isStale, firstComments) {
     const session = get("session");
     const mine = !!(session && comment.user && comment.user.id === session.id);
 
-    const meta = h("div", { class: "comment__meta" },
-      h("a", {
-        class: "comment__author",
-        href: `#/u/${encodeURIComponent(comment.user.username)}`,
-        title: `Everything by ${comment.user.username}`,
-      }, comment.user.username),
-      h("time", { datetime: comment.created_at, title: fullTime(comment.created_at) },
-        relativeTime(comment.created_at)));
+    const meta = h(
+      "div",
+      { class: "comment__meta" },
+      h(
+        "a",
+        {
+          class: "comment__author",
+          href: `#/u/${encodeURIComponent(comment.user.username)}`,
+          title: `Everything by ${comment.user.username}`,
+        },
+        comment.user.username
+      ),
+      h(
+        "time",
+        { datetime: comment.created_at, title: fullTime(comment.created_at) },
+        relativeTime(comment.created_at)
+      )
+    );
 
-    const body = h("div", { class: "comment__body" }, meta,
-      h("p", { class: "comment__text" }, comment.content));
+    const body = h(
+      "div",
+      { class: "comment__body" },
+      meta,
+      h("p", { class: "comment__text" }, comment.content)
+    );
 
-    const row = h("li",
+    const row = h(
+      "li",
       {
         class:
           "comment" +
@@ -231,7 +266,8 @@ export function commentsFor(post, isStale, firstComments) {
           (reply ? " comment--reply" : ""),
       },
       avatar(comment.user.username, "sm"),
-      body);
+      body
+    );
 
     // Nothing to remove until the server has given it an id, so a pending
     // comment doesn't offer the control at all.
@@ -265,14 +301,16 @@ export function commentsFor(post, isStale, firstComments) {
    */
   function replyControl(comment, sublist) {
     const slot = h("div", { class: "comment__replyform" });
-    const btn = h("button",
+    const btn = h(
+      "button",
       {
         class: "comment__reply",
         type: "button",
         "aria-expanded": "false",
         "aria-label": `Reply to ${comment.user.username}`,
       },
-      "Reply");
+      "Reply"
+    );
 
     const close = () => {
       slot.replaceChildren();
@@ -309,9 +347,11 @@ export function commentsFor(post, isStale, firstComments) {
   // thing it's protecting; a button that asks once is enough, and it lets go
   // again on Escape or as soon as you look somewhere else.
   function removeControl(comment, row) {
-    const btn = h("button",
+    const btn = h(
+      "button",
       { class: "comment__remove", type: "button", "aria-label": "Remove your comment" },
-      "Remove");
+      "Remove"
+    );
     let armed = false;
 
     const relax = () => {
@@ -375,16 +415,20 @@ export function commentsFor(post, isStale, firstComments) {
       maxlength: String(COMMENT_MAX + 200),
     });
     const counter = h("span", { class: "counter", "aria-live": "off" });
-    const submit = h("button", { class: "btn btn--primary", type: "submit" },
-      answering ? "Reply" : "Comment");
+    const submit = h(
+      "button",
+      { class: "btn btn--primary", type: "submit" },
+      answering ? "Reply" : "Comment"
+    );
 
     const paint = () => {
       const n = box.value.trim().length;
       // Silent until it matters: a counter that ticks from zero on an empty
       // box is telling you about a limit you're nowhere near.
-      counter.textContent = n > COMMENT_MAX * 0.8
-        ? `${n.toLocaleString()} / ${COMMENT_MAX.toLocaleString()}`
-        : "";
+      counter.textContent =
+        n > COMMENT_MAX * 0.8
+          ? `${n.toLocaleString()} / ${COMMENT_MAX.toLocaleString()}`
+          : "";
       counter.classList.toggle("counter--over", n > COMMENT_MAX);
     };
     box.addEventListener("input", paint);
@@ -392,15 +436,19 @@ export function commentsFor(post, isStale, firstComments) {
     const row = h("div", { class: "composer__row" }, counter, submit);
     if (answering) {
       // A way out that isn't "delete what you typed and click elsewhere".
-      const cancel = h("button",
+      const cancel = h(
+        "button",
         { class: "btn btn--quiet", type: "button", onclick: () => onDone && onDone() },
-        "Cancel");
+        "Cancel"
+      );
       row.append(cancel);
     }
-    const form = h("form",
+    const form = h(
+      "form",
       { class: "composer" + (answering ? " composer--reply" : ""), novalidate: true },
       box,
-      row);
+      row
+    );
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -420,9 +468,12 @@ export function commentsFor(post, isStale, firstComments) {
   }
 
   function signInPrompt() {
-    return h("p", { class: "composer__prompt" },
+    return h(
+      "p",
+      { class: "composer__prompt" },
       h("a", { href: "#/login" }, "Sign in"),
-      " to join in.");
+      " to join in."
+    );
   }
 
   // The optimistic bit. The comment goes on screen built from what we already
@@ -481,12 +532,18 @@ function skeletonComments(n) {
   const frag = document.createDocumentFragment();
   for (let i = 0; i < n; i++) {
     frag.append(
-      h("li", { class: "comment" },
+      h(
+        "li",
+        { class: "comment" },
         h("span", { class: "sk avatar avatar--sm" }),
-        h("div", { class: "comment__body" },
+        h(
+          "div",
+          { class: "comment__body" },
           skeletonBar({ width: "30%", height: "12px", marginBottom: "10px" }),
           h("span", { class: "sk sk--line" }),
-          h("span", { class: "sk sk--line sk--short" })))
+          h("span", { class: "sk sk--line sk--short" })
+        )
+      )
     );
   }
   return frag;

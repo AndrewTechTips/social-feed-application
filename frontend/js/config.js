@@ -59,9 +59,8 @@ async function demoBackend() {
   // The control surface the end-to-end suite drives. Declared on a widened
   // view of window rather than in a .d.ts, so there is still nothing here but
   // the files the browser loads.
-  /** @type {Window & { __commonsDemo?: unknown }} */ (
-    window
-  ).__commonsDemo = demo.control;
+  /** @type {Window & { __commonsDemo?: unknown }} */ (window).__commonsDemo =
+    demo.control;
   window.dispatchEvent(new CustomEvent("commons:demo-ready"));
   return demo;
 }

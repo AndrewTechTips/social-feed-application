@@ -247,6 +247,10 @@ class State:
         self.sessions: dict[str, dict] = {}
         self.posts: dict[int, dict] = {}  # id -> post row
         self.votes: set[tuple[str, int]] = set()  # (email, post_id)
+        # The shelf. A list rather than a set because a shelf has an order and
+        # a tally doesn't — most recently saved first, which is what the real
+        # `ix_saves_user_id_created_at` hands back without a sort.
+        self.saves: list[tuple[str, int]] = []  # (email, post_id), newest first
         self.comments: dict[int, dict] = {}  # id -> comment row
         # id -> {user_email, actor_email, comment_id, kind, created_at, read_at}
         self.notifications: dict[int, dict] = {}
@@ -397,6 +401,11 @@ class State:
             for cid in orphans:
                 self.comments.pop(cid, None)
         self.votes = {(e, pid) for (e, pid) in self.votes if e != email and pid not in mine}
+        # Both directions of the `saves` cascade: this person's shelf, and
+        # everyone else's saves of the posts that just went with them.
+        self.saves = [
+            (e, pid) for (e, pid) in self.saves if e != email and pid not in mine
+        ]
         self.sessions = {
             fam: row for fam, row in self.sessions.items() if row["email"] != email
         }
@@ -444,7 +453,7 @@ class State:
     ) -> dict:
         """One post in the shape PostOut describes.
 
-        `viewer` decides `voted` and nothing else. The count is the room's and
+        `viewer` decides `voted` and `saved` and nothing else. The count is the room's and
         the flag is the reader's: the same row answers differently for two
         people, which is why neither is stored on it.
 
@@ -465,6 +474,9 @@ class State:
             # False for a reader who isn't signed in, which is the truthful
             # answer rather than a missing one.
             "voted": viewer is not None and (viewer, row["id"]) in self.votes,
+            # Same terms as `voted`: a fact about the pair, false rather than
+            # missing for a reader who isn't signed in.
+            "saved": viewer is not None and (viewer, row["id"]) in self.saves,
             # Only when somebody asked a question; see headline() above.
             "excerpt": headline(row["content"], terms) if terms else None,
         }
@@ -901,6 +913,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._create_post(self._json())
         if path == "/vote/" and method == "POST":
             return self._vote(self._json())
+
+        if path == "/shelf" and method == "GET":
+            return self._get_shelf(query)
+
+        m = re.match(r"^/posts/(\d+)/save$", path)
+        if m:
+            pid = int(m.group(1))
+            if method == "PUT":
+                return self._save_post(pid)
+            if method == "DELETE":
+                return self._unsave_post(pid)
 
         m = re.match(r"^/posts/(\d+)/comments$", path)
         if m:
@@ -1417,8 +1440,89 @@ class Handler(BaseHTTPRequestHandler):
             )
         del ST.posts[pid]
         ST.votes = {(e, p) for (e, p) in ST.votes if p != pid}
+        # ON DELETE CASCADE on saves.post_id: a deleted post leaves nobody's
+        # shelf pointing at nothing.
+        ST.saves = [(e, p) for (e, p) in ST.saves if p != pid]
         ST.drop_comments_on_post(pid)
         self._send(204, None)
+
+    # — the shelf ------------------------------------------------------------
+    # Mirrors backend/app/routers/shelf.py, including the part that is easy to
+    # get wrong by being helpful: **saving is idempotent, both ways**. A shelf
+    # is a set, so the second press asks for the state you are already in, and
+    # neither direction is ever an error.
+    def _save_post(self, pid: int) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        row = ST.posts.get(pid)
+        # 404, not 403, for a draft that isn't yours — the same answer reading
+        # it gives, so the shelf can't be used to confirm one exists.
+        if not row or not self._may_see(row, email):
+            return self._send(404, {"detail": f"Post with id: {pid} was not found"})
+
+        if (email, pid) not in ST.saves:
+            ST.saves.insert(0, (email, pid))
+        self._send(204, None)
+
+    def _unsave_post(self, pid: int) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        # No 404 on this one, deliberately: the post not existing, you not
+        # being able to see it, and you not having saved it all end in the same
+        # place, which is that it is not on your shelf.
+        ST.saves = [(e, p) for (e, p) in ST.saves if not (e == email and p == pid)]
+        self._send(204, None)
+
+    def _get_shelf(self, query: dict) -> None:
+        email = self._require_auth()
+        if not email:
+            return
+        try:
+            page = max(1, int(query.get("page", ["1"])[0]))
+            page_size = int(query.get("page_size", ["10"])[0])
+        except ValueError:
+            return self._send(422, {"detail": "bad pagination"})
+        if not (1 <= page_size <= 100):
+            return self._send(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["query", "page_size"],
+                            "msg": "out of range",
+                            "type": "value_error",
+                        }
+                    ]
+                },
+            )
+
+        # Shelf order, and the visibility rule applied on read rather than
+        # cleaned up on write — so a post whose author has since unpublished it
+        # leaves the shelf without anything having to run.
+        rows = [
+            ST.posts[pid]
+            for (e, pid) in ST.saves
+            if e == email and pid in ST.posts and self._may_see(ST.posts[pid], email)
+        ]
+        total = len(rows)
+        pages = (total + page_size - 1) // page_size if total else 0
+        start = (page - 1) * page_size
+        self._send(
+            200,
+            {
+                "items": [
+                    ST.post_out(r, email) for r in rows[start : start + page_size]
+                ],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": pages,
+                "has_next": page < pages,
+                "has_prev": page > 1,
+            },
+        )
 
     # — comments -------------------------------------------------------------
     # Comments inherit the post's visibility whole: a draft you can't see has

@@ -141,6 +141,13 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      - name: Check formatting (prettier)
+        # The frontend half of the `black --check` in the backend job. Same
+        # arrangement deliberately: the formatter is a gate, not a commit hook
+        # that rewrites somebody's work while they are looking at it.
+        working-directory: frontend
+        run: npm run format:check
+
       - name: Repo measurements are up to date
         # The other half of the check in the backend job: this one has the
         # Playwright install and so can count the end-to-end tests, and has no
@@ -153,8 +160,18 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run end-to-end tests
+        # --ignore-snapshots covers exactly one file. tests/visual.spec.js
+        # compares screenshots, and Playwright names each baseline after the
+        # platform that recorded it, because macOS and Linux rasterise type
+        # differently enough that a shared baseline is not a strict test but a
+        # permanently failing one. So the visual specs still *run* here — every
+        # navigation, every control, every evaluate, so a screen that throws
+        # still turns this red — and only the pixel comparison is skipped, on a
+        # runner that has no baseline it could honestly compare against. The
+        # comparison is real where the design work happens: `npm run
+        # test:visual`. See the note at the top of that file.
         working-directory: frontend
-        run: npm test
+        run: npm test -- --ignore-snapshots
 
       - name: Lighthouse
         # Against the demo build, which is what the published site serves. The

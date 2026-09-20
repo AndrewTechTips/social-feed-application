@@ -4,7 +4,9 @@
 // for the server before we move on.
 
 import { api } from "../api.js";
-import { h, mountView, toast } from "../ui.js";
+import { h } from "../dom.js";
+import { toast } from "../toast.js";
+import { mountView } from "../view.js";
 import { readingMinutes } from "../reading.js";
 import { get, isMine, dropFeedCache } from "../store.js";
 import { navigate, onLeavingScreen } from "../router.js";
@@ -13,7 +15,13 @@ import { readDraft, saveDraft, clearDraft } from "../draft.js";
 const TITLE_MAX = 120;
 const CONTENT_MAX = 5000;
 const field = (id, label, control, err) =>
-  h("div", { class: "field" }, h("label", { class: "field__label", for: id }, label), control, err);
+  h(
+    "div",
+    { class: "field" },
+    h("label", { class: "field__label", for: id }, label),
+    control,
+    err
+  );
 
 /**
  * @param {object} spec
@@ -30,18 +38,28 @@ function buildForm({ mode, post }) {
   const edited = /** @type {import("../types.js").Post} */ (post);
 
   const title = h("input", {
-    id: "post-title", class: "input title-input", type: "text",
-    maxlength: String(TITLE_MAX + 20), placeholder: "A title",
-    value: start.title, "aria-describedby": "title-err",
+    id: "post-title",
+    class: "input title-input",
+    type: "text",
+    maxlength: String(TITLE_MAX + 20),
+    placeholder: "A title",
+    value: start.title,
+    "aria-describedby": "title-err",
   });
   const titleErr = h("p", { class: "field__error", id: "title-err", role: "alert" });
 
   const content = h("textarea", {
-    id: "post-content", class: "textarea",
-    placeholder: "Say what you're thinking.", "aria-describedby": "content-err",
+    id: "post-content",
+    class: "textarea",
+    placeholder: "Say what you're thinking.",
+    "aria-describedby": "content-err",
   });
   content.value = start.content;
-  const contentErr = h("p", { class: "field__error", id: "content-err", role: "alert" });
+  const contentErr = h("p", {
+    class: "field__error",
+    id: "content-err",
+    role: "alert",
+  });
 
   // What you have written, in the terms the card will describe it in.
   //
@@ -82,10 +100,13 @@ function buildForm({ mode, post }) {
   pub.addEventListener("change", () => {
     pubText.textContent = pub.checked ? "Publish now" : "Save as a draft";
   });
-  const toggle = h("label", { class: "switch" },
+  const toggle = h(
+    "label",
+    { class: "switch" },
     pub,
     h("span", { class: "switch__track" }, h("span", { class: "switch__thumb" })),
-    pubText);
+    pubText
+  );
 
   // ── the draft you were part-way through ──────────────────────────────────
   // New posts only. An edit already has somewhere to keep its words, and the
@@ -168,19 +189,31 @@ function buildForm({ mode, post }) {
   addEventListener("pagehide", flush);
   addEventListener("visibilitychange", flush);
 
-  const submit = h("button", { class: "btn btn--primary", type: "submit" },
-    editing ? "Save changes" : "Post");
-  const cancel = h("a",
-    { class: "btn btn--quiet", href: editing ? `#/posts/${edited.id}` : "#/" }, "Cancel");
+  const submit = h(
+    "button",
+    { class: "btn btn--primary", type: "submit" },
+    editing ? "Save changes" : "Post"
+  );
+  const cancel = h(
+    "a",
+    { class: "btn btn--quiet", href: editing ? `#/posts/${edited.id}` : "#/" },
+    "Cancel"
+  );
 
-  const form = h("form", { class: "compose", novalidate: true },
+  const form = h(
+    "form",
+    { class: "compose", novalidate: true },
     h("h1", { class: "compose__title" }, editing ? "Edit your post" : "New post"),
-    h("div", { class: "compose__panel" },
+    h(
+      "div",
+      { class: "compose__panel" },
       notice,
       field("post-title", "Title", title, titleErr),
       field("post-content", "Body", content, contentErr),
       h("div", { class: "compose__row" }, toggle, counter, limit),
-      h("div", { class: "compose__actions" }, cancel, submit)));
+      h("div", { class: "compose__actions" }, cancel, submit)
+    )
+  );
 
   let pending = false;
   const setPending = (on) => {
@@ -196,13 +229,13 @@ function buildForm({ mode, post }) {
     titleErr.textContent = !t
       ? "Give it a title."
       : t.length > TITLE_MAX
-      ? `Keep the title under ${TITLE_MAX} characters.`
-      : "";
+        ? `Keep the title under ${TITLE_MAX} characters.`
+        : "";
     contentErr.textContent = !c
       ? "Write something first."
       : c.length > CONTENT_MAX
-      ? "This is a bit long. Trim it down."
-      : "";
+        ? "This is a bit long. Trim it down."
+        : "";
     const bad = form.querySelector(".field__error:not(:empty)");
     if (bad) bad.previousElementSibling.focus();
     return !bad;
@@ -253,9 +286,11 @@ function buildForm({ mode, post }) {
       flush();
       if (err.status === 403) navigate(`/posts/${edited.id}`);
       else if (err.status !== 401) {
-        toast(err.status === 0
-          ? "Can't reach the server. Try again?"
-          : "That didn't go through. Try again?");
+        toast(
+          err.status === 0
+            ? "Can't reach the server. Try again?"
+            : "That didn't go through. Try again?"
+        );
       }
     }
   });
@@ -285,10 +320,21 @@ export async function renderEdit({ params, isStale }) {
   // to animate out of them again the moment the post lands is two pieces of
   // choreography spent on the gap between one screen and the same screen with
   // the words in it. The cross-fade mountView falls back to is enough.
-  mountView(h("section", { class: "compose" },
-    h("span", { class: "sk", style: { display: "block", width: "40%", height: "24px", marginBottom: "20px" } }),
-    h("span", { class: "sk", style: { display: "block", height: "220px", borderRadius: "18px" } })),
-    { transition: false });
+  mountView(
+    h(
+      "section",
+      { class: "compose" },
+      h("span", {
+        class: "sk",
+        style: { display: "block", width: "40%", height: "24px", marginBottom: "20px" },
+      }),
+      h("span", {
+        class: "sk",
+        style: { display: "block", height: "220px", borderRadius: "18px" },
+      })
+    ),
+    { transition: false }
+  );
 
   let post;
   try {

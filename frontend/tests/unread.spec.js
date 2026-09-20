@@ -89,7 +89,10 @@ test.describe("new since your last visit", () => {
     await expect(page.locator(BOOKMARK)).toHaveCount(0);
   });
 
-  test("counts what arrived, and draws the line where it stops", async ({ page, api }) => {
+  test("counts what arrived, and draws the line where it stops", async ({
+    page,
+    api,
+  }) => {
     await api.seed(5);
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(5);
@@ -98,7 +101,9 @@ test.describe("new since your last visit", () => {
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(5);
 
-    await expect(page.locator(SINCE)).toHaveText("Two new posts since you were last here.");
+    await expect(page.locator(SINCE)).toHaveText(
+      "Two new posts since you were last here."
+    );
 
     // Two cards, then the line, then the rest.
     const kinds = await page
@@ -115,7 +120,9 @@ test.describe("new since your last visit", () => {
 
     await plantVisit(page, await cutoffAfter(page, 1));
     await page.goto("/");
-    await expect(page.locator(SINCE)).toHaveText("One new post since you were last here.");
+    await expect(page.locator(SINCE)).toHaveText(
+      "One new post since you were last here."
+    );
   });
 
   test("nothing new says nothing at all", async ({ page, api }) => {
@@ -152,14 +159,18 @@ test.describe("new since your last visit", () => {
 
     await plantVisit(page, await cutoffAfter(page, 2));
     await page.goto("/");
-    await expect(page.locator(SINCE)).toHaveText("Two new posts since you were last here.");
+    await expect(page.locator(SINCE)).toHaveText(
+      "Two new posts since you were last here."
+    );
 
     // Reloading writes "you were last here a moment ago" on the way out. If
     // that were the value the next document read, F5 would quietly throw the
     // line away before the reader had done anything about it.
     await page.reload();
     await expect(page.locator(CARD)).toHaveCount(5);
-    await expect(page.locator(SINCE)).toHaveText("Two new posts since you were last here.");
+    await expect(page.locator(SINCE)).toHaveText(
+      "Two new posts since you were last here."
+    );
     await expect(page.locator(BOOKMARK)).toHaveCount(1);
   });
 
@@ -215,7 +226,9 @@ test.describe("new since your last visit", () => {
     await page.locator(".back").click();
     await expect(page.locator(CARD)).toHaveCount(5);
 
-    await expect(page.locator(SINCE)).toHaveText("Two new posts since you were last here.");
+    await expect(page.locator(SINCE)).toHaveText(
+      "Two new posts since you were last here."
+    );
     await expect(page.locator(BOOKMARK)).toHaveCount(1);
   });
 });
@@ -258,14 +271,19 @@ test.describe("read state", () => {
     await expect(page.locator(".card--read")).toHaveCount(0);
   });
 
-  test("it survives a reload, and says so to a screen reader", async ({ page, api }) => {
+  test("it survives a reload, and says so to a screen reader", async ({
+    page,
+    api,
+  }) => {
     await api.seed(3);
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(3);
 
     const ids = await page
       .locator(`${CARD} .card__link`)
-      .evaluateAll((els) => els.map((el) => Number(el.getAttribute("href").split("/").pop())));
+      .evaluateAll((els) =>
+        els.map((el) => Number(el.getAttribute("href").split("/").pop()))
+      );
     await plantRead(page, [ids[1]]);
     await page.goto("/");
     await expect(page.locator(CARD)).toHaveCount(3);
@@ -305,7 +323,9 @@ test.describe("the new furniture holds up", () => {
 
     const ids = await page
       .locator(`${CARD} .card__link`)
-      .evaluateAll((els) => els.map((el) => Number(el.getAttribute("href").split("/").pop())));
+      .evaluateAll((els) =>
+        els.map((el) => Number(el.getAttribute("href").split("/").pop()))
+      );
     await plantRead(page, [ids[0], ids[3]]);
     await plantVisit(page, await cutoffAfter(page, 2));
     await page.goto("/");
@@ -346,7 +366,8 @@ test.describe("the new furniture holds up", () => {
       await expect(page.locator(BOOKMARK)).toHaveCount(1);
 
       const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        () =>
+          document.documentElement.scrollWidth - document.documentElement.clientWidth
       );
       expect(overflow).toBeLessThanOrEqual(0);
 

@@ -20,7 +20,8 @@
 // same keys; skeletons are excluded because there is nothing to open yet.
 const CARDS = ".feed__list .card:not(.card--skeleton)";
 
-const cards = () => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(CARDS)]);
+const cards = () =>
+  /** @type {HTMLElement[]} */ ([...document.querySelectorAll(CARDS)]);
 
 /** Is there a list to move through on this screen? */
 export const hasCards = () => cards().length > 0;

@@ -19,14 +19,14 @@
 // place it had to compromise is making a claim a reviewer can check, and an app
 // that doesn't is making one they can't.
 
-import { h, mountView } from "../ui.js";
+import { h } from "../dom.js";
+import { mountView } from "../view.js";
 import { REPO_URL } from "../config.js";
 import { openPalette } from "../components/palette.js";
 
 const adr = (file) => `${REPO_URL}/blob/main/docs/adr/${file}`;
 
-const out = (href, text) =>
-  h("a", { href, target: "_blank", rel: "noopener" }, text);
+const out = (href, text) => h("a", { href, target: "_blank", rel: "noopener" }, text);
 
 /**
  * One row of the specification table: a figure and what it counts.
@@ -130,12 +130,7 @@ function decisions() {
       "ul",
       { class: "colophon__decisions" },
       rows.map(([title, why, file]) =>
-        h(
-          "li",
-          {},
-          h("h3", {}, out(adr(file), title)),
-          h("p", {}, why)
-        )
+        h("li", {}, h("h3", {}, out(adr(file), title)), h("p", {}, why))
       )
     )
   );
@@ -231,7 +226,9 @@ export async function renderColophon({ isStale }) {
   const root = h(
     "section",
     { class: "colophon" },
-    h("header", { class: "colophon__head" },
+    h(
+      "header",
+      { class: "colophon__head" },
       h("h1", { class: "colophon__title" }, "Colophon"),
       h(
         "p",
@@ -239,25 +236,39 @@ export async function renderColophon({ isStale }) {
         "The page at the back of a book names the type, the paper and the press. " +
           "This one names what Commons is made of, and what it is honest to say " +
           "about the copy you are looking at."
-      )),
+      )
+    ),
     stack(),
-    stats ? h("section", { class: "colophon__section" },
-      h("h2", {}, "What that comes to"),
-      figures(stats),
-      h("p", { class: "colophon__note" },
-        "Counted from the repository rather than typed here, and re-counted by CI, " +
-        "so a number that moved turns the build red instead of leaving this page lying.")
-    ) : null,
+    stats
+      ? h(
+          "section",
+          { class: "colophon__section" },
+          h("h2", {}, "What that comes to"),
+          figures(stats),
+          h(
+            "p",
+            { class: "colophon__note" },
+            "Counted from the repository rather than typed here, and re-counted by CI, " +
+              "so a number that moved turns the build red instead of leaving this page lying."
+          )
+        )
+      : null,
     decisions(),
     honest(),
     keyboard(),
-    h("footer", { class: "colophon__foot" },
-      h("p", {},
+    h(
+      "footer",
+      { class: "colophon__foot" },
+      h(
+        "p",
+        {},
         "All of it, including the parts this page is too short for, is in ",
         out(REPO_URL, "the repository"),
         " — the ",
         out(`${REPO_URL}/tree/main/docs/adr`, "decision records"),
-        " are the best of it."))
+        " are the best of it."
+      )
+    )
   );
 
   mountView(root);

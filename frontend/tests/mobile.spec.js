@@ -42,7 +42,10 @@ const transparent = (color) =>
 test.describe("tap highlight", () => {
   test.use(phone(390));
 
-  test("nothing tappable flashes the browser's default blue box", async ({ page, api }) => {
+  test("nothing tappable flashes the browser's default blue box", async ({
+    page,
+    api,
+  }) => {
     await api.seed(3, "ada@commons.test");
     await page.goto("/");
     await expect(page.locator(CARD).first()).toBeVisible();
@@ -50,7 +53,8 @@ test.describe("tap highlight", () => {
     // -webkit-tap-highlight-color inherits, so html is the only place that has
     // to set it — but assert on the things a finger actually lands on.
     const colors = await page.evaluate(() => {
-      const read = (el) => (el ? getComputedStyle(el).webkitTapHighlightColor : "MISSING");
+      const read = (el) =>
+        el ? getComputedStyle(el).webkitTapHighlightColor : "MISSING";
       return {
         html: read(document.documentElement),
         body: read(document.body),
@@ -185,7 +189,10 @@ test.describe("press feedback on touch", () => {
     await expect(page.locator(CARD).first()).toBeVisible();
   }
 
-  test("the vote control visibly presses under a finger", async ({ page, api }, info) => {
+  test("the vote control visibly presses under a finger", async ({
+    page,
+    api,
+  }, info) => {
     await onTheFeed(page, api);
 
     const { resting, pressed, released } = await pressedStyle(page, ".vote");
@@ -215,7 +222,11 @@ test.describe("press feedback on touch", () => {
 
     // The card tints, the link inside it is what takes :active — hence the
     // separate sample target, and hence `.card:has(.card__link:active)`.
-    const { resting, pressed, released } = await pressedStyle(page, ".card__link", CARD);
+    const { resting, pressed, released } = await pressedStyle(
+      page,
+      ".card__link",
+      CARD
+    );
     expect(pressed.bg, "the card gave no sign it had been tapped").not.toBe(resting.bg);
     expect(pressed.border, "the card's edge should firm up under a finger").not.toBe(
       resting.border
@@ -248,16 +259,27 @@ test.describe("press feedback on touch", () => {
     expect(mq).toEqual({ hoverNone: true, pointerCoarse: true });
 
     // let the card entrance animation finish, or its translateY reads as a lift
-    await page.locator(CARD).first().evaluate((el) =>
-      Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})))
-    );
+    await page
+      .locator(CARD)
+      .first()
+      .evaluate((el) =>
+        Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})))
+      );
 
     // the card's lift + blur is hover-only, so it must not be in effect here
-    const card = await page.locator(CARD).first().evaluate((el) => {
-      const s = getComputedStyle(el);
-      return { transform: s.transform, blur: s.backdropFilter || s.webkitBackdropFilter };
-    });
-    expect(card.transform === "none" || card.transform === "matrix(1, 0, 0, 1, 0, 0)").toBe(true);
+    const card = await page
+      .locator(CARD)
+      .first()
+      .evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          transform: s.transform,
+          blur: s.backdropFilter || s.webkitBackdropFilter,
+        };
+      });
+    expect(
+      card.transform === "none" || card.transform === "matrix(1, 0, 0, 1, 0, 0)"
+    ).toBe(true);
     expect(card.blur).toBe("none");
   });
 });
@@ -274,14 +296,19 @@ test.describe("form controls never trip iOS zoom-on-focus", () => {
 
       const sizes = async (label) => {
         const found = await page.evaluate(() =>
-          [...document.querySelectorAll(".input, .textarea, .search__input")].map((el) => ({
-            id: el.id || el.className,
-            fontSize: parseFloat(getComputedStyle(el).fontSize),
-          }))
+          [...document.querySelectorAll(".input, .textarea, .search__input")].map(
+            (el) => ({
+              id: el.id || el.className,
+              fontSize: parseFloat(getComputedStyle(el).fontSize),
+            })
+          )
         );
         expect(found.length, `no fields found on ${label}`).toBeGreaterThan(0);
         for (const f of found) {
-          expect(f.fontSize, `${label}: ${f.id} renders at ${f.fontSize}px`).toBeGreaterThanOrEqual(16);
+          expect(
+            f.fontSize,
+            `${label}: ${f.id} renders at ${f.fontSize}px`
+          ).toBeGreaterThanOrEqual(16);
         }
       };
 
@@ -302,7 +329,10 @@ test.describe("form controls never trip iOS zoom-on-focus", () => {
     });
   }
 
-  test("a phone held in landscape is still 16px, wide as it is", async ({ browser, api }) => {
+  test("a phone held in landscape is still 16px, wide as it is", async ({
+    browser,
+    api,
+  }) => {
     await api.seed(3, "ada@commons.test");
     // 844px wide — past every mobile width breakpoint, but still a phone. This
     // is the case a width-only media query silently misses.
@@ -339,7 +369,10 @@ test.describe("form controls never trip iOS zoom-on-focus", () => {
 // ── the signed-in header ───────────────────────────────────────────────────
 test.describe("the header fits while signed in", () => {
   for (const width of PHONE_WIDTHS) {
-    test(`no horizontal overflow at ${width}px when signed in`, async ({ browser, api }) => {
+    test(`no horizontal overflow at ${width}px when signed in`, async ({
+      browser,
+      api,
+    }) => {
       const seeded = await api.seed(4, "ada@commons.test");
       const { created } = await seeded.json();
       const context = await browser.newContext(phone(width));
@@ -349,7 +382,10 @@ test.describe("the header fits while signed in", () => {
       for (const route of ["/", `/#/posts/${created[0]}`, "/#/compose"]) {
         await page.goto(route);
         await page.waitForTimeout(300);
-        expect(await overflowOf(page), `${route} overflowed at ${width}px`).toBeLessThanOrEqual(1);
+        expect(
+          await overflowOf(page),
+          `${route} overflowed at ${width}px`
+        ).toBeLessThanOrEqual(1);
       }
 
       await context.close();
@@ -370,7 +406,10 @@ test.describe("the header fits while signed in", () => {
     // The regression: at 320px the labelled Write / Sign out buttons pushed the
     // theme toggle clean off the right edge, where it could not be tapped.
     const controls = [
-      ["the theme toggle", page.getByRole("button", { name: /switch to (light|dark) theme/i })],
+      [
+        "the theme toggle",
+        page.getByRole("button", { name: /switch to (light|dark) theme/i }),
+      ],
       ["Write a post", page.getByRole("link", { name: "Write a post" })],
       ["Sign out", page.getByRole("button", { name: "Sign out" })],
     ];
@@ -378,7 +417,9 @@ test.describe("the header fits while signed in", () => {
       await expect(control).toBeVisible();
       const box = await control.boundingBox();
       expect(box.x, `${name} starts off the left edge`).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width, `${name} runs past the right edge`).toBeLessThanOrEqual(320);
+      expect(box.x + box.width, `${name} runs past the right edge`).toBeLessThanOrEqual(
+        320
+      );
       expect(box.height, `${name} is too small to tap`).toBeGreaterThanOrEqual(44);
       expect(box.width, `${name} is too narrow to tap`).toBeGreaterThanOrEqual(44);
     }
@@ -402,7 +443,11 @@ test.describe("the compose form works at 320px", () => {
     await expect(title).toBeVisible();
 
     // nothing is clipped horizontally, and the body box is worth writing in
-    for (const [label, locator] of [["title", title], ["body", body], ["Post", post]]) {
+    for (const [label, locator] of [
+      ["title", title],
+      ["body", body],
+      ["Post", post],
+    ]) {
       const box = await locator.boundingBox();
       expect(box.x, `${label} starts off-screen`).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width, `${label} runs off-screen`).toBeLessThanOrEqual(320);
@@ -425,7 +470,10 @@ test.describe("the compose form works at 320px", () => {
 
     await title.fill("Written on a small phone");
     await body.fill("Three hundred and twenty pixels wide.");
-    expect(await overflowOf(page), "typing pushed the layout sideways").toBeLessThanOrEqual(1);
+    expect(
+      await overflowOf(page),
+      "typing pushed the layout sideways"
+    ).toBeLessThanOrEqual(1);
 
     await post.click();
     await expect(
@@ -451,7 +499,9 @@ test.describe("the compose form works at 320px", () => {
     expect(await overflowOf(page)).toBeLessThanOrEqual(1);
     for (const name of ["Keep it", "Delete"]) {
       const box = await confirm.getByRole("button", { name }).boundingBox();
-      expect(box.x + box.width, `${name} runs off the right edge`).toBeLessThanOrEqual(320);
+      expect(box.x + box.width, `${name} runs off the right edge`).toBeLessThanOrEqual(
+        320
+      );
       expect(box.height, `${name} is too small to tap`).toBeGreaterThanOrEqual(44);
     }
 
@@ -465,14 +515,19 @@ test.describe("the stylesheets keep their mobile guarantees", () => {
     fs
       .readdirSync(STYLE_DIR)
       .filter((f) => f.endsWith(".css"))
-      .map((f) => ({ file: f, text: fs.readFileSync(path.join(STYLE_DIR, f), "utf8") }));
+      .map((f) => ({
+        file: f,
+        text: fs.readFileSync(path.join(STYLE_DIR, f), "utf8"),
+      }));
 
   test("no bare 100vh — mobile browser chrome makes it lie", async () => {
     // vh is frozen at the largest viewport, so a 100vh box is taller than the
     // screen whenever the URL bar is showing, and the page jumps as it hides.
     for (const { file, text } of css()) {
       const offenders = text.match(/\b\d+vh\b/g) || [];
-      expect(offenders, `${file} uses vh where it means the visible viewport`).toEqual([]);
+      expect(offenders, `${file} uses vh where it means the visible viewport`).toEqual(
+        []
+      );
     }
   });
 
@@ -482,8 +537,12 @@ test.describe("the stylesheets keep their mobile guarantees", () => {
   });
 
   test("the sticky header respects the notch", async () => {
-    const all = css().map((c) => c.text).join("\n");
-    expect(all, "viewport-fit=cover paints under the status bar; the header must inset for it")
-      .toMatch(/safe-area-inset-top/);
+    const all = css()
+      .map((c) => c.text)
+      .join("\n");
+    expect(
+      all,
+      "viewport-fit=cover paints under the status bar; the header must inset for it"
+    ).toMatch(/safe-area-inset-top/);
   });
 });

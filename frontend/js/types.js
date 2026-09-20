@@ -71,9 +71,13 @@
  * @property {number} votes  how many the room gave it
  * @property {boolean} voted whether *this* reader is one of them — a property
  *   of the pair rather than of the post, and false for anybody signed out
+ * @property {boolean} [saved] whether this post is on the reader's shelf. Same
+ *   terms as `voted`, and optional here rather than required because the local
+ *   shelf mirror in js/shelf.js is what the card actually draws from — this is
+ *   what a *sync* reads, not what a render depends on
  * @property {string | null} [excerpt] the sentence a search matched on, with
  *   the matches wrapped in two control characters. Null unless the caller
- *   searched. **Not HTML** — see highlighted() in ui.js, which is the only
+ *   searched. **Not HTML** — see highlighted() in components/card.js, which is the only
  *   thing allowed to read it.
  */
 

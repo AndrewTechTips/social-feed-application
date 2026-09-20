@@ -9,7 +9,8 @@ from backend.app.config import settings, API_PREFIX
 from backend.app.main import app
 from backend.app.oauth2 import create_access_token
 
-SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name}_test"
+# The same connection the app uses, against the `_test` database beside it.
+SQLALCHEMY_DATABASE_URL = settings.database_url("_test")
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

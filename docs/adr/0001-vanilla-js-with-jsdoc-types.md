@@ -1,6 +1,6 @@
 # 0001 — Vanilla JS with JSDoc types, not TypeScript
 
-**Status:** accepted · 2026-09-14
+**Status:** accepted · 2026-09-14 · amended 2026-09-20 (see *The trigger fired*)
 
 ## What was decided
 
@@ -64,3 +64,56 @@ Written down so it's a plan and not a excuse:
 
 Any of those, and the right move is real TypeScript with a build step — at
 which point this file should be superseded rather than edited.
+
+## The trigger fired, and we are not acting on it (2026-09-20)
+
+The line count is **8,165**, against a trigger written at 3,000. Nearly three
+times over. This section exists because an ADR with a trigger that quietly
+fired and was ignored is worse than an ADR with no trigger at all: the next
+person to read it can run the command above, and what they find should be a
+decision rather than a silence.
+
+**The decision: stay on JSDoc. No TypeScript, no build step.**
+
+The reasoning, and it is not "we didn't get round to it":
+
+- **3,000 was a guess at a cost, not a measurement of one.** What it was really
+  asking was *when does passing untyped objects around start to hurt*. Six
+  features have landed since — comments, replies, notifications, the shelf, the
+  colophon, a service worker — and `tsc --noEmit` has been green through all of
+  them, in CI, on every push. The number went up; the pain the number was
+  standing in for did not arrive.
+- **The second trigger is the one that measures the real thing, and it has not
+  fired.** "The JSDoc casts start outnumbering the code they're annotating in
+  any one file" is a direct reading of whether the annotations have become the
+  work. The densest file in the tree is `store.js` at eighteen JSDoc tags
+  across 300 lines. That is documentation, not ceremony.
+- **A third of the count is not the kind of code the trigger meant.**
+  `js/demo/backend.js` was already excluded, but `sw.js`, the type definitions
+  themselves and several hundred lines of explanatory comment are all in the
+  8,165. The app did not get harder to hold in your head; it got more
+  thoroughly written down.
+- **What a migration would actually cost is still the thing this ADR was
+  written about.** A bundler puts a `dist/` between the source somebody reads
+  and the thing that runs, and "open `index.html` and it runs" stops being
+  true. That was the argument in 2026-09-14 and nothing since has weakened it.
+
+**What changes.** The 3,000-line trigger is **retired**, because a threshold
+that has been crossed and consciously declined is no longer a threshold — it is
+a number someone will have to explain again in six months. The other two stand,
+and they are the ones that were measuring the right thing all along:
+
+- **A second person** starts contributing regularly.
+- The JSDoc casts start outnumbering the code they're annotating in any one
+  file.
+
+To those, one replacement for the line count that is about difficulty rather
+than about size:
+
+- **`tsc --noEmit` stops being able to describe something the app actually
+  does**, and the workaround is a cast that asserts what the code is pointedly
+  not assuming. One of those is a bad afternoon; a habit of them means the
+  types have stopped helping and a real type system is owed.
+
+If any of those fire, this file is superseded rather than edited — same as
+before.

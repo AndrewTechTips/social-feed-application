@@ -17,7 +17,8 @@
 // selection happens rather than being handed one. Same arrangement as the feed
 // keys, and for the same reason — a component with no lifecycle cannot leak one.
 
-import { h, toast } from "../ui.js";
+import { h } from "../dom.js";
+import { toast } from "../toast.js";
 
 const CONTENT = ".detail__content";
 
@@ -59,7 +60,10 @@ export function wireQuote() {
     if (!content) return null;
     // Both ends inside the post. A selection that started in the byline and
     // ended in the body is not a quote from anything.
-    if (!content.contains(selection.anchorNode) || !content.contains(selection.focusNode)) {
+    if (
+      !content.contains(selection.anchorNode) ||
+      !content.contains(selection.focusNode)
+    ) {
       return null;
     }
     return { text, rect: selection.getRangeAt(0).getBoundingClientRect(), content };

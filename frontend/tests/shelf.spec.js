@@ -1,10 +1,13 @@
 // The shelf: saving a post, finding the shelf, and what happens to a saved
 // post that stops existing.
 //
-// Like read state, this has no backend — js/shelf.js keeps ids in
-// localStorage — so both projects run the same code. What differs, and what is
-// worth running twice, is the fetching: the shelf screen asks for each saved
-// post by id, and the two implementations answer that separately.
+// It used to have no backend at all. It has one now: signed in, `saves` on the
+// server is the truth and `commons.shelf` is a local mirror of it, which is
+// what keeps `isShelved` answerable on every card without a request. Signed
+// out, it is exactly what it always was — one key in localStorage, sent
+// nowhere. Both halves are below, and the seam between them (signing in
+// *merges* rather than replaces) is the part most worth testing, because it is
+// the one where a reader could lose something.
 
 const AxeBuilder = require("@axe-core/playwright").default;
 const { test, expect, CARD, settled } = require("./support/fixtures");
@@ -51,7 +54,9 @@ async function openCard(page, index) {
 const idsOnScreen = (page) =>
   page
     .locator(`${CARD} .card__link`)
-    .evaluateAll((els) => els.map((el) => Number(el.getAttribute("href").split("/").pop())));
+    .evaluateAll((els) =>
+      els.map((el) => Number(el.getAttribute("href").split("/").pop()))
+    );
 
 // ── saving ─────────────────────────────────────────────────────────────────
 test("saving a post says so, and opens a way to the shelf", async ({ page, api }) => {
@@ -110,7 +115,10 @@ test("it survives a reload, and does not need an account", async ({ page, api })
 });
 
 // ── the shelf screen ───────────────────────────────────────────────────────
-test("the shelf is a feed of what you saved, newest save first", async ({ page, api }) => {
+test("the shelf is a feed of what you saved, newest save first", async ({
+  page,
+  api,
+}) => {
   await api.seed(3);
   await page.goto("/");
   await expect(page.locator(CARD)).toHaveCount(3);
@@ -261,8 +269,174 @@ test.describe("at 320px", () => {
     const row = await page.evaluate(() => {
       const el = document.querySelector(".detail__row");
       const r = el.getBoundingClientRect();
-      return { right: Math.round(r.right), width: Math.round(document.documentElement.clientWidth) };
+      return {
+        right: Math.round(r.right),
+        width: Math.round(document.documentElement.clientWidth),
+      };
     });
     expect(row.right).toBeLessThanOrEqual(row.width);
   });
+});
+
+// ── the account's half ──────────────────────────────────────────────────────
+// Everything above is about a shelf in a browser. These are about the one on
+// the server, and about the moment the two meet.
+
+const ACCOUNT = { email: "mira@commons.test", password: "seedpassword" };
+
+/**
+ * What the *server* thinks is on this account's shelf.
+ *
+ * `shelfIds` reads the local mirror, which is written optimistically — so it
+ * says yes the instant the control is pressed and long before anything has been
+ * recorded. Every test below that then throws the mirror away has to know the
+ * write actually landed first, or it is racing its own setup.
+ *
+ * Asked through the app's own API client rather than with a fetch of our own,
+ * so this works unchanged against both projects: in demo mode `api.get` goes to
+ * js/demo/backend.js in the same window, and against the mock it goes over HTTP
+ * with whatever token the app is holding. `background` so a 401 here can never
+ * move the page out from under the test.
+ */
+const onTheServer = (page) =>
+  page.evaluate(async () => {
+    const { api } = await import("/js/api.js");
+    const res = await api.get("/shelf", { background: true });
+    return res.items.map((post) => post.id);
+  });
+
+/** Seed `n` posts and come back with their ids, newest first. */
+async function seedPosts(page, api, n) {
+  await api.seed(n, "ada@commons.test");
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(n);
+  return idsOnScreen(page);
+}
+
+/**
+ * Sign in the way a reader does, through the form.
+ *
+ * Not `api.signIn`, and the difference matters for exactly one test. Against
+ * demo mode that fixture reinstalls the Node-side copy of the demo state as an
+ * init script, which is right for setting a test up and wrong once the *page*
+ * has written something the Node-side copy has never heard of — it would
+ * replace the page's state and take that write with it. Filling the form leaves
+ * whatever the page has alone, which is also what actually happens to a reader.
+ */
+async function signInWithForm(page, { email, password }) {
+  await page.goto("/#/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(/#\/$/);
+}
+
+async function signOut(page) {
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+}
+
+test("signing in merges this browser's shelf into the account's", async ({
+  page,
+  api,
+}) => {
+  await api.register(ACCOUNT.email, ACCOUNT.password, "mira");
+  const [newer, older] = await seedPosts(page, api, 2);
+
+  // One saved from "another device" — on the account, and then signed out of,
+  // so this browser's mirror no longer holds it.
+  await api.signIn(page, ACCOUNT.email, ACCOUNT.password);
+  await page.goto(`/#/posts/${older}`);
+  await page.locator(SAVE).click();
+  await expect.poll(() => onTheServer(page)).toEqual([older]);
+  await signOut(page);
+  expect(await shelfIds(page)).toEqual([]);
+
+  // And one saved right here, signed out, which lives only in localStorage.
+  await page.goto(`/#/posts/${newer}`);
+  await page.locator(SAVE).click();
+  expect(await shelfIds(page)).toEqual([newer]);
+
+  await signInWithForm(page, ACCOUNT);
+
+  // A union, not a replacement. Losing the save you made a minute ago because
+  // you signed in is the one outcome that would make this feature feel unsafe.
+  await expect
+    .poll(async () => (await shelfIds(page)).slice().sort())
+    .toEqual([newer, older].sort());
+});
+
+test("a save made while signed in survives losing the local mirror", async ({
+  page,
+  api,
+}) => {
+  await api.register(ACCOUNT.email, ACCOUNT.password, "mira");
+  const [first] = await seedPosts(page, api, 1);
+  await api.signIn(page, ACCOUNT.email, ACCOUNT.password);
+
+  await page.goto(`/#/posts/${first}`);
+  await page.locator(SAVE).click();
+  // The server's copy, not the mirror's — the mirror says yes optimistically,
+  // and clearing it before the write landed would be racing our own setup.
+  await expect.poll(() => onTheServer(page)).toEqual([first]);
+
+  // The whole point of the server half. Clearing the mirror is what a second
+  // device looks like from here: same account, nothing cached.
+  await page.evaluate(() => {
+    localStorage.removeItem("commons.shelf");
+    localStorage.removeItem("commons.shelf.owner");
+  });
+  await page.reload();
+
+  await expect.poll(() => shelfIds(page)).toEqual([first]);
+});
+
+test("signing out takes an account's shelf off this browser", async ({ page, api }) => {
+  await api.register(ACCOUNT.email, ACCOUNT.password, "mira");
+  const [first] = await seedPosts(page, api, 1);
+  await api.signIn(page, ACCOUNT.email, ACCOUNT.password);
+
+  await page.goto(`/#/posts/${first}`);
+  await page.locator(SAVE).click();
+  await expect.poll(() => onTheServer(page)).toEqual([first]);
+
+  await signOut(page);
+
+  // Somebody else's reading list should not be sitting on a shared machine
+  // after they have left.
+  await expect.poll(() => shelfIds(page)).toEqual([]);
+});
+
+test("signing out leaves a shelf that was never an account's", async ({
+  page,
+  api,
+}) => {
+  const [first] = await seedPosts(page, api, 1);
+
+  // Saved signed out, and nobody ever signed in — so this belongs to the
+  // browser, and nothing about a session should empty it.
+  await plantShelf(page, [first]);
+  await gotoPlanted(page, "/#/");
+  expect(await shelfIds(page)).toEqual([first]);
+
+  await page.reload();
+  expect(await shelfIds(page)).toEqual([first]);
+});
+
+test("a save the server refuses puts the control back", async ({ page, api }) => {
+  await api.register(ACCOUNT.email, ACCOUNT.password, "mira");
+  const [first] = await seedPosts(page, api, 1);
+  await api.signIn(page, ACCOUNT.email, ACCOUNT.password);
+  await page.goto(`/#/posts/${first}`);
+
+  const control = page.locator(SAVE);
+  await expect(control).toHaveAttribute("aria-pressed", "false");
+
+  await api.failNext({ method: "PUT", path: "/posts/\\d+/save", status: 500 });
+  await control.click();
+
+  // Optimistic on the way in and rolled back when the request lands badly —
+  // the same contract the vote control has had since the beginning.
+  await expect(control).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => shelfIds(page)).toEqual([]);
 });

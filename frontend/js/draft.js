@@ -79,10 +79,7 @@ export function saveDraft(who, fields) {
   // wrote would leave a draft behind that the next visit offers to restore.
   if (!fields.title.trim() && !fields.content.trim()) return clearDraft();
   try {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({ who, ...fields, at: Date.now() })
-    );
+    localStorage.setItem(KEY, JSON.stringify({ who, ...fields, at: Date.now() }));
   } catch (e) {
     /* storage disabled, or full — the composer still works, it just forgets */
   }

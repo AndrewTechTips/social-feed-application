@@ -2,6 +2,9 @@
 // Hash router. Patterns use :name for segments. Handlers get { params, isStale }
 // where isStale() tells a slow async handler that the user has since navigated on.
 
+import { h } from "./dom.js";
+import { mountView } from "./view.js";
+
 const routes = [];
 let generation = 0;
 
@@ -132,13 +135,76 @@ async function resolve() {
     try {
       await handler({ params, query, isStale });
     } catch (err) {
-      if (!isStale()) console.error(err);
+      // The screen that was being built isn't coming. Everything below is
+      // about what the reader is left looking at.
+      if (isStale()) return;
+      console.error(err);
+      mountScreenError(err);
     }
     return;
   }
 
   // nothing matched — send them home
   navigate("/");
+}
+
+/**
+ * What a reader sees when a view throws.
+ *
+ * Until this existed, a throw inside a handler was caught, written to the
+ * console, and that was all — which left **the previous screen on the page**,
+ * still interactive, with the address bar naming a screen that never rendered.
+ * Pressing back from there went somewhere that looked identical. The failure
+ * mode of an error nobody handles should not be a page that lies about which
+ * page it is.
+ *
+ * Deliberately not a toast: a toast is for something that happened *beside*
+ * what you were doing, and this is the thing you were doing. The screen is
+ * where the failure is, so the screen is where it is reported.
+ *
+ * Two ways out, because there are two different failures underneath. "Try
+ * again" re-runs the same route, which is the right answer for anything
+ * transient — a dropped request, a race on a slow connection. "Go to the feed"
+ * is for the other kind, where this screen is simply not going to build, and
+ * it is a plain link rather than a button so it works even if the handler that
+ * threw left something in a bad state.
+ *
+ * The message itself is not shown. It is a stack trace or a driver's idea of
+ * what went wrong, it is written to the console two lines up for whoever wants
+ * it, and putting it on the page in the reading face would be neither useful
+ * to a reader nor honest about how much we know.
+ *
+ * @param {unknown} err
+ */
+function mountScreenError(err) {
+  const retry = h(
+    "button",
+    { class: "btn btn--quiet", type: "button", onclick: () => resolve() },
+    "Try again"
+  );
+
+  mountView(
+    h(
+      "section",
+      { class: "screen-error", "aria-label": "This screen didn't load" },
+      h("h1", { class: "screen-error__title" }, "This screen didn't load."),
+      h(
+        "p",
+        { class: "screen-error__line" },
+        "Something went wrong putting it together. Nothing you did is lost."
+      ),
+      h(
+        "div",
+        { class: "screen-error__actions" },
+        retry,
+        h("a", { class: "btn btn--ghost", href: "#/" }, "Go to the feed")
+      )
+    ),
+    // Not a journey and not an arrival — the screen the reader asked for did
+    // not happen. The quiet cross-fade says that better than a page that rises
+    // into place as though it had been fetched.
+    { transition: false }
+  );
 }
 
 export function startRouter() {

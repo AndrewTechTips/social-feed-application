@@ -193,6 +193,59 @@ export function setTextSize(next) {
 /** The names, in order, for a control that steps through them. */
 export const textSizes = () => SIZES.slice();
 
+// — the measure ---------------------------------------------------------------
+//
+// The other half of §5.2, and the one that shipped four days late.
+//
+// Size and measure are the two numbers a reading room ought to let you set,
+// and they are not the same kind of choice. Size is about your eyes and is the
+// one people reach for; measure is about how far the eye travels back to find
+// the start of the next line, and it is the one nobody knows they want until
+// they try the other setting once.
+//
+// **Two steps, not four, and no slider.** That restraint is written down in
+// the plan this comes from, and the reason is that the design system already
+// decided what a good measure is — 66ch, chosen with the face and the size
+// together. What this offers is not "any width" but "the one the type system
+// picked, or a narrower one for a long sitting". A slider would invite
+// somebody to set 90ch and conclude the typography was bad.
+//
+// Stored and applied exactly like the size, including the pre-paint bootstrap
+// in index.html, because a column that reflows one frame after it renders is
+// the same broken promise a resizing font is.
+const MEASURE_KEY = "commons.measure";
+const MEASURES = ["normal", "narrow"];
+const DEFAULT_MEASURE = "normal";
+
+/** @returns {string} */
+export function measure() {
+  try {
+    const raw = localStorage.getItem(MEASURE_KEY);
+    return MEASURES.includes(String(raw)) ? String(raw) : DEFAULT_MEASURE;
+  } catch (e) {
+    return DEFAULT_MEASURE;
+  }
+}
+
+/** @param {string} next */
+export function setMeasure(next) {
+  const value = MEASURES.includes(next) ? next : DEFAULT_MEASURE;
+  document.documentElement.dataset.measure = value;
+  try {
+    localStorage.setItem(MEASURE_KEY, value);
+  } catch (e) {
+    /* storage disabled — the choice holds for this page and no longer */
+  }
+  dispatchEvent(new CustomEvent("commons:measure", { detail: value }));
+  return value;
+}
+
+/** The names, in order, for a control that steps through them. */
+export const measures = () => MEASURES.slice();
+
+document.documentElement.dataset.measure =
+  document.documentElement.dataset.measure || measure();
+
 // The bootstrap in index.html normally does this before first paint; this is
 // what covers a browser that ran it with storage disabled, and it costs one
 // attribute write.
@@ -300,7 +353,10 @@ export function isNewSince(post) {
 
 /** @param {string | null | undefined} text */
 export function readingMinutes(text) {
-  const words = String(text || "").trim().split(/\s+/).filter(Boolean).length;
+  const words = String(text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
   // Never zero: a one-line post still costs you the tap and the look.
   return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
 }

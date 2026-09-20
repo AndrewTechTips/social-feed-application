@@ -12,7 +12,9 @@ const OPTION = ".sortbar__option";
 const current = (page) => page.locator(`${OPTION}[aria-current]`);
 
 const titles = (page) =>
-  page.locator(".card__title").evaluateAll((els) => els.map((e) => e.textContent.trim()));
+  page
+    .locator(".card__title")
+    .evaluateAll((els) => els.map((e) => e.textContent.trim()));
 
 /**
  * Wait for the screen the sort bar says you are on.
@@ -249,7 +251,10 @@ test.describe("changing the order is not going anywhere", () => {
 
   const swapped = (page) => page.evaluate(() => window.__swap);
 
-  test("a re-order does not replay the page-change animation", async ({ page, api }) => {
+  test("a re-order does not replay the page-change animation", async ({
+    page,
+    api,
+  }) => {
     await api.seed(3);
     await page.goto("/");
     await ordered(page, "Newest", 3);

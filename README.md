@@ -168,15 +168,19 @@ frontend/
     config.js          picks the API: the real one, or the in-browser demo
     api.js             fetch wrapper — auth header, JSON, error normalisation, 401/403/429
     store.js           tiny reactive store: session, feed cache, local vote mirror
-    router.js          hash router with :params and a ?query
-    ui.js              h() builder, toasts, relative time, avatars, skeletons, vote control
-    views/             feed.js · post.js · profile.js · auth.js · compose.js
-    components/        palette.js — the ⌘K command palette
+    router.js          hash router with :params, a ?query, and an error boundary
+    dom.js             h() builder, icons, skeletons — knows nothing about posts
+    toast.js           the one way the app interrupts you
+    format.js          relative time, initials, the tinted avatar
+    view.js            mounting a screen, and where the last one was scrolled to
+    views/             feed.js · post.js · profile.js · shelf.js · auth.js · …
+    components/        card.js · vote.js · comments.js · palette.js · reader.js · …
     actions.js         the few things both the header and the palette can do
     transitions.js     the card-title → post-title view transition
     demo/              backend.js (the API, in the browser) · seed.json · strip.js
     main.js            boot: header, theme toggle, search wiring, routes
-  assets/              one subset variable font, one SVG icon sprite
+  assets/              one subset variable font (37 KB), one SVG icon sprite
+  robots.txt           and sitemap.xml — one URL, because it is one document
   tests/               Playwright specs, a stdlib mock backend, and the fixtures
                        that point the suite at either API
 docs/                  screenshots, and the scripts that regenerate them
@@ -189,7 +193,7 @@ One page, hash routes.
 | Route | Screen |
 | --- | --- |
 | `#/` | Feed (public). Opens with a masthead for anyone not signed in — a line of type saying what this is, and in demo mode the notice too. Debounced search drives `?search=`, and a result shows the sentence it matched on with the matching words marked rather than the post's opening 280 characters; infinite scroll with a visible end state; skeletons while loading. Three orderings — newest, warmest and discussed, the last two decaying rankings. While you are reading it, the feed asks every forty-five seconds whether anything has arrived and offers it as a pill rather than moving the page under you. A returning reader also gets a count of what arrived while they were away and a rule through the list marking where they left off; cards they have opened draw their title dimmed, and every card says how long it is. |
-| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Save to the shelf, a reading panel (three text sizes and focus mode, `f`), Edit/Delete if it's yours with an inline confirm. Select a passage with a mouse and it offers to copy it with a link back. `Ctrl+P` prints it as a page from a book. At the end, two links into the list you arrived from — `j` and `k` follow them. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. You can reply to a comment — one level, declared in the API's own schema rather than only checked in a handler — and a conversation is never split across a page boundary, because the page is over conversations and replies come with their parent. |
+| `#/posts/:id` | Post detail (public). Full text, timestamps, "edited" when changed, vote control, Save to the shelf, a reading panel (three text sizes, two line widths and focus mode, `f`), Edit/Delete if it's yours with an inline confirm. Select a passage with a mouse and it offers to copy it with a link back. `Ctrl+P` prints it as a page from a book. At the end, two links into the list you arrived from — `j` and `k` follow them. The byline links to the author. Below it, the conversation: an inline composer, comments oldest first, appended optimistically and rolled back with a toast if the write fails. You can reply to a comment — one level, declared in the API's own schema rather than only checked in a handler — and a conversation is never split across a page boundary, because the page is over conversations and replies come with their parent. |
 | `#/u/:username` | Everything one person has written — the feed's cards and rules with a single author, including their drafts staying theirs. |
 | `#/login`, `#/register` | Inline field errors, one friendly line on failure, submit disabled while pending. Registering asks for a username, an email and a password; a taken username and a taken email are told apart. Register signs you in, so you land on the feed ready to post. |
 | `#/colophon` | How this was made, inside the thing it describes: the stack in prose, the repository's own measurements, four decisions linked to their records, what's honest about the demo, and a button that opens the palette rather than printing a list of shortcuts that could go wrong. Offered from the masthead and from ⌘K. |
@@ -269,7 +273,7 @@ cd frontend && npm install && npx playwright install chromium
 | --- | --- |
 | `e2e.spec.js` | The whole journey: register → sign in → create → upvote and un-upvote → edit → delete (inline confirm, Escape to cancel) → sign out. Plus pagination on scroll and search. |
 | `drafts.spec.js` | A draft is visible to its author and to nobody else, in the feed and by direct URL, and publishing puts it back in everyone's feed. |
-| `errors.spec.js` | Wrong password, duplicate email, editing someone else's post, empty fields, backend unreachable. |
+| `errors.spec.js` | Wrong password, duplicate email, editing someone else's post, empty fields, backend unreachable — and the router's error boundary: a view that throws putting up a screen of its own instead of leaving the last one on the page under a URL that names something else, the way back off it working, and a fragment that matches nothing going home rather than to an apology. |
 | `responsive.spec.js` | No horizontal overflow at 320–1280, the header collapse, ≥44px tap targets, the reading column staying narrow. |
 | `palette.spec.js` | ⌘K: one flat list, a key on every row, filtering the loaded feed without touching the network, each of the five actions, and the shortcuts working outside the palette but staying out of the way while you type. |
 | `transitions.spec.js` | The title morph both ways, the name being released afterwards, reduced motion starting no transition at all, a browser without the API still navigating, and the per-card stagger staying gone. |
@@ -284,7 +288,8 @@ cd frontend && npm install && npx playwright install chromium
 | `live.spec.js` | The count being right and singular at one, the posts being offered rather than forced, the pages below not renumbering when they are taken, the pill staying away from a ranking and a search, what it brought in joining the list the post screen reads on from, and the poll stopping when you leave the feed — with a positive control, because a poll that never happened and a poll that was stopped look identical. |
 | `search.spec.js` (excerpts) | That a result shows the sentence it matched on, that the mark follows the stem rather than the letters, that there is no excerpt without a question — and the one that matters: that the excerpt is never parsed as markup. Swap the splitting for `innerHTML` and that last one fails in both projects with an `<img>` on the page. |
 | `onward.spec.js` | The two links at the end of a post: which list they mean, the first and last of it having only one, two steps in a row still working, `j`/`k` following them and staying out of a comment box, and the morph name being handed on rather than shared. |
-| `shelf.spec.js` | Saving and unsaving, the header link appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. |
+| `shelf.spec.js` | Saving and unsaving, the header link appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. Then the account's half: signing in merging rather than replacing, a save surviving the local mirror being thrown away, signing out taking an account's shelf off a shared machine and leaving one that was never an account's, and a refused save putting the control back. |
+| `visual.spec.js` | Screenshots of the feed in both themes and on a phone, a post, a post in focus mode at the largest text, a post at the narrow measure, and the sign-in form. The only specs that would notice a stylesheet that stopped loading or a token that resolved to nothing. Run with `npm run test:visual`; CI runs them with `--ignore-snapshots`, because macOS and Linux do not rasterise type the same way and a shared baseline would be a permanently failing test rather than a strict one. |
 | `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
 | `colophon.spec.js` | That every figure on the page is one from the committed measurement and nothing was typed in, that every decision it names links to a record that is actually on disk, that it still reads as a page when the measurement can't be fetched, and that the outward links carry `rel=noopener`. |
 | `reader.spec.js` | The panel opening, the text size changing the post and nothing else and surviving a reload, focus mode clearing the page and leaving one way out and not following you off it, the panel's own radios not switching the single-key shortcuts off, and a printed post being ink on paper rather than white on white. |
@@ -427,12 +432,27 @@ aggregate (`bool_or`) over rows that were read anyway. The old `commons.votes` k
 removed on boot rather than merely unused: a guess about somebody's voting, left in
 their browser, is still a record of it.
 
-**What you've saved never leaves your browser either**, for the same reasons —
-`commons.shelf` is a list of post ids, nothing more. Ids rather than copies of
-the posts: a saved snapshot would render instantly and would then be wrong in
-every way a post can change, whereas an id costs a request and is never
-describing something that isn't there. A post that has been deleted answers 404
-and comes off the shelf as it's discovered.
+**What you've saved is on your account if you have one, and in this browser if
+you don't** — and the shelf screen says which, rather than printing the stronger
+claim in both cases. Signed in, `saves` is a table with the same shape `votes`
+has and the shelf follows you between devices; `commons.shelf` is then a local
+mirror of it, which is what lets a card answer "is this saved?" without a
+request. Signed out, the mirror is the whole shelf.
+
+Signing in **merges** rather than replaces: everything on this browser is pushed
+up first and the account's list pulled down after, so nobody loses a save by
+signing in. That is the only ordering a reader would call correct, and it is
+free because `PUT /posts/{id}/save` is idempotent — a shelf is a set, so asking
+twice is the state you are already in, and neither direction is ever an error.
+Signing out clears the mirror only when it was an account's; a shelf built
+before anybody signed in belongs to the browser and stays.
+
+Either way it holds ids, not copies of the posts. A saved snapshot would render
+instantly and would then be wrong in every way a post can change, whereas an id
+costs a request and is never describing something that isn't there. A post that
+has been deleted answers 404 and comes off the shelf as it's discovered — and
+one whose author has since unpublished it leaves the shelf on read, filtered by
+the same visibility rule the feed uses, so nothing has to clean up after it.
 
 **The numbers on the colophon are measured, not typed.** `docs/stats.py` counts
 the repository into [`frontend/stats.json`](frontend/stats.json) — lines, modules,
@@ -628,11 +648,19 @@ of these was a deliberate pass over code that already worked:
 - [x] Postgres full-text search, and types without a build step
 - [x] Decision records, a changelog, PWA and link-preview assets, Lighthouse in CI
 - [x] Keyboard navigation, the warmth hairline, reading progress, refresh tokens, OpenAPI polish
+- [x] The shelf on your account, two reading widths, the warmth igniting on your own vote
+- [x] Rate limits on every write, a connection URL that survives a password with an `@` in it
+- [x] `ui.js` split along what does and doesn't know about a post, an error boundary on the router
+- [x] A 37 KB font, visual-regression snapshots, prettier in CI
 - Not doing: follows (no social graph worth showing yet), a WebSocket live feed (nowhere
-  in production to run it) — reasoning for both is in `UPGRADE_PLAN.md`
+  in production to run it), a TypeScript migration
+  ([ADR 0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md) records why the line-count
+  trigger fired and was declined)
 
-The longer version — what I'd change, what I'd skip, and why — is in
-[`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
+Two audits got it here, and both are finished. What they contained is in
+[`CHANGELOG.md`](CHANGELOG.md), in [`docs/adr/`](docs/adr/) and in the history.
+What comes next is in [`PWA_UPGRADE_PLAN.md`](PWA_UPGRADE_PLAN.md) and
+[`SETTINGS_UPGRADE_PLAN.md`](SETTINGS_UPGRADE_PLAN.md).
 
 ## License
 

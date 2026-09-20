@@ -50,7 +50,9 @@ test("the tapped title becomes the heading of the post", async ({ page, api }) =
     await expect
       .poll(() =>
         page.evaluate(
-          () => getComputedStyle(document.querySelector(".detail__title")).viewTransitionName
+          () =>
+            getComputedStyle(document.querySelector(".detail__title"))
+              .viewTransitionName
         )
       )
       .toBe("post-title");
@@ -71,7 +73,9 @@ test("going back reverses the journey", async ({ page, api }) => {
   await expect(page.locator(CARD).first()).toBeVisible();
 
   if (await supported(page)) {
-    expect(await started(page), "post → feed should transition too").toBeGreaterThan(before);
+    expect(await started(page), "post → feed should transition too").toBeGreaterThan(
+      before
+    );
   }
 });
 
@@ -98,7 +102,10 @@ test("the name is released once the transition is over", async ({ page, api }) =
     .toBeLessThanOrEqual(1);
 });
 
-test("the chrome stays put instead of cross-fading with the page", async ({ page, api }) => {
+test("the chrome stays put instead of cross-fading with the page", async ({
+  page,
+  api,
+}) => {
   await api.seed(1, "ada@commons.test");
   await page.goto("/");
   await expect(page.locator(CARD).first()).toBeVisible();
@@ -132,7 +139,10 @@ test("changing the theme cross-fades the room", async ({ page, api }) => {
   await expect.poll(() => theme(page)).not.toBe(before);
 });
 
-test("the flag it animates by does not outlive the transition", async ({ page, api }) => {
+test("the flag it animates by does not outlive the transition", async ({
+  page,
+  api,
+}) => {
   // It keys a different animation onto ::view-transition-*(root). Left behind,
   // every subsequent navigation would fade like a theme change — and it would
   // be invisible in review, because nothing about the theme would be wrong.
@@ -164,7 +174,10 @@ test("the header joins the fade instead of sitting it out", async ({ page, api }
           real(() => {
             // Inside the callback the old snapshot has been taken, so this is
             // the value it was taken with.
-            resolve(getComputedStyle(document.querySelector(".site-header")).viewTransitionName);
+            resolve(
+              getComputedStyle(document.querySelector(".site-header"))
+                .viewTransitionName
+            );
             cb();
           });
       })
@@ -238,20 +251,22 @@ test("cards no longer animate themselves in", async ({ page, api }) => {
   await page.goto("/");
   await expect(page.locator(CARD).first()).toBeVisible();
 
-  const animated = await page.evaluate(() =>
-    [...document.querySelectorAll(".card:not(.card--skeleton)")].filter(
-      (c) => getComputedStyle(c).animationName !== "none"
-    ).length
+  const animated = await page.evaluate(
+    () =>
+      [...document.querySelectorAll(".card:not(.card--skeleton)")].filter(
+        (c) => getComputedStyle(c).animationName !== "none"
+      ).length
   );
   expect(animated, "per-card entrance animation should be gone").toBe(0);
 
   // ...including the pages that arrive later, where nothing has "arrived" at all
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(page.locator(CARD)).toHaveCount(12);
-  const afterPaging = await page.evaluate(() =>
-    [...document.querySelectorAll(".card:not(.card--skeleton)")].filter(
-      (c) => getComputedStyle(c).animationName !== "none"
-    ).length
+  const afterPaging = await page.evaluate(
+    () =>
+      [...document.querySelectorAll(".card:not(.card--skeleton)")].filter(
+        (c) => getComputedStyle(c).animationName !== "none"
+      ).length
   );
   expect(afterPaging).toBe(0);
 });

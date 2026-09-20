@@ -4,13 +4,22 @@ from typing import Optional
 
 from typing import Any
 
-from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
-from sqlalchemy import ColumnElement, UnaryExpression, literal, select, func, or_
+from fastapi import status, HTTPException, Request, Response, Depends, APIRouter, Query
+from sqlalchemy import (
+    ColumnElement,
+    UnaryExpression,
+    exists,
+    literal,
+    select,
+    func,
+    or_,
+)
 from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2, docs
 from ..database import get_db
 from ..etag import ETagRoute
+from ..limiter import limiter, CREATE_POST, EDIT_POST
 
 # The feed is the one response in this API big enough for a conditional request
 # to be worth anything — ten posts of prose, several kilobytes, asked for again
@@ -56,7 +65,27 @@ def _attach_counts(
         )
         > 0
     )
+    post.saved = viewer is not None and _is_saved(db, post.id, viewer.id)
     return post
+
+
+def _is_saved(db: Session, post_id: int, user_id: int) -> bool:
+    """Is this post on this person's shelf?
+
+    Its own function because three places ask it — one post, the shelf's own
+    toggle, and (in aggregate form) the feed.
+    """
+    return (
+        db.scalar(
+            select(literal(True)).where(
+                exists().where(
+                    models.Save.post_id == post_id,
+                    models.Save.user_id == user_id,
+                )
+            )
+        )
+        is True
+    )
 
 
 def get_owned_post(
@@ -88,6 +117,30 @@ def visible_to(user: Optional[models.User]) -> ColumnElement[bool]:
     if user is None:
         return models.Post.published.is_(True)
     return or_(models.Post.published.is_(True), models.Post.user_id == user.id)
+
+
+def get_visible_post(
+    db: Session, post_id: int, viewer: Optional[models.User]
+) -> models.Post:
+    """One post, as this caller is allowed to see it, or a 404.
+
+    Reported as missing rather than forbidden when they aren't, which is the
+    same answer ``GET /posts/{id}`` gives and for the same reason: a 403 would
+    confirm the draft exists.
+
+    Lives here rather than in the routers that call it — comments and the
+    shelf — because the rule it enforces is the post's, and a second copy of a
+    visibility rule is how the two drift apart.
+    """
+    post = db.scalar(
+        select(models.Post).where(models.Post.id == post_id, visible_to(viewer))
+    )
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post with id: {post_id} was not found",
+        )
+    return post
 
 
 # The text-search configuration, named once. Changing it means rebuilding the
@@ -302,11 +355,26 @@ def page_of_posts(
         else literal(None)
     )
 
+    # A correlated EXISTS rather than a second outer join. Saves are not
+    # counted, so unlike votes there is no join here to borrow an aggregate
+    # from — and joining them anyway would multiply against the vote rows, the
+    # same fan-out `count(distinct ...)` guards against above. EXISTS stops at
+    # the first matching row and adds no rows to the result.
+    shelved: ColumnElement[bool]
+    if viewer is None:
+        shelved = literal(False)
+    else:
+        shelved = exists().where(
+            models.Save.post_id == models.Post.id,
+            models.Save.user_id == viewer.id,
+        )
+
     stmt = (
         select(
             models.Post,
             vote_count.label("votes"),
             mine.label("voted"),
+            shelved.label("saved"),
             headline.label("excerpt"),
         )
         .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
@@ -326,9 +394,10 @@ def page_of_posts(
         )
 
     items = []
-    for post, votes, voted, excerpt in db.execute(stmt).all():
+    for post, votes, voted, saved, excerpt in db.execute(stmt).all():
         post.votes = votes
         post.voted = bool(voted)
+        post.saved = bool(saved)
         post.excerpt = excerpt
         items.append(post)
 
@@ -421,7 +490,9 @@ def get_posts(
         **docs.errors(401, 422),
     },
 )
+@limiter.limit(CREATE_POST)
 def create_posts(
+    request: Request,
     post: schemas.PostCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
@@ -437,6 +508,7 @@ def create_posts(
     db.refresh(new_post)
     new_post.votes = 0  # a brand new post has no votes,
     new_post.voted = False  # and its author has not voted for it
+    new_post.saved = False  # and nobody has shelved it
     new_post.excerpt = None  # and nobody searched for it
     return new_post
 
@@ -482,7 +554,9 @@ def get_post(
         **docs.errors(401, 403, 404),
     },
 )
+@limiter.limit(EDIT_POST)
 def delete_post(
+    request: Request,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -502,7 +576,9 @@ def delete_post(
     summary="Replace a post",
     responses={200: docs.ok(docs.POST_EXAMPLE), **docs.errors(401, 403, 404, 422)},
 )
+@limiter.limit(EDIT_POST)
 def update_post(
+    request: Request,
     updated_post: schemas.PostCreate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),
@@ -535,7 +611,9 @@ def update_post(
         **docs.errors(400, 401, 403, 404, 422),
     },
 )
+@limiter.limit(EDIT_POST)
 def patch_post(
+    request: Request,
     payload: schemas.PostUpdate,
     post: models.Post = Depends(get_owned_post),
     db: Session = Depends(get_db),

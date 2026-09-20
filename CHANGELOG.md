@@ -16,12 +16,87 @@ here on: one concern per commit, written by hand.
 
 ## Unreleased
 
-Everything since `v0.2.0`: the pass described in [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md),
-and — from *The feed remembers you* down to *A shelf* — the first group of
-[`UPGRADE_PLAN_V2.md`](UPGRADE_PLAN_V2.md), which is about what the app remembers
-about the reader.
+Everything since `v0.2.0`. Two upgrade plans went into this and both are now
+finished and deleted; what they contained is here, in `docs/adr/`, and in the
+history. The last of it closed on 2026-09-20 — the findings that had been
+carried, unfixed, from the first audit, plus the three items of the second plan
+that never shipped.
 
 ### Added
+
+- **The shelf is on your account.** It shipped as ids in `localStorage`, which
+  is instant, needs no sign-in and went out to the published demo the day it
+  was written — and does not follow you to your phone. There is a `saves` table
+  now, shaped like `votes`: a composite key over the pair, both foreign keys
+  cascading at the database, and a `created_at` because a shelf has an order
+  where a tally doesn't. `PostOut` carries `saved` alongside `voted`, answered
+  with a correlated `EXISTS` rather than a second outer join — the feed already
+  joins votes in order to count them, so `voted` is free, but nothing counts
+  saves and a second join would multiply against the first.
+
+  **Saving is idempotent in both directions**, and that is the decision worth
+  keeping: a shelf is a set, so `PUT` and `DELETE` both answer 204 whether or
+  not anything changed. Voting is the counter-example one file over — it
+  answers 409 and 404 on the repeat, and every client has to be told to read
+  those as success. The control here is a toggle beside a card, pressed twice
+  by accident constantly, and it should never produce an error that means yes.
+
+  `commons.shelf` is a **mirror** now rather than the thing itself, which is
+  what keeps "is this saved?" answerable on every card without a request.
+  Signing in *merges* — this browser's saves are pushed up first, the account's
+  pulled down after — because the alternative loses the save somebody made a
+  minute before signing in, which is the one outcome that would make the
+  feature feel unsafe. Signing out clears the mirror only when it was an
+  account's; a shelf built before anybody signed in belongs to the browser.
+
+- **Two line widths, not one.** The reading panel has had three text sizes and
+  focus mode since the reading room shipped; the second of the two settings the
+  plan asked for arrived four days late. `--measure` is 66ch or 54ch, written
+  in `ch` like the token it overrides so it moves with the text size, and set
+  before first paint by the same bootstrap the theme and the size use — a
+  column that reflows a frame after it renders is the same broken promise a
+  resizing font is. Two steps and not a slider, deliberately: the type system
+  already decided what a good measure is, and a slider would invite somebody to
+  set 90ch and conclude the typography was bad.
+
+- **The warmth ignites.** When *your* vote is the one that carries a post over
+  three, the hairline no longer appears — it draws in from the top, once, over
+  420ms. It is the whole dopamine budget of this app, spent in one place, on
+  its own metaphor and its own accent.
+
+  The rule that makes it honest is that it is keyed on the **crossing**, not on
+  the class. The class is toggled optimistically and toggled back on rollback,
+  so a rule that animated `.card--warm` would have played this for a vote the
+  server refused — the app celebrating something that didn't happen. Three
+  conditions, each ruling out a different small lie: this reader's press, going
+  up, and from below the line rather than holding above it.
+
+- **Rate limits on every write.** `POST /posts/`, the three ways to change one,
+  `/vote/`, both comment routes and the shelf. The numbers live in
+  `app/limiter.py` rather than in the decorators, so they can be compared with
+  each other, and the tests read them from there rather than restating them —
+  changing a limit can't leave a test asserting the old one. Reads stay free:
+  the feed is the front door.
+
+- **Visual regression.** `tests/visual.spec.js` — the feed in both themes and
+  on a phone, a post, a post in focus mode at the largest text, a post at the
+  narrow measure, and the sign-in form. Nothing else in the suite would notice
+  a stylesheet that stopped loading or a token that resolved to `unset`, and
+  that surface grew considerably the day this app got two themes, three text
+  sizes, two measures and a focus mode. CI runs them with `--ignore-snapshots`:
+  macOS and Linux do not rasterise type the same way, so a shared baseline is
+  not a strict test but a permanently failing one. The navigation still runs
+  there; only the comparison is skipped.
+
+- **Prettier over the frontend**, gated in CI — the other half of the
+  `black --check` the backend has had since the beginning. A gate rather than a
+  commit hook, same as black, so nothing rewrites somebody's work while they
+  are looking at it.
+
+- **`robots.txt`, `sitemap.xml` and a canonical link.** The sitemap has one URL
+  and that is not an oversight: every screen here lives behind a fragment, a
+  fragment is never sent to a server, and a sitemap padded with them would lie
+  about how big the site is.
 
 - **The demo can show you its notifications.** The published site has one
   visitor and nobody else awake, and you cannot be notified by yourself — so a
@@ -47,7 +122,7 @@ about the reader.
 
   **A vote makes no notification.** That is a decision, not an omission: a vote
   is a number moving, and "three people upvoted you" is precisely the mechanic
-  the design thesis in `UPGRADE_PLAN_V2.md` §4 spends a page arguing against.
+  the design thesis of the second upgrade plan spent a page arguing against.
   Everything here is a person having said something, so every line has
   somewhere to take you and something to answer.
 
@@ -391,6 +466,93 @@ about the reader.
   but useless), axe on every screen, and a keyboard-only journey.
 
 ### Changed
+
+- **`ui.js` is gone.** It was 549 lines holding a hyperscript builder, toasts,
+  time formatting, avatars, skeletons, view mounting *and* the vote control —
+  a stateful component that makes network calls — and it was the file
+  everything imported because it was the file everything imported. Split along
+  one line: does this need to know what a post is. `dom.js`, `toast.js`,
+  `format.js` and `view.js` don't; `components/card.js` and
+  `components/vote.js` do. `dom.js` has no imports at all and should never gain
+  one.
+
+- **`api.js` says what happened instead of doing something about it.** It used
+  to import `toast` and assign to `location.hash`, which put the interface and
+  the router underneath the transport layer — the one place in this codebase
+  where the layering ran backwards, and therefore the one place a change to the
+  interface could break a fetch. It dispatches `commons:api-error` now and
+  `main.js` decides what a 401, a 403 and a 429 look like. The wording moved
+  with it, which is where wording belongs.
+
+  One thing the refactor got wrong on the first pass and the suite caught: the
+  announcement has to keep the condition the old code had. A 401 on a request
+  that never carried a token is not a session ending, and announcing it sent a
+  signed-out visitor to a sign-in form they had not asked for — on a boot with
+  a dead cookie it replaced the feed. The same class of bug then appeared once
+  more from the other direction, in the shelf's sync at boot, and the answer
+  there was the `background` flag the notification poller already uses: nobody
+  asked for that request, so it must never move the reader.
+
+- **A view that throws now says so.** `router.js` caught the error, wrote it to
+  the console, and stopped — which left the *previous* screen on the page,
+  fully interactive, with the address bar naming a screen that never rendered.
+  Pressing back from there went somewhere that looked identical. There is a
+  screen for it now, set like the empty states rather than like a warning: no
+  red, no icon, no panel, a sentence and two ways onward. A fragment that
+  matches no route still goes home, because a typo is not a failure.
+
+- **The connection URL is assembled, not formatted.** `f"postgresql://{user}:{password}@…"`
+  in three files, and a password is exactly where people put reserved
+  characters: `foo@bar` moves the host boundary and the driver goes looking for
+  a server called `bar`. One `URL.create` on `Settings` now, shared by the app,
+  Alembic and the tests. The round trip back into `alembic.ini` has a trap of
+  its own — ConfigParser reads a literal `%` in the rendered password as the
+  start of a substitution — which is why that one line is not a one-liner.
+
+- **`users.password` is `users.password_hash`.** It never held a password:
+  `hash_password` runs before the row is built. A column called `password` in a
+  table called `users` is the name in this schema most likely to be misread by
+  somebody in a hurry, and the mistakes it invites — logging it, returning it,
+  comparing it to a plaintext — are the expensive kind. The rename also removed
+  a trick at the call site, which used to mutate the request model in place so
+  that `**model_dump()` would line up.
+
+- **The font is 37 KB, down from 120.** It was the largest asset in the app by
+  an order of magnitude, and the optical-size axis was 70 KB of it on its own —
+  a second set of variation deltas for all 261 glyphs, there for a span that
+  runs to a 72pt masthead this app does not have. Pinned at 18, which is both
+  the font's own default and the size the type system was designed around, so
+  body text renders byte-identically and only the headings change at all. The
+  weight axis is narrowed to 400–600 because 340 and 660 were never used by
+  anything, and the `@font-face` descriptor now says so — declaring a range the
+  file cannot serve is how a heading silently gets a weight nobody chose. Not
+  one glyph lost: 261 before, 261 after, all 223 codepoints still there.
+
+- **Hovering a card no longer blurs what is behind it.** `backdrop-filter` on
+  `.card:hover` put the element on its own layer *and* re-sampled everything
+  behind it for as long as the pointer was there — a live blur running under a
+  scrolling list, which is the exact shape of the problem that turned out to be
+  the whole of September's scroll jank. It takes `--glass-bg-fallback` now,
+  which is not a compromise but the token that already existed for this
+  appearance: it is what every browser without `backdrop-filter` has always
+  been shown. The header keeps its real glass — one element, always on screen,
+  measured at zero dropped frames.
+
+- **The feed says how many arrived.** `.feed__status` is a live region, and a
+  page that appends announces itself. Infinite scroll is a visual idiom: ten
+  cards slide under the last one and a sighted reader simply sees them, while
+  somebody listening gets a list that silently grew. After the tail and only
+  into the gap it leaves, because reaching the end of a list is more worth
+  hearing than the length of the last page.
+
+- **Three comments that should have been written when the code was.** Why the
+  signup 409 tells a caller which addresses are registered and what the fix
+  would cost (mail this project cannot send); what the rate limiter actually is
+  — per-process, in-memory, keyed on the socket address — and that the fix is
+  two changes and not one, because Redis without `ProxyHeadersMiddleware` gives
+  one accurate bucket for the entire internet; and that the delete confirm is
+  an `alertdialog` with no focus trap *deliberately*, because it covers nothing
+  and trapping the cursor would take away an exit that is genuinely open.
 
 - **`components.css` split in two.** It had become the file everything landed
   in — 1,358 lines of header, buttons, cards, palette, toasts and demo notice.

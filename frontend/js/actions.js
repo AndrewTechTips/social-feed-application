@@ -8,7 +8,7 @@
 
 import { api, forgetPendingRefresh } from "./api.js";
 import { clearSession, dropFeedCache } from "./store.js";
-import { toast } from "./ui.js";
+import { toast } from "./toast.js";
 import { navigate } from "./router.js";
 import { crossFade } from "./transitions.js";
 

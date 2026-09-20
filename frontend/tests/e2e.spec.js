@@ -175,10 +175,7 @@ test("the feed keeps filling while the sentinel is still in view", async ({
   await context.close();
 });
 
-test("search filters the feed and drives the query string", async ({
-  page,
-  api,
-}) => {
+test("search filters the feed and drives the query string", async ({ page, api }) => {
   await api.seed(5, "ada@commons.test");
   await page.goto("/");
 

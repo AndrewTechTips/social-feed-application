@@ -15,14 +15,15 @@ room nobody can enter.
 import math
 from typing import Any, Optional
 
-from fastapi import status, HTTPException, Response, Depends, APIRouter, Query
+from fastapi import status, HTTPException, Request, Response, Depends, APIRouter, Query
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 from .. import models, schemas, oauth2, docs
 from ..database import get_db
+from ..limiter import limiter, CREATE_COMMENT, DELETE_COMMENT
 from .notification import notify
-from .post import visible_to
+from .post import get_visible_post
 
 router = APIRouter(tags=["Comments"])
 
@@ -48,26 +49,6 @@ def get_owned_comment(
             detail="Not authorized to perform requested action",
         )
     return comment
-
-
-def get_visible_post(
-    db: Session, post_id: int, viewer: Optional[models.User]
-) -> models.Post:
-    """The post these comments belong to, as this caller is allowed to see it.
-
-    Reported as missing rather than forbidden when they aren't, which is the
-    same answer ``GET /posts/{id}`` gives and for the same reason: a 403 would
-    confirm the draft exists.
-    """
-    post = db.scalar(
-        select(models.Post).where(models.Post.id == post_id, visible_to(viewer))
-    )
-    if post is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Post with id: {post_id} was not found",
-        )
-    return post
 
 
 @router.get(
@@ -155,7 +136,9 @@ def get_comments(
         **docs.errors(400, 401, 404, 422),
     },
 )
+@limiter.limit(CREATE_COMMENT)
 def create_comment(
+    request: Request,
     post_id: int,
     payload: schemas.CommentCreate,
     db: Session = Depends(get_db),
@@ -220,7 +203,9 @@ def create_comment(
         **docs.errors(401, 403, 404),
     },
 )
+@limiter.limit(DELETE_COMMENT)
 def delete_comment(
+    request: Request,
     comment: models.Comment = Depends(get_owned_comment),
     db: Session = Depends(get_db),
 ) -> Response:

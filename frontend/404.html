@@ -1,46 +1,58 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Commons</title>
-  <meta name="robots" content="noindex" />
-  <script>
-    // GitHub Pages serves this for any path it doesn't have a file for.
-    //
-    // This app is hash-routed (see docs/adr/0002-hash-routing.md), so a deep
-    // link inside it — #/posts/12 — never reaches the server and never lands
-    // here. What does land here is somebody typing or pasting a *real* path:
-    // /posts/12, or a link written by hand against a History-API app. Rather
-    // than showing them GitHub's 404, translate the path into the fragment the
-    // router understands and send them on.
-    //
-    // The repository name is the first path segment on a project Pages site
-    // (/social-feed-application/posts/12), and is not part of the route. It's
-    // taken from the script's own URL rather than hard-coded, so this keeps
-    // working at a custom domain or under a different repo name.
-    (function () {
-      var base = location.pathname.slice(0, location.pathname.indexOf("/", 1) + 1);
-      // Serving from the domain root: nothing to strip.
-      if (base === "/404.html" || base === "") base = "/";
-      var route = location.pathname.slice(base.length).replace(/^\/+/, "");
-      var target = base + (route ? "#/" + route : "") + location.search + location.hash;
-      // replace(), not assign(): the bad URL should not be a back-button stop.
-      location.replace(target);
-    })();
-  </script>
-  <style>
-    body {
-      margin: 0; min-height: 100vh; display: grid; place-items: center;
-      background: #0c1315; color: #93a3a1;
-      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    a { color: #f0a63c; }
-  </style>
-</head>
-<body>
-  <!-- Only ever seen with JavaScript off, which is also the only case where
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Commons</title>
+    <meta name="robots" content="noindex" />
+    <script>
+      // GitHub Pages serves this for any path it doesn't have a file for.
+      //
+      // This app is hash-routed (see docs/adr/0002-hash-routing.md), so a deep
+      // link inside it — #/posts/12 — never reaches the server and never lands
+      // here. What does land here is somebody typing or pasting a *real* path:
+      // /posts/12, or a link written by hand against a History-API app. Rather
+      // than showing them GitHub's 404, translate the path into the fragment the
+      // router understands and send them on.
+      //
+      // The repository name is the first path segment on a project Pages site
+      // (/social-feed-application/posts/12), and is not part of the route. It's
+      // taken from the script's own URL rather than hard-coded, so this keeps
+      // working at a custom domain or under a different repo name.
+      (function () {
+        var base = location.pathname.slice(0, location.pathname.indexOf("/", 1) + 1);
+        // Serving from the domain root: nothing to strip.
+        if (base === "/404.html" || base === "") base = "/";
+        var route = location.pathname.slice(base.length).replace(/^\/+/, "");
+        var target =
+          base + (route ? "#/" + route : "") + location.search + location.hash;
+        // replace(), not assign(): the bad URL should not be a back-button stop.
+        location.replace(target);
+      })();
+    </script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0c1315;
+        color: #93a3a1;
+        font:
+          15px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      a {
+        color: #f0a63c;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Only ever seen with JavaScript off, which is also the only case where
        the app itself wouldn't work either. -->
-  <p>Taking you back to <a href="./">Commons</a>…</p>
-</body>
+    <p>Taking you back to <a href="./">Commons</a>…</p>
+  </body>
 </html>

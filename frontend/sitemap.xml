@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One URL, and that is not an oversight.
+
+  Commons is a hash-routed single page (ADR 0002). `#/posts/12` and `#/colophon`
+  are never sent to a server, so they are not separate documents and listing
+  them here would be listing URLs that resolve to this one. A sitemap padded
+  with fragments is a sitemap that lies about how big the site is.
+
+  `changefreq` and `priority` are deliberately absent: Google has said for years
+  that it ignores both, and writing values nobody reads is how a file like this
+  starts drifting from the truth.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://andrewtechtips.github.io/social-feed-application/</loc>
+    <lastmod>2026-09-20</lastmod>
+  </url>
+</urlset>

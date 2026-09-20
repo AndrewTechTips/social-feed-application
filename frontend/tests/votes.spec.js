@@ -8,7 +8,8 @@
 
 const { test, expect, CARD } = require("./support/fixtures");
 
-const firstVote = (page) => page.locator(`.feed__list ${CARD}`).first().locator(".vote");
+const firstVote = (page) =>
+  page.locator(`.feed__list ${CARD}`).first().locator(".vote");
 
 const pressed = async (locator) =>
   (await locator.getAttribute("aria-pressed")) === "true";

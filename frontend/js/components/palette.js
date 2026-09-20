@@ -15,7 +15,8 @@
 // Not borrowed: fuzzy matching everything in the product. This searches the
 // posts already on screen and runs a handful of actions. It doesn't grow.
 
-import { h, toast } from "../ui.js";
+import { h } from "../dom.js";
+import { toast } from "../toast.js";
 import { get, knownPosts } from "../store.js";
 import { otherTheme, toggleTheme, signOut } from "../actions.js";
 import { unreadCount } from "../notify.js";
@@ -106,15 +107,16 @@ function commands() {
     // palette keeps its promise that what it shows you works outside it.
     // Enter takes the next one, and settles for the previous at the end of the
     // list, which is the only place "next" has nowhere to go.
-    !hasCards() && hasOnward() && {
-      id: "onward",
-      label: "Move to the next or previous post",
-      key: "J K",
-      owned: true,
-      run: () => {
-        readOn("next") || readOn("prev");
+    !hasCards() &&
+      hasOnward() && {
+        id: "onward",
+        label: "Move to the next or previous post",
+        key: "J K",
+        owned: true,
+        run: () => {
+          readOn("next") || readOn("prev");
+        },
       },
-    },
     // Only where there is a post to focus on. The label names what pressing it
     // will do rather than what is currently true, which is the difference
     // between a command and a status line.
@@ -180,11 +182,29 @@ function rowsFor(query) {
 const searchGlyph = () =>
   h(
     "svg",
-    { class: "palette__glyph", viewBox: "0 0 20 20", width: 16, height: 16, "aria-hidden": "true" },
-    h("circle", { cx: 9, cy: 9, r: 6, fill: "none", stroke: "currentColor", "stroke-width": 1.7 }),
+    {
+      class: "palette__glyph",
+      viewBox: "0 0 20 20",
+      width: 16,
+      height: 16,
+      "aria-hidden": "true",
+    },
+    h("circle", {
+      cx: 9,
+      cy: 9,
+      r: 6,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": 1.7,
+    }),
     h("line", {
-      x1: 13.5, y1: 13.5, x2: 18, y2: 18,
-      stroke: "currentColor", "stroke-width": 1.7, "stroke-linecap": "round",
+      x1: 13.5,
+      y1: 13.5,
+      x2: 18,
+      y2: 18,
+      stroke: "currentColor",
+      "stroke-width": 1.7,
+      "stroke-linecap": "round",
     })
   );
 
@@ -230,7 +250,11 @@ function build() {
     "aria-label": "Results",
   });
 
-  const empty = h("p", { class: "palette__empty", hidden: true }, "Nothing matches that.");
+  const empty = h(
+    "p",
+    { class: "palette__empty", hidden: true },
+    "Nothing matches that."
+  );
 
   const panel = h(
     "div",
@@ -269,8 +293,15 @@ function build() {
           // palette. Hidden from assistive tech — a listbox already announces
           // "3 of 9", and the only way to press this is to be looking at it.
           i < NUMBERED
-            ? h("kbd", { class: "palette__ordinal", "aria-hidden": "true" }, `⌥${i + 1}`)
-            : h("span", { class: "palette__ordinal palette__ordinal--none", "aria-hidden": "true" }),
+            ? h(
+                "kbd",
+                { class: "palette__ordinal", "aria-hidden": "true" },
+                `⌥${i + 1}`
+              )
+            : h("span", {
+                class: "palette__ordinal palette__ordinal--none",
+                "aria-hidden": "true",
+              }),
           h("span", { class: "palette__label" }, row.label),
           h("kbd", { class: "palette__key" }, row.key || "↵")
         )

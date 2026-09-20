@@ -19,7 +19,8 @@
 // and the same person tomorrow — sees it again. A notice you can permanently
 // dismiss is a notice that stops being true.
 
-import { h, icon, toast } from "../ui.js";
+import { h, icon } from "../dom.js";
+import { toast } from "../toast.js";
 import { api } from "../api.js";
 import { resetDemo, REPO_URL } from "../config.js";
 import { navigate } from "../router.js";
@@ -57,7 +58,11 @@ export function demoSentence() {
     { class: "demo__text" },
     h("strong", { class: "demo__label" }, "Demo mode"),
     " — this runs entirely in your browser. The real backend is in ",
-    h("a", { href: `${REPO}/tree/main/backend`, target: "_blank", rel: "noopener" }, "backend/"),
+    h(
+      "a",
+      { href: `${REPO}/tree/main/backend`, target: "_blank", rel: "noopener" },
+      "backend/"
+    ),
     "; here's ",
     // The committed spec rather than the README's table: "the contract" should
     // go to the contract. It exists as a file precisely because this API has no

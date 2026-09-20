@@ -122,7 +122,7 @@ def login(
         utils.verify_password_dummy()
         raise INVALID_CREDENTIALS
 
-    if not utils.verify_password(user_credentials.password, user.password):
+    if not utils.verify_password(user_credentials.password, user.password_hash):
         raise INVALID_CREDENTIALS
 
     refresh_token, csrf_token = oauth2.open_refresh_session(db, user)

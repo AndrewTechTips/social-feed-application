@@ -9,18 +9,11 @@
 // hand. See commentsFor() below.
 
 import { api } from "../api.js";
-import {
-  h,
-  icon,
-  mountView,
-  avatar,
-  relativeTime,
-  fullTime,
-  wasEdited,
-  voteControl,
-  skeletonBar,
-  toast,
-} from "../ui.js";
+import { h, icon, skeletonBar } from "../dom.js";
+import { toast } from "../toast.js";
+import { avatar, fullTime, relativeTime, wasEdited } from "../format.js";
+import { mountView } from "../view.js";
+import { voteControl } from "../components/vote.js";
 import { get, isMine, dropFeedCache, knownPosts, knownFrom } from "../store.js";
 import { markReadOnceSeen } from "../reading.js";
 import { isShelved, toggleShelf } from "../shelf.js";
@@ -33,8 +26,6 @@ import {
   morphPending,
 } from "../transitions.js";
 import { navigate, previousScreen } from "../router.js";
-
-
 
 // How long the post gets to arrive before the reader is shown a loading state.
 //
@@ -73,7 +64,8 @@ const SKELETON_AFTER = 250;
 function backTo() {
   const from = previousScreen() || "";
   const profile = from.match(/^#\/u\/([^?]+)$/);
-  if (profile) return { href: from, label: `Back to ${decodeURIComponent(profile[1])}` };
+  if (profile)
+    return { href: from, label: `Back to ${decodeURIComponent(profile[1])}` };
   if (/^#\/\?search=/.test(from)) return { href: from, label: "Back to the results" };
   return { href: "#/", label: "Back to the feed" };
 }
@@ -149,7 +141,11 @@ function onward(post, heldTitle) {
   return h(
     "nav",
     { class: "onward", "aria-labelledby": "onward-head" },
-    h("p", { class: "onward__head", id: "onward-head" }, `More from ${knownFrom() || "the feed"}`),
+    h(
+      "p",
+      { class: "onward__head", id: "onward-head" },
+      `More from ${knownFrom() || "the feed"}`
+    ),
     h(
       "div",
       { class: "onward__pair" },
@@ -193,21 +189,38 @@ function saveControl(post) {
     toast(on ? "Saved to your shelf." : "Removed from your shelf.");
   });
 
+  // Repaint whenever the shelf changes, whoever changed it.
+  //
+  // This exists for one case in particular and it is not a hypothetical: a save
+  // made while signed in is written to the server, and if that write fails
+  // js/shelf.js puts the list back. Without this the button would go on saying
+  // "Saved" over a shelf that no longer holds this post — the app asserting
+  // something it knows to be untrue, which is the worst thing an optimistic
+  // control can do. It also covers the sync at sign-in and a change made in
+  // another tab.
+  //
+  // Nothing removes the listener, because nothing has to: the button goes with
+  // the screen and `paint` closes over an element that is then unreachable.
+  // Same arrangement main.js uses for the header's own copy of this count.
+  addEventListener("commons:shelf", paint);
+
   paint();
   return btn;
 }
 
 function loadingSkeleton() {
-  return h("section", { class: "detail" },
+  return h(
+    "section",
+    { class: "detail" },
     backLink(),
     skeletonBar({ width: "62%", height: "30px", marginBottom: "20px" }),
     skeletonBar({ width: "40%", height: "14px", marginBottom: "28px" }),
     h("span", { class: "sk sk--line" }),
     h("span", { class: "sk sk--line" }),
     h("span", { class: "sk sk--line" }),
-    h("span", { class: "sk sk--line sk--short" }));
+    h("span", { class: "sk sk--line sk--short" })
+  );
 }
-
 
 export async function renderPost({ params, isStale }) {
   const id = params.id;
@@ -242,11 +255,23 @@ export async function renderPost({ params, isStale }) {
   } catch (err) {
     if (isStale()) return;
     const gone = err.status === 404;
-    mountView(h("section", { class: "detail" },
-      backLink(),
-      h("h1", { class: "detail__title" }, gone ? "That post is gone." : "That didn't load."),
-      h("p", { style: { color: "var(--text-dim)" } },
-        gone ? "It may have been deleted." : "Try again in a moment.")));
+    mountView(
+      h(
+        "section",
+        { class: "detail" },
+        backLink(),
+        h(
+          "h1",
+          { class: "detail__title" },
+          gone ? "That post is gone." : "That didn't load."
+        ),
+        h(
+          "p",
+          { style: { color: "var(--text-dim)" } },
+          gone ? "It may have been deleted." : "Try again in a moment."
+        )
+      )
+    );
     return;
   } finally {
     // Whichever way the request went, the loading state has missed its moment.
@@ -259,24 +284,46 @@ export async function renderPost({ params, isStale }) {
   const mine = isMine(post);
 
   const timeBits = [
-    h("time", { datetime: post.created_at, title: fullTime(post.created_at) },
-      relativeTime(post.created_at)),
+    h(
+      "time",
+      { datetime: post.created_at, title: fullTime(post.created_at) },
+      relativeTime(post.created_at)
+    ),
   ];
   if (wasEdited(post)) {
     // No separator dot: the tag is already a chip, and space does the job.
     timeBits.push(
-      h("span", { class: "tag", title: "Last edited " + fullTime(post.updated_at) }, "edited"));
+      h(
+        "span",
+        { class: "tag", title: "Last edited " + fullTime(post.updated_at) },
+        "edited"
+      )
+    );
   }
 
-  const byline = h("div", { class: "detail__byline" },
+  const byline = h(
+    "div",
+    { class: "detail__byline" },
     avatar(post.user.username, "lg"),
-    h("div", { class: "stack" },
-      h("a", {
-        class: "name",
-        href: `#/u/${encodeURIComponent(post.user.username)}`,
-        title: `Everything by ${post.user.username}`,
-      }, post.user.username),
-      h("span", { style: { display: "inline-flex", alignItems: "center", gap: "8px" } }, timeBits)));
+    h(
+      "div",
+      { class: "stack" },
+      h(
+        "a",
+        {
+          class: "name",
+          href: `#/u/${encodeURIComponent(post.user.username)}`,
+          title: `Everything by ${post.user.username}`,
+        },
+        post.user.username
+      ),
+      h(
+        "span",
+        { style: { display: "inline-flex", alignItems: "center", gap: "8px" } },
+        timeBits
+      )
+    )
+  );
 
   const actions = h("div", { class: "detail__actions" });
 
@@ -293,7 +340,9 @@ export async function renderPost({ params, isStale }) {
   // Two halves: a button for the toolbar row, and the row it opens under it.
   const reading = readerControl();
 
-  const root = h("section", { class: "detail" },
+  const root = h(
+    "section",
+    { class: "detail" },
     backLink(),
     title,
     byline,
@@ -311,7 +360,8 @@ export async function renderPost({ params, isStale }) {
     // Last, after the conversation, because that is where the page actually
     // ends — and because slipping it between the post and its comments would
     // interrupt the one sequence this screen is built around.
-    onward(post, title));
+    onward(post, title)
+  );
 
   if (mine) mountActions();
   mountView(root);
@@ -328,20 +378,53 @@ export async function renderPost({ params, isStale }) {
   // element — silently dropping the cursor to the body, which is precisely
   // what Escape is supposed to avoid.
   function mountActions() {
-    const deleteBtn = h("button",
-      { class: "btn btn--quiet danger", type: "button", onclick: askDelete }, "Delete");
+    const deleteBtn = h(
+      "button",
+      { class: "btn btn--quiet danger", type: "button", onclick: askDelete },
+      "Delete"
+    );
     actions.replaceChildren(
       h("a", { class: "btn btn--ghost", href: `#/posts/${post.id}/edit` }, "Edit"),
-      deleteBtn);
+      deleteBtn
+    );
     return deleteBtn;
 
     function askDelete() {
       const yes = h("button", { class: "btn btn--danger", type: "button" }, "Delete");
-      const no = h("button", { class: "btn btn--quiet", type: "button", onclick: cancel }, "Keep it");
-      const box = h("div",
-        { class: "confirm", role: "alertdialog", "aria-label": "Confirm delete", tabindex: "-1" },
+      const no = h(
+        "button",
+        { class: "btn btn--quiet", type: "button", onclick: cancel },
+        "Keep it"
+      );
+      // `alertdialog` with **no focus trap**, and that is deliberate rather
+      // than unfinished.
+      //
+      // A focus trap is what makes a *modal* dialog safe: it is the mechanism
+      // that stops a screen reader wandering out of a box that is covering the
+      // page. This box covers nothing. It expands in place where the Delete
+      // button was, the post is still there above it and still readable, and
+      // the rest of the page is still legitimately reachable — so trapping the
+      // cursor inside it would take away an exit that is genuinely open.
+      //
+      // The role is still right: this interrupts to ask something whose answer
+      // cannot be undone, which is what `alertdialog` is for, and the
+      // announcement it triggers is the point. What is deliberately absent is
+      // `aria-modal`, because claiming that would be claiming the trap.
+      //
+      // Escape cancels and puts focus back on the button that opened it, which
+      // is the part of modal behaviour that *is* owed here — see cancel().
+      const box = h(
+        "div",
+        {
+          class: "confirm",
+          role: "alertdialog",
+          "aria-label": "Confirm delete",
+          tabindex: "-1",
+        },
         h("p", { class: "confirm__text" }, "Delete this post? There's no undo."),
-        no, yes);
+        no,
+        yes
+      );
 
       const onKey = (e) => e.key === "Escape" && cancel();
       function cancel() {
@@ -371,4 +454,3 @@ export async function renderPost({ params, isStale }) {
     }
   }
 }
-

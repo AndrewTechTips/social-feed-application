@@ -44,7 +44,10 @@ test("registering asks for a name, and holds you to the rule", async ({ page }) 
   await expect(page.locator("#username-err")).not.toBeEmpty();
 });
 
-test("a taken username is named as the problem, not the email", async ({ page, api }) => {
+test("a taken username is named as the problem, not the email", async ({
+  page,
+  api,
+}) => {
   await api.register("firsthere@commons.test", PW, "contested");
 
   await page.goto("/#/register");
@@ -135,7 +138,10 @@ test("a profile keeps that person's drafts to themselves", async ({ page, api })
 
 // ── who am I, on a browser that has never been here ────────────────────────
 test.describe("signing in somewhere new", () => {
-  test("a plain login still knows which posts are yours", async ({ browser, api }, testInfo) => {
+  test("a plain login still knows which posts are yours", async ({
+    browser,
+    api,
+  }, testInfo) => {
     // Real-backend only, and not because of a limitation worth working around:
     // in demo mode the accounts live in the browser that made them, so a second
     // browser has nobody to sign in as. "Somewhere new" only means something
@@ -176,7 +182,10 @@ test.describe("signing in somewhere new", () => {
     }));
     expect(stored.identity.id, "no identity to answer with").toBeTruthy();
     expect(stored.identity.username).toBe("returninghere");
-    expect(stored.identity.token, "the credential does not belong here").toBeUndefined();
+    expect(
+      stored.identity.token,
+      "the credential does not belong here"
+    ).toBeUndefined();
     expect(stored.legacy, "the old token key should be gone").toBeNull();
 
     await p2.goto(`/#/posts/${postId}`);

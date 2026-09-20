@@ -12,7 +12,9 @@ const cards = (page) => page.locator(`.feed__list ${CARD}`);
 // Which card holds focus, by index. -1 when focus is off the list entirely.
 const cursor = (page) =>
   page.evaluate(() => {
-    const list = [...document.querySelectorAll(".feed__list .card:not(.card--skeleton)")];
+    const list = [
+      ...document.querySelectorAll(".feed__list .card:not(.card--skeleton)"),
+    ];
     const card = document.activeElement && document.activeElement.closest(".card");
     return card ? list.indexOf(card) : -1;
   });
@@ -91,7 +93,10 @@ test("u does nothing with no cursor on the list", async ({ page, api }) => {
   await expect(cards(page).first()).toBeVisible();
 
   await page.keyboard.press("u");
-  await expect(cards(page).first().locator(".vote")).toHaveAttribute("aria-pressed", "false");
+  await expect(cards(page).first().locator(".vote")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
 });
 
 test("the keys keep out of the way while you're typing", async ({ page }) => {
@@ -127,7 +132,10 @@ test("it picks up from what's on screen, not from the top", async ({ page, api }
   expect(await cursor(page)).toBeGreaterThan(0);
 });
 
-test("it carries on into a page that loaded while you walked", async ({ page, api }) => {
+test("it carries on into a page that loaded while you walked", async ({
+  page,
+  api,
+}) => {
   await api.reset();
   await api.seed(14, "ada@commons.test");
   await page.goto("/");
@@ -176,5 +184,7 @@ test("and doesn't advertise it where there's no list", async ({ page, api }) => 
   await expect(page.locator(".detail__title")).toBeVisible();
 
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.locator(".palette__row", { hasText: "Move through the feed" })).toHaveCount(0);
+  await expect(
+    page.locator(".palette__row", { hasText: "Move through the feed" })
+  ).toHaveCount(0);
 });

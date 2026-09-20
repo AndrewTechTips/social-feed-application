@@ -102,7 +102,8 @@
   color: var(--text-faint);
   font-size: var(--fs-ui);
   text-decoration: none;
-  transition: color var(--t-mid) var(--ease),
+  transition:
+    color var(--t-mid) var(--ease),
     border-color var(--t-mid) var(--ease);
 }
 @media (hover: hover) {
@@ -589,8 +590,10 @@
   color: var(--text-dim);
   font-size: var(--fs-meta);
   cursor: pointer;
-  transition: border-color var(--t-mid) var(--ease),
-    background-color var(--t-mid) var(--ease), color var(--t-mid) var(--ease);
+  transition:
+    border-color var(--t-mid) var(--ease),
+    background-color var(--t-mid) var(--ease),
+    color var(--t-mid) var(--ease);
 }
 .typeset__step input {
   position: absolute;
@@ -767,7 +770,9 @@
 @media (hover: hover) {
   .comment__remove {
     opacity: 0;
-    transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      opacity var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
   .comment:hover .comment__remove,
   .comment__remove:focus-visible {
@@ -892,7 +897,8 @@
   background: var(--card-bg);
   color: inherit;
   text-decoration: none;
-  transition: border-color var(--t-mid) var(--ease),
+  transition:
+    border-color var(--t-mid) var(--ease),
     background-color var(--t-mid) var(--ease);
 }
 .onward__dir {
@@ -1097,8 +1103,8 @@
      its bottom padding, and whatever the notch and home indicator take. */
   .auth {
     min-height: calc(
-      100dvh - var(--header-h) - var(--s-5) - var(--s-9) -
-        env(safe-area-inset-top) - env(safe-area-inset-bottom)
+      100dvh - var(--header-h) - var(--s-5) - var(--s-9) - env(safe-area-inset-top) -
+        env(safe-area-inset-bottom)
     );
     padding-block: var(--s-5);
   }
@@ -1317,4 +1323,39 @@
 }
 .notice__post {
   color: var(--text-dim);
+}
+
+/* — the screen that didn't load --------------------------------------------
+   What the router puts up when a view throws. See mountScreenError.
+
+   Set like the masthead and the empty states rather than like a warning:
+   serif, quiet, centred in the reading column, no red, no icon, no panel. A
+   failure the reader did not cause and cannot fix does not earn an alarm — it
+   earns a sentence and a way onward, and the accent stays spent on a vote,
+   warmth and where you are. */
+.screen-error {
+  max-width: var(--measure);
+  margin: var(--s-8) auto;
+  padding: 0 var(--s-4);
+  text-align: center;
+}
+.screen-error__title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  font-weight: 500;
+  line-height: 1.2;
+  margin-bottom: var(--s-3);
+}
+.screen-error__line {
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: 1.5;
+  margin-bottom: var(--s-5);
+}
+.screen-error__actions {
+  display: flex;
+  gap: var(--s-3);
+  justify-content: center;
+  flex-wrap: wrap;
 }

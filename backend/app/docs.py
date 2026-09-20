@@ -126,6 +126,7 @@ POST_EXAMPLE = {
     "user": USER_EXAMPLE,
     "votes": 4,
     "voted": False,
+    "saved": False,
 }
 
 COMMENT_EXAMPLE = {

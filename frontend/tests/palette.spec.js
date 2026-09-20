@@ -13,7 +13,8 @@ const open = async (page) => {
 
 const rows = (page) => page.locator(".palette__row");
 const labels = (page) => page.locator(".palette__label");
-const selected = (page) => page.locator('.palette__row[aria-selected="true"] .palette__label');
+const selected = (page) =>
+  page.locator('.palette__row[aria-selected="true"] .palette__label');
 
 test.beforeEach(async ({ page, api }) => {
   await api.seed(4, "ada@commons.test");
@@ -21,7 +22,9 @@ test.beforeEach(async ({ page, api }) => {
   await expect(page.locator(CARD).first()).toBeVisible();
 });
 
-test("opens on the shortcut, closes on Escape, and hands focus back", async ({ page }) => {
+test("opens on the shortcut, closes on Escape, and hands focus back", async ({
+  page,
+}) => {
   await open(page);
   await expect(page.locator(".palette__input")).toBeFocused();
 
@@ -52,7 +55,9 @@ test("one flat list, and every row carries a key", async ({ page }) => {
   }
 });
 
-test("filters the posts already on screen, without asking the server", async ({ page }) => {
+test("filters the posts already on screen, without asking the server", async ({
+  page,
+}) => {
   const calls = [];
   await page.route(/\/posts\//, (route) => {
     calls.push(route.request().url());
@@ -174,9 +179,9 @@ test("copying a link is offered on a post and nowhere else", async ({ page, api 
   await expect(rows(page)).toHaveCount(1);
   await page.keyboard.press("Enter");
 
-  await expect.poll(() => page.evaluate(() => window.__copied)).toContain(
-    `#/posts/${created[0]}`
-  );
+  await expect
+    .poll(() => page.evaluate(() => window.__copied))
+    .toContain(`#/posts/${created[0]}`);
   await expect(page.getByText("Link copied.")).toBeVisible();
 });
 
@@ -215,11 +220,13 @@ test("the first five rows carry a number, and the rest do not", async ({ page })
   // Read what is painted, not what is in the DOM: past the fifth row the
   // element is still there — it holds the indent so the labels stay in one
   // column — and `visibility: hidden` is what makes it not a number.
-  const shown = await page.locator(".palette__ordinal").evaluateAll((els) =>
-    els.map((el) =>
-      getComputedStyle(el).visibility === "hidden" ? null : el.textContent
-    )
-  );
+  const shown = await page
+    .locator(".palette__ordinal")
+    .evaluateAll((els) =>
+      els.map((el) =>
+        getComputedStyle(el).visibility === "hidden" ? null : el.textContent
+      )
+    );
   expect(shown.length).toBeGreaterThan(5);
   expect(shown.slice(0, 5)).toEqual(["⌥1", "⌥2", "⌥3", "⌥4", "⌥5"]);
   expect(shown.slice(5).every((v) => v === null)).toBe(true);

@@ -109,7 +109,10 @@ test("what one reader had is not served to the next", async ({ page, api }) => {
   await expect(page.locator(".feed__list")).not.toContainText("Nobody else's business");
 });
 
-test("a post screen is conditional too, and a vote still lands", async ({ page, api }) => {
+test("a post screen is conditional too, and a vote still lands", async ({
+  page,
+  api,
+}) => {
   await api.seed(2, EMAIL);
   await api.signIn(page, EMAIL, "seedpassword");
   await page.goto("/");

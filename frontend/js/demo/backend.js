@@ -35,8 +35,10 @@ const API_PREFIX = "/api/v1";
 // went to 4 when notifications arrived, and that one is the clearest example
 // of why the number exists: a v3 blob has no `notifications` array, and the
 // first thing the header does on a signed-in visit is count the unread ones.
+// It went to 5 when the shelf got a server half: a v4 blob has no `saves`, and
+// `postOut` reads it for every card in the feed.
 const STORAGE_KEY = "commons.demo.v1";
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 
 // Access-token life, mirroring settings.access_token_expire_minutes and the
 // copy in tests/mock_api.py. The demo runs it at full length rather than
@@ -130,7 +132,10 @@ async function conditional(response, presented) {
   if (response.status !== 200) return response;
   const body = await response.clone().text();
   const tag = fingerprint(body);
-  const offered = (presented || "").split(",").map((v) => v.trim()).filter(Boolean);
+  const offered = (presented || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
 
   // Vary, like the real one: this endpoint answers differently depending on
   // who is asking, and nothing in between may treat the two as one.
@@ -228,7 +233,11 @@ function stem(word) {
 }
 
 function words(value) {
-  return String(value || "").toLowerCase().match(WORD_RE) || [];
+  return (
+    String(value || "")
+      .toLowerCase()
+      .match(WORD_RE) || []
+  );
 }
 
 // The markers ts_headline is configured with in backend/app/routers/post.py.
@@ -249,7 +258,9 @@ const HEADLINE_LEAD = 8; // words of run-up before the first match
  * nothing about the result is markup.
  */
 function headline(content, terms) {
-  const tokens = String(content || "").split(/\s+/).filter(Boolean);
+  const tokens = String(content || "")
+    .split(/\s+/)
+    .filter(Boolean);
   const matches = (tok) => {
     const found = tok.toLowerCase().match(WORD_RE);
     return !!found && terms.includes(stem(found[0]));
@@ -266,20 +277,32 @@ function headline(content, terms) {
       if (!found) return tok;
       const a = found.index;
       const b = a + found[0].length;
-      return tok.slice(0, a) + HEADLINE_START + tok.slice(a, b) + HEADLINE_STOP + tok.slice(b);
+      return (
+        tok.slice(0, a) +
+        HEADLINE_START +
+        tok.slice(a, b) +
+        HEADLINE_STOP +
+        tok.slice(b)
+      );
     })
     .join(" ");
 }
 
 /** The words of a piece of text, as the index would keep them. */
 function lexemes(value) {
-  return new Set(words(value).filter((w) => !STOP_WORDS.has(w)).map(stem));
+  return new Set(
+    words(value)
+      .filter((w) => !STOP_WORDS.has(w))
+      .map(stem)
+  );
 }
 
 /** What the caller actually asked for — empty when they asked nothing: an
  *  empty box, punctuation only, or nothing but stop words. */
 function searchTerms(search) {
-  return words(search).filter((w) => !STOP_WORDS.has(w)).map(stem);
+  return words(search)
+    .filter((w) => !STOP_WORDS.has(w))
+    .map(stem);
 }
 
 /** How well one post answers a search, or null if it doesn't. Every term has
@@ -358,6 +381,7 @@ function searchRank(row, terms) {
  *   see the note on `openSession` for why it lives in here
  * @property {DemoPost[]} posts
  * @property {string[]} votes                 "email\0postId"
+ * @property {string[]} saves                 "email\0postId", newest save first
  * @property {DemoComment[]} comments
  * @property {DemoNotification[]} notifications
  * @property {number} nextUserId
@@ -378,6 +402,10 @@ function emptyState() {
     cookie: null,
     posts: [],
     votes: [], // ["email\u0000postId", ...]
+    // The shelf, in shelf order: newest save first. An array rather than a set
+    // because a shelf is ordered and a tally isn't — the real table carries a
+    // created_at and an index that hands the ordering back for free.
+    saves: [], // ["email\u0000postId", ...] newest first
     comments: [],
     notifications: [],
     nextUserId: 1,
@@ -394,8 +422,7 @@ function stateFromSeed(seed) {
   const taken = new Set();
   for (const person of seed.users || []) {
     const username =
-      (person.username || "").toLowerCase() ||
-      usernameFromEmail(person.email, taken);
+      (person.username || "").toLowerCase() || usernameFromEmail(person.email, taken);
     taken.add(username);
     state.users.push({
       id: state.nextUserId++,
@@ -449,7 +476,7 @@ function stateFromSeed(seed) {
       post_id: post.id,
       author_email: comment.author,
       content: comment.content,
-      parent_id: comment.reply_to ? commentIds[comment.reply_to - 1] ?? null : null,
+      parent_id: comment.reply_to ? (commentIds[comment.reply_to - 1] ?? null) : null,
       created_at: nowIso(-(comment.minutes_ago || 0) * 60),
     });
   }
@@ -616,6 +643,9 @@ export function createDemoBackend({
     // False for a reader who isn't signed in, which is the truthful answer
     // rather than a missing one.
     voted: !!viewer && state.votes.includes(voteKey(viewer, row.id)),
+    // Same terms as `voted`: a fact about the pair, false rather than missing
+    // for a reader who isn't signed in.
+    saved: !!viewer && state.saves.includes(voteKey(viewer, row.id)),
     excerpt: terms && terms.length ? headline(row.content, terms) : null,
   });
 
@@ -624,11 +654,7 @@ export function createDemoBackend({
   const maySee = (row, viewer) => row.published || row.author_email === viewer;
 
   const byOldest = (a, b) =>
-    a.created_at === b.created_at
-      ? a.id - b.id
-      : a.created_at < b.created_at
-        ? -1
-        : 1;
+    a.created_at === b.created_at ? a.id - b.id : a.created_at < b.created_at ? -1 : 1;
 
   const repliesTo = (commentId) =>
     state.comments.filter((c) => c.parent_id === commentId).sort(byOldest);
@@ -651,7 +677,9 @@ export function createDemoBackend({
   function register(body) {
     const email = String(body.email || "").trim();
     const password = String(body.password || "");
-    const username = String(body.username || "").trim().toLowerCase();
+    const username = String(body.username || "")
+      .trim()
+      .toLowerCase();
     const errors = [];
 
     if (!USERNAME_RE.test(username) || RESERVED_USERNAMES.has(username)) {
@@ -721,7 +749,9 @@ export function createDemoBackend({
   function updateMe(body, viewer) {
     const u = userByEmail(viewer);
     if (!u) return detail(401, "Could not validate credentials");
-    const wanted = String(body.username || "").trim().toLowerCase();
+    const wanted = String(body.username || "")
+      .trim()
+      .toLowerCase();
     if (!USERNAME_RE.test(wanted) || RESERVED_USERNAMES.has(wanted)) {
       return json(422, {
         detail: [
@@ -775,6 +805,12 @@ export function createDemoBackend({
       state.comments = kept;
     }
     state.votes = state.votes.filter((v) => {
+      const [email, postId] = v.split("\u0000");
+      return email !== viewer && !mine.has(Number(postId));
+    });
+    // Both directions again — this person's shelf, and everyone else's saves
+    // of the posts that have just gone with them.
+    state.saves = state.saves.filter((v) => {
       const [email, postId] = v.split("\u0000");
       return email !== viewer && !mine.has(Number(postId));
     });
@@ -840,8 +876,8 @@ export function createDemoBackend({
         a.created_at === b.created_at
           ? b.id - a.id
           : a.created_at < b.created_at
-          ? 1
-          : -1
+            ? 1
+            : -1
       );
 
     const total = rows.length;
@@ -1095,7 +1131,7 @@ export function createDemoBackend({
       rows = visible
         .map((row) => ({ row, rank: searchRank(row, terms) }))
         .filter((hit) => hit.rank !== null)
-        .sort((a, b) => (b.rank - a.rank) || byNewest(a.row, b.row))
+        .sort((a, b) => b.rank - a.rank || byNewest(a.row, b.row))
         .map((hit) => hit.row);
     } else if (sort === "warm" || sort === "discussed") {
       const warm = sort === "warm";
@@ -1141,7 +1177,9 @@ export function createDemoBackend({
   function createPost(body, email) {
     if (typeof body.title !== "string" || typeof body.content !== "string") {
       return json(422, {
-        detail: [{ loc: ["body"], msg: "title and content are required", type: "missing" }],
+        detail: [
+          { loc: ["body"], msg: "title and content are required", type: "missing" },
+        ],
       });
     }
     const ts = nowIso();
@@ -1210,6 +1248,9 @@ export function createDemoBackend({
     });
     state.comments = state.comments.filter((c) => c.post_id !== id);
     state.votes = state.votes.filter((v) => !v.endsWith(`\u0000${id}`));
+    // saves.post_id cascades too: a deleted post leaves nobody's shelf
+    // pointing at nothing.
+    state.saves = state.saves.filter((v) => !v.endsWith(`\u0000${id}`));
     save();
     return json(204, null);
   }
@@ -1379,6 +1420,64 @@ export function createDemoBackend({
     return json(201, { message: "successfully deleted vote" });
   }
 
+  // — the shelf --------------------------------------------------------------
+  // Mirrors backend/app/routers/shelf.py, including the part that is easy to
+  // get wrong by being helpful: **saving is idempotent, both ways**. A shelf is
+  // a set, so a second press asks for the state you are already in, and
+  // neither direction is ever an error. Vote is the counter-example one file
+  // up — it answers 409 and 404 on the repeat, and the client has to know to
+  // read those as success.
+  function savePost(id, email) {
+    const row = postById(id);
+    // 404 rather than 403 for a draft that isn't yours, the same answer
+    // reading it gives — otherwise the shelf confirms that it exists.
+    if (!row || !maySee(row, email)) {
+      return detail(404, `Post with id: ${id} was not found`);
+    }
+    const key = voteKey(email, id);
+    if (!state.saves.includes(key)) state.saves.unshift(key);
+    save();
+    return json(204, null);
+  }
+
+  function unsavePost(id, email) {
+    // No 404 here, deliberately: the post not existing, you not being able to
+    // see it, and you not having saved it all end in the same place.
+    const key = voteKey(email, id);
+    state.saves = state.saves.filter((v) => v !== key);
+    save();
+    return json(204, null);
+  }
+
+  function getShelf(query, email) {
+    const page = Math.max(1, Number(query.get("page") || 1));
+    const pageSize = Number(query.get("page_size") || 10);
+    if (!(pageSize >= 1 && pageSize <= 100)) {
+      return invalid(["query", "page_size"], "out of range");
+    }
+
+    // Shelf order, and the visibility rule applied on *read*: a post whose
+    // author has since unpublished it leaves the shelf without anything having
+    // had to run when they did.
+    const rows = state.saves
+      .filter((v) => v.startsWith(`${email}\u0000`))
+      .map((v) => postById(Number(v.split("\u0000")[1])))
+      .filter((row) => row && maySee(row, email));
+
+    const total = rows.length;
+    const pages = total ? Math.ceil(total / pageSize) : 0;
+    const start = (page - 1) * pageSize;
+    return json(200, {
+      items: rows.slice(start, start + pageSize).map((r) => postOut(r, email)),
+      total,
+      page,
+      page_size: pageSize,
+      pages,
+      has_next: page < pages,
+      has_prev: page > 1,
+    });
+  }
+
   // Only reachable from the test control surface below, never from the UI.
   // `votes` hangs that many upvotes on each post it creates. The voters are
   // synthetic addresses with no accounts behind them, exactly as in
@@ -1464,7 +1563,8 @@ export function createDemoBackend({
     const csrfHeader = init.headers?.["X-CSRF-Token"] || null;
 
     // Endpoints that need a signed-in caller all answer the same way without one.
-    const requireAuth = () => (viewer ? null : detail(401, "Could not validate credentials"));
+    const requireAuth = () =>
+      viewer ? null : detail(401, "Could not validate credentials");
 
     if (route === "/") return json(200, { service: "commons-demo-api" });
     if (route === "/healthz") return json(200, { status: "ok" });
@@ -1512,6 +1612,17 @@ export function createDemoBackend({
     }
     if (route === "/vote/" && method === "POST") {
       return requireAuth() || vote(body(), viewer);
+    }
+
+    if (route === "/shelf" && method === "GET") {
+      return requireAuth() || getShelf(url.searchParams, viewer);
+    }
+
+    const oneSave = route.match(/^\/posts\/(\d+)\/save$/);
+    if (oneSave) {
+      const id = Number(oneSave[1]);
+      if (method === "PUT") return requireAuth() || savePost(id, viewer);
+      if (method === "DELETE") return requireAuth() || unsavePost(id, viewer);
     }
 
     const comments = route.match(/^\/posts\/(\d+)\/comments$/);
@@ -1566,7 +1677,9 @@ export function createDemoBackend({
         register({
           email,
           password,
-          username: username || usernameFromEmail(email, new Set(state.users.map((u) => u.username))),
+          username:
+            username ||
+            usernameFromEmail(email, new Set(state.users.map((u) => u.username))),
         }).status,
       // Open a session without walking the sign-in screen, for tests that need
       // to start on a signed-in page. It goes through the same login() the app

@@ -88,6 +88,19 @@ class Post(Base):
     # documented compromise sitting in two files.
     voted: Mapped[bool] = query_expression()
 
+    # Whether this post is on the asking reader's shelf. Same story as
+    # ``voted``, one step later: the shelf shipped as a set of ids in
+    # localStorage, which is instant and needs no account and does not follow
+    # anybody to a second device.
+    #
+    # Unlike ``voted`` this one is *not* free. The feed's query already outer-
+    # joins votes because it has to count them, so "did you vote" is another
+    # aggregate over rows already read; nothing counts saves, so there is no
+    # join to borrow. A second outer join would also fan out against the first
+    # — the same multiplication the "discussed" sort guards against — so this
+    # is answered with a correlated EXISTS instead. See page_of_posts.
+    saved: Mapped[bool] = query_expression()
+
     # The sentence a search matched on, with the matching words marked. Only
     # ever attached when somebody searched — see ts_headline in routers/post.py
     # — because it is an answer to a question, and without a question there is
@@ -107,7 +120,11 @@ class User(Base):
     # second normalised column to keep in step.
     username: Mapped[str] = mapped_column(unique=True)
     email: Mapped[str] = mapped_column(unique=True)
-    password: Mapped[str]
+    # Named for what it holds. This was `password` until 2026-09-20 and never
+    # once contained one — bcrypt output is what is written here — and a column
+    # whose name invites somebody to log it, return it, or compare it against
+    # what a form sent is a name worth spending a migration on.
+    password_hash: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
     )
@@ -197,6 +214,46 @@ class Vote(Base):
     )
     post_id: Mapped[int] = mapped_column(
         ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class Save(Base):
+    """A post somebody put on their shelf.
+
+    The same shape as ``Vote`` — a composite primary key over the pair — and
+    for the same reason: "has this person saved that post" is the question, and
+    a key that *is* the question makes saving twice impossible at the database
+    rather than in a handler that might forget.
+
+    What it adds that ``Vote`` doesn't is ``created_at``, because a shelf has an
+    order and a tally doesn't. The one query this table serves is "my shelf,
+    most recently saved first", and the index below hands back that ordering
+    without a sort.
+
+    Both foreign keys cascade at the database. A post that is deleted leaves
+    nobody's shelf pointing at nothing; an account that goes takes its shelf.
+    """
+
+    __tablename__ = "saves"
+
+    # The primary key leads with user_id, which is the only way this table is
+    # ever read. created_at on the end of a second index is what makes the
+    # ordering free. post_id gets its own index for the other direction — the
+    # cascade when a post is deleted, which is otherwise a scan of every save
+    # anyone ever made.
+    __table_args__ = (
+        Index("ix_saves_user_id_created_at", "user_id", "created_at"),
+        Index("ix_saves_post_id", "post_id"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
     )
 
 

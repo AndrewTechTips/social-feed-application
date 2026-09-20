@@ -451,6 +451,11 @@
             "title": "Published",
             "type": "boolean"
           },
+          "saved": {
+            "default": false,
+            "title": "Saved",
+            "type": "boolean"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1269,6 +1274,7 @@
                       "created_at": "2026-09-08T22:41:07.220Z",
                       "id": 12,
                       "published": true,
+                      "saved": false,
                       "title": "The library that stays open all night",
                       "updated_at": "2026-09-08T22:41:07.220Z",
                       "user": {
@@ -1324,6 +1330,7 @@
                   "created_at": "2026-09-08T22:41:07.220Z",
                   "id": 12,
                   "published": true,
+                  "saved": false,
                   "title": "The library that stays open all night",
                   "updated_at": "2026-09-08T22:41:07.220Z",
                   "user": {
@@ -1460,6 +1467,7 @@
                   "created_at": "2026-09-08T22:41:07.220Z",
                   "id": 12,
                   "published": true,
+                  "saved": false,
                   "title": "The library that stays open all night",
                   "updated_at": "2026-09-08T22:41:07.220Z",
                   "user": {
@@ -1537,6 +1545,7 @@
                   "created_at": "2026-09-08T22:41:07.220Z",
                   "id": 12,
                   "published": true,
+                  "saved": false,
                   "title": "The library that stays open all night",
                   "updated_at": "2026-09-08T22:41:07.220Z",
                   "user": {
@@ -1642,6 +1651,7 @@
                   "created_at": "2026-09-08T22:41:07.220Z",
                   "id": 12,
                   "published": true,
+                  "saved": false,
                   "title": "The library that stays open all night",
                   "updated_at": "2026-09-08T22:41:07.220Z",
                   "user": {
@@ -1702,6 +1712,116 @@
         "summary": "Replace a post",
         "tags": [
           "Posts"
+        ]
+      }
+    },
+    "/api/v1/posts/{id}/save": {
+      "delete": {
+        "description": "Remove a post from your shelf.\n\nNo 404 on this one, deliberately, and not for symmetry: there is nothing\nhere worth reporting as missing. Whether the post exists, whether you could\nsee it, and whether you had saved it all end in the same place — it is not\non your shelf — and three ways of saying that would be three branches a\nclient has to handle to reach one outcome.",
+        "operationId": "unsave_post_api_v1_posts__id__save_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Off your shelf — including when it was never on it. The state you asked for is the state you're in."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Take a post off your shelf",
+        "tags": [
+          "Shelf"
+        ]
+      },
+      "put": {
+        "description": "Save a post you can see.\n\nA draft you don't own answers 404, exactly as reading it would — a 403\nwould confirm that it exists.",
+        "operationId": "save_post_api_v1_posts__id__save_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "On your shelf. Saying so again is the same answer — this is a set, and asking for a post to be in it twice is not an error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No such row — or one you aren't allowed to know about. Somebody else's unpublished post answers this, deliberately, because a 403 would confirm that it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Put a post on your shelf",
+        "tags": [
+          "Shelf"
         ]
       }
     },
@@ -1884,6 +2004,98 @@
         "summary": "Say something about a post",
         "tags": [
           "Comments"
+        ]
+      }
+    },
+    "/api/v1/shelf": {
+      "get": {
+        "description": "Your shelf, most recently saved first.\n\nOrdered by when you saved it rather than by when it was written, which is\nthe difference between a shelf and a feed: what you put there last is what\nyou meant to read next. `ix_saves_user_id_created_at` hands that ordering\nback without a sort.\n\nIt is one page of the feed's own machinery, so the visibility rule, the\nvote counts and `voted` are all the same here as anywhere else.",
+        "operationId": "get_shelf_api_v1_shelf_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "has_next": false,
+                  "has_prev": false,
+                  "items": [
+                    {
+                      "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                      "created_at": "2026-09-08T22:41:07.220Z",
+                      "id": 12,
+                      "published": true,
+                      "saved": true,
+                      "title": "The library that stays open all night",
+                      "updated_at": "2026-09-08T22:41:07.220Z",
+                      "user": {
+                        "created_at": "2026-08-21T09:14:02.511Z",
+                        "id": 7,
+                        "username": "marenholt"
+                      },
+                      "user_id": 7,
+                      "voted": false,
+                      "votes": 4
+                    }
+                  ],
+                  "page": 1,
+                  "page_size": 10,
+                  "pages": 1,
+                  "total": 6
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PostPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "422": {
+            "description": "The body or the query string didn't validate. FastAPI's own shape: `detail` is a list of `{loc, msg, type}`, one per field."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "What you saved",
+        "tags": [
+          "Shelf"
         ]
       }
     },
@@ -2191,6 +2403,7 @@
                       "created_at": "2026-09-08T22:41:07.220Z",
                       "id": 12,
                       "published": true,
+                      "saved": false,
                       "title": "The library that stays open all night",
                       "updated_at": "2026-09-08T22:41:07.220Z",
                       "user": {
@@ -2364,6 +2577,10 @@
     {
       "description": "Accounts and public identities. The **username** is what everyone sees; the **email** is a credential and leaves the server on exactly one endpoint, `GET /users/me`, where the caller is the only person it belongs to.",
       "name": "Users"
+    },
+    {
+      "description": "Posts saved to read later. A shelf is a **set**, so saving is idempotent — `PUT` and `DELETE` both answer 204 whether or not anything changed, and a client never has to treat one of its own errors as success.",
+      "name": "Shelf"
     },
     {
       "description": "One upvote per person per post. There is no downvote — the only live quantity in this product is agreement.",

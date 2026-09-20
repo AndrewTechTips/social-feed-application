@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 # This file is backend/app/config.py, so the repo root is two levels up.
 # Building the path from __file__ makes the .env load work no matter which
@@ -53,6 +54,34 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
+
+    def database_url(self, suffix: str = "") -> URL:
+        """The connection URL, assembled rather than formatted.
+
+        This used to be an f-string in three places, and an f-string is wrong
+        here for one specific reason: a URL has reserved characters and a
+        password is a place people put them. A password containing `@`, `:`,
+        `/` or `#` produces a string that parses — just not into the database
+        you meant. `foo@bar` as a password moves the host boundary and the
+        driver goes looking for a server called `bar`.
+
+        `URL.create` takes the parts as parts and does its own percent-encoding
+        at render time, so there is no string for a password to be misread in.
+        The one-liner it replaces was also duplicated in `alembic/env.py` and
+        in the test conftest, which meant three chances to fix it and two
+        chances to forget.
+
+        `suffix` is for the test database, which is the same connection with
+        `_test` on the end of the name.
+        """
+        return URL.create(
+            "postgresql",
+            username=self.database_username,
+            password=self.database_password,
+            host=self.database_hostname,
+            port=int(self.database_port),
+            database=f"{self.database_name}{suffix}",
+        )
 
     @property
     def secure_cookies(self) -> bool:

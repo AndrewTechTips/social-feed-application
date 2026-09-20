@@ -9,7 +9,11 @@
     "test:headed": "playwright test -c tests/playwright.config.js --headed",
     "test:ui": "playwright test -c tests/playwright.config.js --ui",
     "test:report": "playwright show-report tests/.report",
+    "test:visual": "playwright test -c tests/playwright.config.js visual.spec.js",
+    "test:visual:update": "playwright test -c tests/playwright.config.js visual.spec.js --update-snapshots",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"js/**/*.js\" \"tests/**/*.js\" \"styles/**/*.css\" \"*.html\" \"sw.js\"",
+    "format:check": "prettier --check \"js/**/*.js\" \"tests/**/*.js\" \"styles/**/*.css\" \"*.html\" \"sw.js\"",
     "lighthouse": "node tests/lighthouse.mjs"
   },
   "devDependencies": {
@@ -17,6 +21,7 @@
     "@playwright/test": "^1.55.0",
     "chrome-launcher": "^1.2.1",
     "lighthouse": "^13.4.1",
+    "prettier": "^3.9.8",
     "typescript": "^5.9.2"
   },
   "engines": {

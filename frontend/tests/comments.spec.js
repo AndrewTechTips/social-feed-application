@@ -51,8 +51,7 @@ const commentText = (page) => page.locator(".comment__text");
 // A comment is on screen before the request that saves it has answered, so
 // anything that goes on to inspect what the *store* holds has to wait for the
 // optimistic row to stop being provisional first.
-const settled = (page) =>
-  expect(page.locator(".comment--pending")).toHaveCount(0);
+const settled = (page) => expect(page.locator(".comment--pending")).toHaveCount(0);
 
 // ---------------------------------------------------------------------------
 // Reading
@@ -106,8 +105,9 @@ test("signed out there's no composer, just a way in", async ({ page, api }) => {
   await page.goto("/#/posts/1");
 
   await expect(page.getByLabel("Add a comment")).toHaveCount(0);
-  await expect(page.locator(".composer__prompt").getByRole("link", { name: "Sign in" }))
-    .toBeVisible();
+  await expect(
+    page.locator(".composer__prompt").getByRole("link", { name: "Sign in" })
+  ).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
@@ -132,10 +132,7 @@ test("a new comment is on screen before the server has answered", async ({
   await expect(comments(page).first()).not.toHaveClass(/comment--pending/);
 });
 
-test("a comment that doesn't post gives you your words back", async ({
-  page,
-  api,
-}) => {
+test("a comment that doesn't post gives you your words back", async ({ page, api }) => {
   await api.seed(1, "ada@commons.test");
   await register(page, uniqueEmail("unlucky"));
   await page.goto("/#/posts/1");
@@ -197,7 +194,9 @@ test("there's nothing to remove on somebody else's comment", async ({ page, api 
   await page.goto("/#/posts/1");
 
   await expect(comments(page)).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Remove your comment" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove your comment" })).toHaveCount(
+    0
+  );
 });
 
 test("the author of a post can't remove comments on it either", async ({
@@ -225,11 +224,14 @@ test("the author of a post can't remove comments on it either", async ({
   await page.goto(`/#/posts/${postId}`);
   await expect(comments(page)).toHaveCount(1);
   // Owning the room is not owning what was said in it.
-  await expect(page.getByRole("button", { name: "Remove your comment" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove your comment" })).toHaveCount(
+    0
+  );
   // and the post's own Delete is still there, which is the control this one
   // is deliberately not
-  await expect(page.locator(".detail__actions").getByRole("button", { name: "Delete" }))
-    .toBeVisible();
+  await expect(
+    page.locator(".detail__actions").getByRole("button", { name: "Delete" })
+  ).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
@@ -289,7 +291,6 @@ test("deleting a post takes its comments with it", async ({ page, api }) => {
   expect(String(left[0].post_id)).toBe(survivor);
 });
 
-
 // ---------------------------------------------------------------------------
 // Replying — one level, deliberately
 // ---------------------------------------------------------------------------
@@ -322,7 +323,10 @@ test("a reply lands under what it answers", async ({ page, api }) => {
   await expect(replies(page)).toHaveText(/Two winters now\./);
   // Inside the conversation it answers, not loose in the thread.
   await expect(
-    page.locator(".comments__list > .comment").first().locator(".comment__replies .comment")
+    page
+      .locator(".comments__list > .comment")
+      .first()
+      .locator(".comment__replies .comment")
   ).toHaveCount(1);
   await expect(page.locator(".comments__list > .comment")).toHaveCount(1);
 });
@@ -382,7 +386,10 @@ test("the heading counts everything said, not just the conversations", async ({
   await expect(page.locator(".comments__count")).toHaveText("3");
 });
 
-test("removing a conversation takes what was said back to it", async ({ page, api }) => {
+test("removing a conversation takes what was said back to it", async ({
+  page,
+  api,
+}) => {
   await register(page, uniqueEmail("cascade"));
   await writePost(page, "A wall");
   await say(page, "One.");
@@ -422,7 +429,10 @@ test("cancelling puts the thread back", async ({ page, api }) => {
 
   await page.locator(".comment__reply").click();
   await expect(page.locator(".composer--reply")).toBeVisible();
-  await page.locator(".composer--reply").getByRole("button", { name: "Cancel" }).click();
+  await page
+    .locator(".composer--reply")
+    .getByRole("button", { name: "Cancel" })
+    .click();
   await expect(page.locator(".composer--reply")).toHaveCount(0);
   await expect(page.locator(".comment__reply")).toBeVisible();
 });

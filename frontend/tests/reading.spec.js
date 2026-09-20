@@ -69,17 +69,21 @@ test("it fills as you read, and is empty before you start", async ({ page, api }
   await page.locator("#post-title").fill("A long walk");
   // Long enough to scroll several screens, short enough to stay inside the
   // 5,000-character limit the composer enforces.
-  await page.locator("#post-content").fill(
-    Array.from(
-      { length: 20 },
-      (_, i) => `Paragraph ${i + 1}. ` + "Words about a wall. ".repeat(11)
-    ).join("\n\n")
-  );
+  await page
+    .locator("#post-content")
+    .fill(
+      Array.from(
+        { length: 20 },
+        (_, i) => `Paragraph ${i + 1}. ` + "Words about a wall. ".repeat(11)
+      ).join("\n\n")
+    );
   await page.getByRole("button", { name: "Post" }).click();
   await expect(page.locator(".detail__title")).toHaveText("A long walk");
 
   const full = await page.evaluate(() => innerWidth);
-  await expect.poll(() => barWidth(page), { message: "empty at the top" }).toBeLessThan(4);
+  await expect
+    .poll(() => barWidth(page), { message: "empty at the top" })
+    .toBeLessThan(4);
 
   const max = await page.evaluate(
     () => document.documentElement.scrollHeight - innerHeight
@@ -93,9 +97,9 @@ test("it fills as you read, and is empty before you start", async ({ page, api }
   expect(await barWidth(page)).toBeLessThan(full * 0.7);
 
   await page.evaluate((y) => window.scrollTo(0, y), max);
-  await expect.poll(() => barWidth(page), { message: "full at the end" }).toBeGreaterThan(
-    full * 0.95
-  );
+  await expect
+    .poll(() => barWidth(page), { message: "full at the end" })
+    .toBeGreaterThan(full * 0.95);
 });
 
 test.describe("reduced motion", () => {
@@ -111,7 +115,9 @@ test.describe("reduced motion", () => {
     // first pixel of scroll — a lie, and the one failure mode this exemption
     // exists to prevent.
     expect(
-      await page.locator(".reading").evaluate((el) => getComputedStyle(el).animationDuration)
+      await page
+        .locator(".reading")
+        .evaluate((el) => getComputedStyle(el).animationDuration)
     ).toBe("auto");
     await expect.poll(() => barWidth(page)).toBeLessThan(4);
   });
@@ -129,10 +135,13 @@ test("headings balance their lines; prose doesn't", async ({ page, api }) => {
   await expect(page.locator(CARD).first()).toBeVisible();
 
   const style = (sel) =>
-    page.locator(sel).first().evaluate((el) => {
-      const s = getComputedStyle(el);
-      return s.textWrapStyle || s.textWrap;
-    });
+    page
+      .locator(sel)
+      .first()
+      .evaluate((el) => {
+        const s = getComputedStyle(el);
+        return s.textWrapStyle || s.textWrap;
+      });
 
   // A card title is a heading, and a heading is short enough for the browser
   // to even out every line of it — which is what stops a two-line title

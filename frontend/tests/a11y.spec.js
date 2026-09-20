@@ -77,7 +77,9 @@ test("a post has no violations", async ({ page, api }) => {
 
 test("sign in has no violations", async ({ page, api }) => {
   await page.goto("/#/login");
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sign in", exact: true })
+  ).toBeVisible();
   await scan(page);
 });
 
@@ -138,7 +140,10 @@ test("the delete confirmation has no violations", async ({ page, api }) => {
   await register(page, uniqueEmail("a11y"));
   const id = await write(page, "About to go");
   await page.goto(`/#/posts/${id}`);
-  await page.locator(".detail__actions").getByRole("button", { name: "Delete" }).click();
+  await page
+    .locator(".detail__actions")
+    .getByRole("button", { name: "Delete" })
+    .click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await scan(page);
 });

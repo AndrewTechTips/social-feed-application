@@ -99,7 +99,10 @@ test("the character limit shows up only when it is close", async ({ page, api })
 });
 
 // ── and what it keeps ──────────────────────────────────────────────────────
-test("what you typed is still there after the page goes away", async ({ page, api }) => {
+test("what you typed is still there after the page goes away", async ({
+  page,
+  api,
+}) => {
   await composer(page, api);
   await title(page).fill("A half-written thing");
   await body(page).fill("I had got this far when the tab went.");
@@ -204,7 +207,10 @@ test("a write that doesn't land keeps the words", async ({ page, api }) => {
   await expect(title(page)).toHaveValue("Worth keeping");
 });
 
-test("editing an existing post does not touch the draft slot", async ({ page, api }) => {
+test("editing an existing post does not touch the draft slot", async ({
+  page,
+  api,
+}) => {
   await composer(page, api, { posts: 1 });
   await title(page).fill("Keep me");
   await body(page).fill("I am unfinished.");

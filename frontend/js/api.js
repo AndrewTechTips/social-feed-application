@@ -4,14 +4,7 @@
 // codes (401 / 403 / 429) in one place.
 
 import { apiFetch } from "./config.js";
-import {
-  get,
-  clearSession,
-  setAccess,
-  accessToken,
-  csrfToken,
-} from "./store.js";
-import { toast } from "./ui.js";
+import { get, clearSession, setAccess, accessToken, csrfToken } from "./store.js";
 
 export class ApiError extends Error {
   constructor(status, detail, data) {
@@ -29,7 +22,8 @@ function readDetail(data, status) {
   if (!data) return `Request failed (${status})`;
   const d = data.detail;
   if (typeof d === "string") return d;
-  if (Array.isArray(d) && d.length) return d[0].msg || "That didn't go through. Try again?";
+  if (Array.isArray(d) && d.length)
+    return d[0].msg || "That didn't go through. Try again?";
   return `Request failed (${status})`;
 }
 
@@ -303,15 +297,42 @@ async function request(
     // no token was sent at all, which is what a 401 on a write means once the
     // identity has been dropped.
     clearSession();
-    if (!location.hash.startsWith("#/login")) location.hash = "#/login";
-    toast("Your session expired.");
-  } else if (res.status === 403) {
-    toast("You can't edit that.");
-  } else if (res.status === 429) {
-    toast("You're doing that a bit fast — try again in a minute.");
+    // Only here. A 401 on a request that never carried a token is not a
+    // session ending — it is a signed-out reader touching something that needs
+    // one, which the screen they are on already knows how to say. Announcing it
+    // would send somebody who is simply browsing to a sign-in form they did not
+    // ask for, and on a boot with a dead cookie it would replace the feed.
+    announce(401);
+  } else if (res.status === 403 || res.status === 429) {
+    announce(res.status);
   }
 
   throw new ApiError(res.status, readDetail(data, res.status), data);
+}
+
+/**
+ * Tell the app that a request came back with a status the whole app cares
+ * about, and let the app decide what that looks like.
+ *
+ * This file used to do it itself: it imported `toast` and it assigned to
+ * `location.hash`, which meant the transport layer put things on the screen
+ * and navigated between screens. It worked — and it was the one place in this
+ * codebase where the layering ran backwards, which made it the one place a
+ * change to the interface could break a fetch.
+ *
+ * An event rather than a callback passed in from `main.js`, because there is
+ * no single caller to pass one: `request()` is reached from every view, from
+ * the vote control, from the notification poller. An event has one publisher
+ * and any number of subscribers, which is the shape this actually is. It is
+ * the same mechanism the theme toggle and the focus mode already use.
+ *
+ * What subscribes is `main.js`, in one place, and that is also where the
+ * wording lives now — which is where wording belongs.
+ *
+ * @param {number} status
+ */
+function announce(status) {
+  dispatchEvent(new CustomEvent("commons:api-error", { detail: { status } }));
 }
 
 export const api = {

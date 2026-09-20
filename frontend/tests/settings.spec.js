@@ -28,7 +28,10 @@ const name = (page) => page.locator("#settings-username");
 const saveName = (page) => page.getByRole("button", { name: "Save name" });
 
 // ── getting there ──────────────────────────────────────────────────────────
-test("your own profile offers a way in; other people's don't", async ({ page, api }) => {
+test("your own profile offers a way in; other people's don't", async ({
+  page,
+  api,
+}) => {
   await api.seed(1, EMAIL);
   await api.register("bea@commons.test", "seedpassword", "bea");
   await api.signIn(page, EMAIL, "seedpassword");
@@ -52,7 +55,9 @@ test("the palette can get there, and only offers it when there's an account", as
   await page.goto("/");
   await expect(page.locator(CARD)).toHaveCount(1);
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.locator(".palette__row", { hasText: "Your account" })).toHaveCount(0);
+  await expect(page.locator(".palette__row", { hasText: "Your account" })).toHaveCount(
+    0
+  );
   await page.keyboard.press("Escape");
 
   await api.signIn(page, EMAIL, "seedpassword");
@@ -63,7 +68,9 @@ test("the palette can get there, and only offers it when there's an account", as
   await expect(page).toHaveURL(/#\/settings$/);
 });
 
-test("a signed-out visitor who types the address is sent to sign in", async ({ page }) => {
+test("a signed-out visitor who types the address is sent to sign in", async ({
+  page,
+}) => {
   await page.goto("/#/settings");
   await expect(page).toHaveURL(/#\/login$/);
 });
@@ -94,7 +101,9 @@ test("a rename keeps your posts", async ({ page, api }) => {
   await page.goto("/#/u/adalovelace");
   await expect(page.locator(CARD)).toHaveCount(3);
   // And the byline on each has moved with it rather than keeping a stale copy.
-  await expect(page.locator(`${CARD} .card__author`).first()).toContainText("adalovelace");
+  await expect(page.locator(`${CARD} .card__author`).first()).toContainText(
+    "adalovelace"
+  );
 });
 
 test("a name somebody else has comes back as an error on the field", async ({
@@ -107,7 +116,9 @@ test("a name somebody else has comes back as an error on the field", async ({
   await name(page).fill("bea");
   await saveName(page).click();
 
-  await expect(page.locator("#settings-username-err")).toHaveText("That username is taken.");
+  await expect(page.locator("#settings-username-err")).toHaveText(
+    "That username is taken."
+  );
   await expect(name(page)).toHaveAttribute("aria-invalid", "true");
   // Still signed in as who you were, and the box still holds what you tried —
   // a form that clears itself on a rejection makes you type it twice to find
@@ -128,7 +139,9 @@ test("a name that breaks the rules never leaves the page", async ({ page, api })
   await name(page).fill("9lives");
   await saveName(page).click();
 
-  await expect(page.locator("#settings-username-err")).toContainText("starting with a letter");
+  await expect(page.locator("#settings-username-err")).toContainText(
+    "starting with a letter"
+  );
   expect(asked).toBe(0);
 });
 
@@ -229,7 +242,9 @@ test("deleting an account takes everything that was attached to it", async ({
   await page.locator("#settings-confirm").fill("ada");
   await page.getByRole("button", { name: "Delete my account" }).click();
 
-  await expect(page.locator(".toast")).toHaveText("Your account is gone. Thanks for reading.");
+  await expect(page.locator(".toast")).toHaveText(
+    "Your account is gone. Thanks for reading."
+  );
   await expect(page).toHaveURL(/#\/$/);
   await expect(page.locator(".account")).toContainText("Sign in");
 

@@ -40,7 +40,9 @@ test("every figure is one from the committed measurement", async ({ page }) => {
   }
   // And nothing typed in that isn't measured.
   for (const n of numbers) {
-    expect(Object.values(stats), `${n} is on the page but not in stats.json`).toContain(n);
+    expect(Object.values(stats), `${n} is on the page but not in stats.json`).toContain(
+      n
+    );
   }
 });
 
@@ -86,9 +88,7 @@ test("the links off the site open away from it, safely", async ({ page }) => {
 
   const outward = await page
     .locator('.colophon a[href^="http"]')
-    .evaluateAll((els) =>
-      els.map((el) => ({ target: el.target, rel: el.rel }))
-    );
+    .evaluateAll((els) => els.map((el) => ({ target: el.target, rel: el.rel })));
   expect(outward.length).toBeGreaterThan(4);
   for (const link of outward) {
     expect(link.target).toBe("_blank");

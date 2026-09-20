@@ -7,7 +7,10 @@
 // already looking at a filter.
 
 import { api, ApiError } from "../api.js";
-import { h, mountView, skeletonCards, avatar, postCard, leavingScrollY } from "../ui.js";
+import { h, skeletonCards } from "../dom.js";
+import { avatar } from "../format.js";
+import { leavingScrollY, mountView } from "../view.js";
+import { postCard } from "../components/card.js";
 import { get, setKnownPosts, cacheFeed, readFeedCache, viewerKey } from "../store.js";
 import { onLeavingScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
@@ -108,8 +111,7 @@ export function renderProfile({ params, isStale }) {
 
   function paintCount() {
     if (total == null) return;
-    countLine.textContent =
-      total === 1 ? "1 post" : `${total.toLocaleString()} posts`;
+    countLine.textContent = total === 1 ? "1 post" : `${total.toLocaleString()} posts`;
   }
 
   function showError(message) {
@@ -125,7 +127,11 @@ export function renderProfile({ params, isStale }) {
       "div",
       { class: "feed__error" },
       h("p", {}, message),
-      h("button", { class: "btn btn--ghost", type: "button", onclick: retry }, "Try again")
+      h(
+        "button",
+        { class: "btn btn--ghost", type: "button", onclick: retry },
+        "Try again"
+      )
     );
     root.append(errorBox);
   }
@@ -141,11 +147,13 @@ export function renderProfile({ params, isStale }) {
     if (initial) list.replaceChildren(skeletonCards(FIRST_SKELETONS));
 
     try {
-      const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
-      const data = await api.get(
-        `/users/${encodeURIComponent(username)}/posts?${qs}`,
-        { signal: controller.signal }
-      );
+      const qs = new URLSearchParams({
+        page: String(wantPage),
+        page_size: String(PAGE_SIZE),
+      });
+      const data = await api.get(`/users/${encodeURIComponent(username)}/posts?${qs}`, {
+        signal: controller.signal,
+      });
       if (isStale()) return;
 
       ({ page, pages, has_next: hasNext, total } = data);

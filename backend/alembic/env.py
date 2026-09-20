@@ -11,8 +11,17 @@ from backend.app.config import settings
 # access to the values within the .ini file in use.
 config = context.config
 
-db_url = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name}"
-config.set_main_option("sqlalchemy.url", db_url)
+# One assembled URL, shared with the app — see Settings.database_url.
+#
+# It has to be rendered back to a string to go into alembic.ini's config, and
+# that round trip has a trap in it: this config file is read with Python's
+# ConfigParser interpolation, so a literal `%` in the rendered password is read
+# as the start of a substitution and raises. Doubling it is the escape, and it
+# is the only reason this isn't a one-liner.
+db_url = settings.database_url()
+config.set_main_option(
+    "sqlalchemy.url", db_url.render_as_string(hide_password=False).replace("%", "%%")
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

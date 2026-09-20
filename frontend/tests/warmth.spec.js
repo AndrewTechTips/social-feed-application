@@ -56,7 +56,10 @@ test("it is a drawn edge, not a badge", async ({ page, api }) => {
   expect(spoken).toEqual(["Upvote, now 4 votes"]);
 });
 
-test("your own vote can carry a card over the line, and back", async ({ page, api }) => {
+test("your own vote can carry a card over the line, and back", async ({
+  page,
+  api,
+}) => {
   await api.register("bob@commons.test", "seedpassword", "bob");
   await api.seed(1, "ada@commons.test", 2);
   await api.signIn(page, "bob@commons.test", "seedpassword");
@@ -106,9 +109,85 @@ test("the post screen doesn't grow one", async ({ page, api }) => {
   await expect(page.locator(".vote__count")).toHaveText("4");
 });
 
-test("a profile draws the same card, so it draws the same edge", async ({ page, api }) => {
+test("a profile draws the same card, so it draws the same edge", async ({
+  page,
+  api,
+}) => {
   await api.seed(1, "ada@commons.test", 3);
   await page.goto("/#/u/ada");
   await expect(cards(page).first()).toBeVisible();
   expect(await warm(cards(page).first())).toBe(true);
+});
+
+// ── and when it is your vote that lights it ─────────────────────────────────
+// The hairline usually just exists. The one time it is an event is when your
+// own press is the third — and the rule that makes that honest is that the
+// animation is keyed on the *crossing*, not on the class.
+
+const igniting = (card) =>
+  card.evaluate((el) => el.classList.contains("card--igniting"));
+
+test("your vote crossing the threshold draws the hairline in", async ({
+  page,
+  api,
+}) => {
+  await api.seed(1, "ada@commons.test", 2);
+  await api.signIn(page, "ada@commons.test", "seedpassword");
+  await page.goto("/");
+  const card = cards(page).first();
+  expect(await warm(card)).toBe(false);
+
+  await card.locator(".vote").click();
+
+  await expect(card).toHaveClass(/card--igniting/);
+  expect(await warm(card)).toBe(true);
+  // And it takes itself off again, so a repaint can't leave a card mid-draw.
+  await expect(card).not.toHaveClass(/card--igniting/, { timeout: 2000 });
+});
+
+test("a card that was already warm does not re-light when you vote", async ({
+  page,
+  api,
+}) => {
+  // Four votes: warm before you touch it. Adding a fifth changes a number, and
+  // a number changing is not a threshold being crossed.
+  await api.seed(1, "ada@commons.test", 4);
+  await api.signIn(page, "ada@commons.test", "seedpassword");
+  await page.goto("/");
+  const card = cards(page).first();
+  expect(await warm(card)).toBe(true);
+
+  await card.locator(".vote").click();
+  expect(await igniting(card)).toBe(false);
+});
+
+test("taking a vote back never lights anything", async ({ page, api }) => {
+  await api.seed(1, "ada@commons.test", 3);
+  await api.signIn(page, "ada@commons.test", "seedpassword");
+  await page.goto("/");
+  const card = cards(page).first();
+
+  // Up to four, back down to three. The second press also changes `warm` —
+  // in the direction nothing should celebrate.
+  await card.locator(".vote").click();
+  await expect(card.locator(".vote")).toHaveAttribute("aria-busy", "false");
+  await card.locator(".vote").click();
+
+  expect(await igniting(card)).toBe(false);
+  expect(await warm(card)).toBe(true);
+});
+
+test("a feed of already-warm cards arrives without any of them lighting", async ({
+  page,
+  api,
+}) => {
+  // The case the `byMe` flag exists for: rendering a card that is already over
+  // the line is not an event that just happened.
+  await api.seed(1, "ada@commons.test", 5);
+  await api.seed(1, "ada@commons.test", 4);
+  await page.goto("/");
+  await expect(cards(page)).toHaveCount(2);
+
+  await expect(page.locator(".card--warm")).toHaveCount(2);
+  await expect(page.locator(".card--igniting")).toHaveCount(0);
 });

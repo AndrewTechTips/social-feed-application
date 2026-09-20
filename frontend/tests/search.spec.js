@@ -100,7 +100,11 @@ test("a plural finds a singular", async ({ page, api }) => {
 test("a title match sits above a body match", async ({ page, api }) => {
   await register(page, uniqueEmail("writer"));
   await write(page, "Sourdough", "Nothing about bread here at all.");
-  await write(page, "A morning routine", "It mostly involves sourdough, if I'm honest.");
+  await write(
+    page,
+    "A morning routine",
+    "It mostly involves sourdough, if I'm honest."
+  );
 
   // setweight is what earns this: the title is stamped 'A' and the body 'B',
   // which is the difference ts_rank reads.
@@ -150,12 +154,11 @@ test("searching never turns up somebody else's draft", async ({ page, api }) => 
   await expect(page.locator(".feed__status")).toContainText("Nothing matches");
 });
 
-
 // ── the sentence it matched on ─────────────────────────────────────────────
 //
 // A result that shows *why* it is a result is worth more than the first 280
 // characters of it. The API answers with `excerpt`, marked up in two control
-// characters; ui.js splits on them and builds real <mark> elements, and the
+// characters; components/card.js splits on them and builds real <mark> elements, and the
 // last test here is the reason that distinction is not decoration.
 
 const EXCERPT = ".card__preview--excerpt";
@@ -213,14 +216,14 @@ test("the excerpt is text, and is never parsed as markup", async ({ page, api })
   // Postgres function that is not a sanitiser and never claimed to be — it
   // drops part of a tag and leaves the rest, closing bracket and all. What
   // stops that being a stored-XSS hole with a search box in front of it is
-  // that ui.js splits the string and appends text nodes, and that the markers
+  // that components/card.js splits the string and appends text nodes, and that the markers
   // are control characters so nothing is tempted to parse them.
   const email = uniqueEmail("inert");
   await register(page, email);
   await write(
     page,
     "Nasty",
-    'Before this. <img src=x onerror=alert(1)> A kettle, after this.'
+    "Before this. <img src=x onerror=alert(1)> A kettle, after this."
   );
 
   await page.goto("/#/?search=kettle");

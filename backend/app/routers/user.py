@@ -62,6 +62,15 @@ def create_user(
         )
     )
     if taken:
+        # This answer tells a caller whether an address is registered, and that
+        # is a deliberate trade rather than an oversight. For the *username* it
+        # is the whole point: nobody can pick one without being told it's free.
+        # For the email it is a real, if minor, disclosure — the textbook fix is
+        # to answer 201 either way and send "you already have an account" to the
+        # address, which needs mail this project has no way to send. A form that
+        # accepted a duplicate address and then said nothing would be worse than
+        # the leak. The 10/hour limit above is the compensating control, and the
+        # race path below says the same thing at more length.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
@@ -71,8 +80,15 @@ def create_user(
             ),
         )
 
-    user.password = utils.hash_password(user.password)
-    new_user = models.User(**user.model_dump())
+    # The schema's field is a password, because that is what a caller sends;
+    # the column's is a hash, because that is what is kept. Excluding one and
+    # naming the other is what keeps those two facts from having to be the same
+    # word — the old version mutated the request model in place so that
+    # `**model_dump()` would line up, which worked and read like a trick.
+    new_user = models.User(
+        **user.model_dump(exclude={"password"}),
+        password_hash=utils.hash_password(user.password),
+    )
     db.add(new_user)
 
     try:

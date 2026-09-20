@@ -2,10 +2,36 @@
    base.css — reset, font, page shell, aurora, shared primitives.
    ========================================================================== */
 
+/* Newsreader, and the two things that were cut out of it on 2026-09-20.
+   119,932 bytes -> 37,216. Not one glyph lost: 261 before, 261 after, and all
+   223 codepoints still there.
+
+   **The optical-size axis is what cost 70KB.** The file shipped with `opsz`
+   6-72 alongside `wght`, and a second axis means a second set of variation
+   deltas for every one of those 261 glyphs. Browsers apply `opsz` on their own
+   through `font-optical-sizing: auto`, so it was being used — the question is
+   what it was buying. This app sets the serif from 13px to about 38px. Over
+   that span the optical designs differ in hairline weight and spacing by an
+   amount that is real to a type designer and invisible on a screen at reading
+   distance; the axis is there for the span that runs to a 72pt masthead, which
+   this app does not have. Pinned at 18, which is both the font's own default
+   instance and the size the whole type system was designed around — so body
+   text renders byte-identically to what it did before, and only the headings
+   change at all.
+
+   **The weight axis is narrowed to what is actually asked for.** 400, 460, 500
+   and 600 are the four weights in the stylesheets; 340 and 660 were never used
+   by anything. The descriptor below says 400 600 because that is now true —
+   declaring a range the file cannot serve is how a heading silently gets a
+   weight nobody chose.
+
+   Regenerated with fontTools' `instantiateVariableFont`, which is a dev-time
+   step run once, not a build step: the result is committed like every other
+   asset and the app still opens from disk with nothing to run. */
 @font-face {
   font-family: "Newsreader";
   src: url("../assets/fonts/newsreader.woff2") format("woff2");
-  font-weight: 340 660;
+  font-weight: 400 600;
   font-display: swap;
   font-style: normal;
 }
@@ -227,12 +253,7 @@ h3 {
   z-index: -1;
   overflow: hidden;
   background:
-    radial-gradient(
-      120% 80% at 50% -20%,
-      var(--bg-2),
-      transparent 60%
-    ),
-    var(--bg);
+    radial-gradient(120% 80% at 50% -20%, var(--bg-2), transparent 60%), var(--bg);
   opacity: var(--aurora-alpha, 1);
 }
 /* The blur radius is the whole cost of this element, and it was set forty

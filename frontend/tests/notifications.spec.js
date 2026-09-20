@@ -231,7 +231,9 @@ test("the palette offers it, with the count in the label", async ({ page, api })
   await expect(page).toHaveURL(/#\/notifications$/);
 });
 
-test("a signed-out visitor who types the address is sent to sign in", async ({ page }) => {
+test("a signed-out visitor who types the address is sent to sign in", async ({
+  page,
+}) => {
   await page.goto("/#/notifications");
   await expect(page).toHaveURL(/#\/login$/);
 });
@@ -317,7 +319,10 @@ test("the ones you hadn't seen are marked, and the marking waits for the list", 
   expect(order.indexOf("list back")).toBeLessThan(order.indexOf("read sent"));
 });
 
-test("and they are not marked at all if the list never arrives", async ({ page, api }) => {
+test("and they are not marked at all if the list never arrives", async ({
+  page,
+  api,
+}) => {
   // The other half of waiting: they are seen once they have been shown. A list
   // that failed to load has shown nothing, so the count must survive it.
   await room(page, api, BEA);

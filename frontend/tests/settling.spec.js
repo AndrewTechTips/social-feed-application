@@ -76,11 +76,17 @@ test("the chrome changes with the screen, not ahead of it", async ({ page, api }
 
   // The search belongs to the feed. Every moment it was hidden, the post was
   // already the screen — never the feed with the post's header on.
-  const hidden = (await page.evaluate(() => window.__chrome)).filter((e) => e.searchHidden);
-  expect(hidden.length, "the search should have been hidden on the way to a post")
-    .toBeGreaterThan(0);
+  const hidden = (await page.evaluate(() => window.__chrome)).filter(
+    (e) => e.searchHidden
+  );
+  expect(
+    hidden.length,
+    "the search should have been hidden on the way to a post"
+  ).toBeGreaterThan(0);
   for (const entry of hidden) {
-    expect(entry.screen, "search hidden while the feed was still up").toContain("detail");
+    expect(entry.screen, "search hidden while the feed was still up").toContain(
+      "detail"
+    );
   }
 
   // And back the other way: the row returns with the feed, not before it.
@@ -88,8 +94,12 @@ test("the chrome changes with the screen, not ahead of it", async ({ page, api }
   await page.locator(".back").click();
   await expect(page.locator(CARD).first()).toBeVisible();
 
-  const shown = (await page.evaluate(() => window.__chrome)).filter((e) => !e.searchHidden);
-  expect(shown.length, "the search should have come back on the feed").toBeGreaterThan(0);
+  const shown = (await page.evaluate(() => window.__chrome)).filter(
+    (e) => !e.searchHidden
+  );
+  expect(shown.length, "the search should have come back on the feed").toBeGreaterThan(
+    0
+  );
   for (const entry of shown) {
     expect(entry.screen, "search shown while the post was still up").toContain("feed");
   }
@@ -110,7 +120,10 @@ test("a fast conversation never shows a loading state", async ({ page, api }) =>
   expect(await page.evaluate(() => window.__commentSkeletons)).toBe(0);
 });
 
-test("the scrollbar track is reserved, so screens don't shift sideways", async ({ page, api }) => {
+test("the scrollbar track is reserved, so screens don't shift sideways", async ({
+  page,
+  api,
+}) => {
   await api.seed(12, "ada@commons.test");
   await page.goto("/");
   await expect(page.locator(CARD).first()).toBeVisible();
@@ -118,13 +131,15 @@ test("the scrollbar track is reserved, so screens don't shift sideways", async (
   // The mechanism, asserted directly: on a platform with overlay scrollbars —
   // which is what this runs on — the widths below are equal whatever the CSS
   // says, so the widths alone would pass against a page that still shifts.
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflowY))
-    .toBe("scroll");
+  expect(
+    await page.evaluate(() => getComputedStyle(document.documentElement).overflowY)
+  ).toBe("scroll");
   // overflow-x has to be on the same element. Left on body it propagates to the
   // viewport, and setting overflow on html stops that propagation, hands body a
   // scroll container of its own and quietly breaks the sticky header.
-  expect(await page.evaluate(() => getComputedStyle(document.body).overflowX))
-    .toBe("visible");
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflowX)).toBe(
+    "visible"
+  );
 
   const feedWidth = await page.evaluate(() => document.documentElement.clientWidth);
   await page.locator(CARD).first().locator(".card__title").click();
@@ -135,8 +150,10 @@ test("the scrollbar track is reserved, so screens don't shift sideways", async (
     scrollHeight: document.documentElement.scrollHeight,
     clientHeight: document.documentElement.clientHeight,
   }));
-  expect(post.scrollHeight, "this post has to be short enough to test anything")
-    .toBeLessThan(post.clientHeight * 2);
+  expect(
+    post.scrollHeight,
+    "this post has to be short enough to test anything"
+  ).toBeLessThan(post.clientHeight * 2);
   expect(post.width).toBe(feedWidth);
 });
 
@@ -155,7 +172,9 @@ test("the header stays put while a post loads", async ({ page, api }) => {
   await page.locator(".back, .card__title").first().click();
   await expect(page.locator(".detail__title")).toBeVisible();
   const onPost = (await header.boundingBox()).height;
-  expect(onPost, "the narrow header should shed a row off the feed").toBeLessThan(onFeed);
+  expect(onPost, "the narrow header should shed a row off the feed").toBeLessThan(
+    onFeed
+  );
 
   // The point being that it shed it *when the post arrived*, which is what the
   // first test in this file pins. Here we only check the two resting states are

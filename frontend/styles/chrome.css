@@ -129,7 +129,9 @@
 }
 .brand__mark {
   color: var(--text-dim);
-  transition: color var(--t-mid) var(--ease), transform var(--t-mid) var(--ease);
+  transition:
+    color var(--t-mid) var(--ease),
+    transform var(--t-mid) var(--ease);
 }
 @media (hover: hover) {
   .brand:hover .brand__mark {
@@ -157,7 +159,8 @@
   border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   color: var(--text-dim);
-  transition: border-color var(--t-mid) var(--ease),
+  transition:
+    border-color var(--t-mid) var(--ease),
     background-color var(--t-mid) var(--ease);
 }
 .search:focus-within {

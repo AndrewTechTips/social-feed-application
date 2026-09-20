@@ -1,0 +1,17 @@
+# Commons — https://andrewtechtips.github.io/social-feed-application/
+#
+# Everything here is public and meant to be found. There is nothing to keep a
+# crawler out of: the app is a static shell plus a demo API that runs in the
+# visitor's own browser, so there are no accounts, no private pages and no
+# expensive queries behind any of these URLs.
+#
+# What a crawler will actually get is the shell. Every screen lives behind a
+# fragment (`#/posts/12`), and a fragment is never sent to a server — so there
+# is exactly one document here, which is why the sitemap below has one entry
+# and not fifteen. That is a consequence of ADR 0002 (hash routing), taken so
+# that GitHub Pages needs no rewrite rules, and it is the honest cost of it.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://andrewtechtips.github.io/social-feed-application/sitemap.xml

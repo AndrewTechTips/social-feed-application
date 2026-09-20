@@ -15,7 +15,9 @@
 // absence, so the absence says so out loud.
 
 import { api, ApiError, forgetPendingRefresh } from "../api.js";
-import { h, mountView, toast } from "../ui.js";
+import { h } from "../dom.js";
+import { toast } from "../toast.js";
+import { mountView } from "../view.js";
 import { get, setSession, clearSession, dropFeedCache } from "../store.js";
 import { navigate, forgetCurrentScreen } from "../router.js";
 
@@ -78,7 +80,7 @@ function nameSection(me) {
     if (pending) return;
     const wanted = input.value.trim();
 
-    if (!wanted) return setError("Pick a username."), input.focus();
+    if (!wanted) return (setError("Pick a username."), input.focus());
     if (!USERNAME_RE.test(wanted)) {
       setError(USERNAME_HINT + ", starting with a letter.");
       return input.focus();
@@ -181,7 +183,11 @@ function sessionsSection() {
 
 // ── delete ─────────────────────────────────────────────────────────────────
 function dangerSection(me) {
-  const open = h("button", { class: "btn btn--quiet danger", type: "button" }, "Delete your account");
+  const open = h(
+    "button",
+    { class: "btn btn--quiet danger", type: "button" },
+    "Delete your account"
+  );
   const slot = h("div", { class: "settings__confirm" });
 
   const confirm = () => {
@@ -307,7 +313,11 @@ export async function renderSettings({ isStale }) {
     // on a screen that has to say something.
     if (error instanceof ApiError && error.status === 401) return;
     root.replaceChildren(
-      h("p", { class: "settings__loading" }, "Couldn't load your account. Reload to try again.")
+      h(
+        "p",
+        { class: "settings__loading" },
+        "Couldn't load your account. Reload to try again."
+      )
     );
     return;
   }

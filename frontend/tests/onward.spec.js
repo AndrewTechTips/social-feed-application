@@ -14,9 +14,9 @@ const titleOf = (page, sel) => page.locator(`${sel} .onward__title`);
 
 /** The feed's card titles, newest first — the order everything below is about. */
 const feedTitles = (page) =>
-  page.locator(`${CARD} .card__title`).evaluateAll((els) =>
-    els.map((el) => el.textContent.trim())
-  );
+  page
+    .locator(`${CARD} .card__title`)
+    .evaluateAll((els) => els.map((el) => el.textContent.trim()));
 
 async function openCard(page, index) {
   await page.locator(`${CARD} .card__link`).nth(index).click();
@@ -186,7 +186,9 @@ test("the palette advertises it, and the row moves you", async ({ page, api }) =
 
   await openCard(page, 1);
   await page.keyboard.press("ControlOrMeta+k");
-  const row = page.locator(".palette__row", { hasText: "Move to the next or previous post" });
+  const row = page.locator(".palette__row", {
+    hasText: "Move to the next or previous post",
+  });
   await expect(row).toBeVisible();
   await expect(row).toContainText("J K");
 
@@ -229,9 +231,7 @@ test("exactly one element carries the morph name when you read on", async ({
   // the link's own handler has run: two elements wearing one
   // view-transition-name is an ambiguous name, and pairOrStrip answers that by
   // dropping the morph entirely.
-  await expect
-    .poll(() => page.locator(".detail__title.is-morphing").count())
-    .toBe(1);
+  await expect.poll(() => page.locator(".detail__title.is-morphing").count()).toBe(1);
   await page.evaluate(() => {
     window.__morphing = null;
     document.addEventListener("click", () => {

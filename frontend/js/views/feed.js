@@ -4,7 +4,10 @@
 // post restores the list and scroll position from a short-lived cache.
 
 import { api } from "../api.js";
-import { h, mountView, skeletonCards, postCard, toast, leavingScrollY } from "../ui.js";
+import { h, skeletonCards } from "../dom.js";
+import { toast } from "../toast.js";
+import { leavingScrollY, mountView } from "../view.js";
+import { postCard } from "../components/card.js";
 import {
   get,
   isMine,
@@ -163,7 +166,21 @@ export function renderFeed({ query, isStale }) {
   const key = `${sort}:${search.toLowerCase()}`;
 
   const list = h("div", { class: "feed__list" });
-  const status = h("p", { class: "feed__status", hidden: true });
+  // A live region, and it has to be one because of what it is used for below.
+  //
+  // Infinite scroll is a visual idiom: ten more cards slide under the last one
+  // and a sighted reader simply sees them. Someone listening gets nothing —
+  // the list silently grew while their cursor stayed where it was, and the
+  // only way to find out is to keep pressing down and hope. `polite` so it
+  // waits for a gap rather than interrupting whatever is being read, and
+  // `aria-atomic` so the whole sentence is spoken rather than whichever words
+  // happen to have changed since last time.
+  const status = h("p", {
+    class: "feed__status",
+    hidden: true,
+    "aria-live": "polite",
+    "aria-atomic": "true",
+  });
   const sentinel = h("div", { class: "feed__sentinel", "aria-hidden": "true" });
   // Not while searching: at that point the reader is looking for something
   // specific and an introduction is in the way.
@@ -191,7 +208,10 @@ export function renderFeed({ query, isStale }) {
 
   const root = h(
     "section",
-    { class: "feed", "aria-label": search ? `Posts matching ${search}` : "Latest posts" },
+    {
+      class: "feed",
+      "aria-label": search ? `Posts matching ${search}` : "Latest posts",
+    },
     showMasthead ? masthead() : null,
     since,
     // Directly above the list it orders, and gone while searching: relevance
@@ -209,7 +229,8 @@ export function renderFeed({ query, isStale }) {
   // rather than afterwards, because the feed is in chronological order — so
   // "new" is a prefix of it, and finding where that prefix ends is the same
   // walk as drawing the cards.
-  let newCount = 0, boundaryFound = false;
+  let newCount = 0,
+    boundaryFound = false;
   // The moment this feed was fetched at, sent back on every page after the
   // first so they are all served out of the same feed.
   //
@@ -243,8 +264,14 @@ export function renderFeed({ query, isStale }) {
   // for. Not the same as `newCount` below, which is about the visit before
   // this one.
   let arrived = 0;
-  let page = 0, pages = 1, hasNext = true, total = null;
-  let loading = false, controller = null, observer = null, errorBox = null;
+  let page = 0,
+    pages = 1,
+    hasNext = true,
+    total = null;
+  let loading = false,
+    controller = null,
+    observer = null,
+    errorBox = null;
   // Who these items were fetched for. Recorded here rather than read back at
   // teardown, because teardown can run after a sign-out has already changed
   // the answer — see the note in store.js.
@@ -323,11 +350,10 @@ export function renderFeed({ query, isStale }) {
         search
           ? `Nothing matches "${search}". It searches titles and bodies, so try one word rather than several.`
           : get("session")
-          ? "Nothing here yet. Be the first to say something."
-          : "Nothing here yet. Sign in and you could be the first to say something.",
+            ? "Nothing here yet. Be the first to say something."
+            : "Nothing here yet. Sign in and you could be the first to say something.",
         true
       );
-
     } else if (!hasNext) {
       setStatus("That's everything for now.");
     } else {
@@ -344,9 +370,16 @@ export function renderFeed({ query, isStale }) {
       errorBox = null;
       load(page === 0);
     };
-    errorBox = h("div", { class: "feed__error" },
+    errorBox = h(
+      "div",
+      { class: "feed__error" },
       h("p", {}, page === 0 ? "The feed didn't load." : "Couldn't load more."),
-      h("button", { class: "btn btn--ghost", type: "button", onclick: retry }, "Try again"));
+      h(
+        "button",
+        { class: "btn btn--ghost", type: "button", onclick: retry },
+        "Try again"
+      )
+    );
     root.append(errorBox);
   }
 
@@ -361,7 +394,10 @@ export function renderFeed({ query, isStale }) {
     if (initial) list.replaceChildren(skeletonCards(FIRST_SKELETONS));
 
     try {
-      const qs = new URLSearchParams({ page: String(wantPage), page_size: String(PAGE_SIZE) });
+      const qs = new URLSearchParams({
+        page: String(wantPage),
+        page_size: String(PAGE_SIZE),
+      });
       if (search) qs.set("search", search);
       if (sort !== "new") qs.set("sort", sort);
       // URLSearchParams encodes the `+` in the timestamp's offset, which a
@@ -392,6 +428,21 @@ export function renderFeed({ query, isStale }) {
       list.append(frag);
       setKnownPosts(items, listName);
       renderTail();
+      // Say how many arrived, for anyone who can't see them arrive.
+      //
+      // After renderTail and only into the gap it leaves, which is the order
+      // that matters: reaching the end of a list is more worth hearing than
+      // the length of the last page, so "that's everything for now" wins and
+      // this fills the silence when there is more to come.
+      //
+      // Not on the first page either — that one *is* the screen, and the
+      // screen announces itself through the heading and the focus move.
+      // Counting the only posts there are would be counting from nothing.
+      if (!initial && data.items.length && status.hidden) {
+        setStatus(
+          `${data.items.length} more ${data.items.length === 1 ? "post" : "posts"}.`
+        );
+      }
       // Only once there is something to compare against.
       if (initial) startPolling();
       landed = true;
@@ -541,7 +592,17 @@ export function renderFeed({ query, isStale }) {
     if (observer) observer.disconnect();
     if (controller) controller.abort();
     if (items.length) {
-      cacheFeed({ key, viewer, items: items.slice(), page, pages, hasNext, total, anchor, scrollY: leavingScrollY() });
+      cacheFeed({
+        key,
+        viewer,
+        items: items.slice(),
+        page,
+        pages,
+        hasNext,
+        total,
+        anchor,
+        scrollY: leavingScrollY(),
+      });
     }
   }
 
@@ -572,9 +633,8 @@ export function renderFeed({ query, isStale }) {
 
   // Where the reader was a moment ago, and what they were asking for there.
   const from = previousScreen() || "";
-  const wasSearching = new URLSearchParams(from.split("?")[1] || "")
-    .get("search")
-    ?.trim() || "";
+  const wasSearching =
+    new URLSearchParams(from.split("?")[1] || "").get("search")?.trim() || "";
 
   /**
    * Is this the same screen still, showing a different answer?

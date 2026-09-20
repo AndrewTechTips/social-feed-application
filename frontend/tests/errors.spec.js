@@ -119,7 +119,10 @@ test("a registration whose sign-in fails says so, and moves you to sign in", asy
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 
-test("the carried-over address doesn't linger on a later visit", async ({ page, api }) => {
+test("the carried-over address doesn't linger on a later visit", async ({
+  page,
+  api,
+}) => {
   await page.goto("/");
   await expect(page.locator(".feed")).toBeVisible();
 
@@ -147,4 +150,70 @@ test("the carried-over address doesn't linger on a later visit", async ({ page, 
   await page.goto("/#/login");
   await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveValue("");
+});
+
+// ── the router's error boundary ─────────────────────────────────────────────
+// A throw inside a view used to be caught, written to the console, and that was
+// all — which left the *previous* screen on the page, still interactive, with
+// the address bar naming a screen that never rendered. Pressing back from there
+// went somewhere that looked identical.
+//
+// The app has no view that throws on demand, so these register one. Importing
+// js/router.js from the page gets the *same module instance* the app is running
+// — ES modules are cached per document — so `route()` here pushes onto the same
+// table `resolve()` reads, and the throw travels the real path.
+
+const routeThatThrows = (page) =>
+  page.evaluate(async () => {
+    const { route } = await import("/js/router.js");
+    route("/__boom", () => {
+      throw new Error("a view that could not build itself");
+    });
+  });
+
+test("a view that throws puts up a screen instead of leaving the last one", async ({
+  page,
+  api,
+}) => {
+  await api.seed(2, "ada@commons.test");
+  await page.goto("/");
+  await expect(page.locator(CARD)).toHaveCount(2);
+
+  await routeThatThrows(page);
+  await page.evaluate(() => (location.hash = "#/__boom"));
+
+  await expect(page.locator(".screen-error")).toBeVisible();
+  await expect(page.getByText("This screen didn't load.")).toBeVisible();
+  // The important half: the feed is *gone*. Leaving it on screen under a URL
+  // that names something else is the failure this exists to prevent.
+  await expect(page.locator(".feed__list")).toHaveCount(0);
+});
+
+test("the boundary offers a way back, and it works", async ({ page, api }) => {
+  await api.seed(1, "ada@commons.test");
+  await page.goto("/");
+  await expect(page.locator(CARD).first()).toBeVisible();
+
+  await routeThatThrows(page);
+  await page.evaluate(() => (location.hash = "#/__boom"));
+  await expect(page.locator(".screen-error")).toBeVisible();
+
+  await page.getByRole("link", { name: "Go to the feed" }).click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator(CARD).first()).toBeVisible();
+});
+
+test("a route that matches nothing goes home rather than to the boundary", async ({
+  page,
+  api,
+}) => {
+  // Not every miss is a failure. A mistyped fragment is not a screen that broke,
+  // and sending somebody to an apology for it would be the app blaming itself
+  // for a typo.
+  await api.seed(1, "ada@commons.test");
+  await page.goto("/#/not-a-route-at-all");
+
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator(".screen-error")).toHaveCount(0);
+  await expect(page.locator(CARD).first()).toBeVisible();
 });

@@ -21,8 +21,7 @@ export const supported = () => typeof document.startViewTransition === "function
 // user-agent's own cross-fade runs regardless, and base.css's blanket
 // animation-duration override can't reach ::view-transition-* pseudo-elements.
 // So the check has to happen here, before the transition starts.
-const reducedMotion = () =>
-  matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export const canMorph = () => supported() && !reducedMotion();
 

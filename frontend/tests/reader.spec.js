@@ -154,9 +154,7 @@ test("the palette offers it on a post and nowhere else", async ({ page, api }) =
   await expect(page.locator(CARD)).toHaveCount(2);
 
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(
-    page.locator(".palette__row", { hasText: "focus mode" })
-  ).toHaveCount(0);
+  await expect(page.locator(".palette__row", { hasText: "focus mode" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await page.locator(`${CARD} .card__link`).first().click();
@@ -267,7 +265,8 @@ test.describe("at 320px", () => {
     await openPost(page, api);
     const overflow = () =>
       page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        () =>
+          document.documentElement.scrollWidth - document.documentElement.clientWidth
       );
     expect(await overflow()).toBeLessThanOrEqual(0);
 

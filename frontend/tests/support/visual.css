@@ -1,0 +1,19 @@
+/* Injected only while a screenshot is being taken — see visual.spec.js.
+   Not a test-only stylesheet for the app: nothing here changes layout, colour
+   or type. It stops the two things on the page that are deliberately never
+   still, so that a picture of the page is a picture of a decision rather than
+   of a moment. */
+
+/* The aurora drifts on an infinite keyframe loop. Under reduced motion it
+   stops, but *where* it stopped depends on when the document loaded, so it
+   would be a different wash of colour behind every run. */
+.aurora,
+[class*="bloom"] {
+  visibility: hidden !important;
+}
+
+/* The caret in a focused field blinks, and a screenshot catches it up or down
+   at random. */
+* {
+  caret-color: transparent !important;
+}

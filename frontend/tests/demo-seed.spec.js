@@ -28,9 +28,7 @@ test("the published site opens on the seeded feed", async ({ page }) => {
 
   await expect(page.locator(CARD).first()).toBeVisible();
   await expect(page.locator(CARD)).toHaveCount(10); // one page
-  await expect(
-    page.getByRole("heading", { name: newest.title }).first()
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: newest.title }).first()).toBeVisible();
 
   // Real sentences, not "Seeded post 4" — the first English anyone reads.
   const preview = await page.locator(".card__preview").first().innerText();
@@ -98,9 +96,9 @@ test("a seeded draft belongs to its author", async ({ page }) => {
   await page.waitForURL(/#\/$/);
 
   await expect(page.getByRole("heading", { name: draft.title })).toBeVisible();
-  await expect(
-    page.locator(CARD, { hasText: draft.title }).locator(".tag")
-  ).toHaveText("Draft");
+  await expect(page.locator(CARD, { hasText: draft.title }).locator(".tag")).toHaveText(
+    "Draft"
+  );
 });
 
 test("the long post fills the reading column", async ({ page }) => {
@@ -121,7 +119,9 @@ test("the long post fills the reading column", async ({ page }) => {
     longest.content.slice(0, 60)
   );
   const paragraphs = longest.content.split("\n\n").length;
-  expect(paragraphs, "the long post should show off the serif column").toBeGreaterThan(3);
+  expect(paragraphs, "the long post should show off the serif column").toBeGreaterThan(
+    3
+  );
 });
 
 test("the long post opens on a conversation, not an empty state", async ({ page }) => {
@@ -222,7 +222,9 @@ test("the demo offers to sign you in as one of the people here", async ({ page }
   await expect(offer).toBeHidden();
 });
 
-test("that person has the notifications their conversation caused", async ({ page }) => {
+test("that person has the notifications their conversation caused", async ({
+  page,
+}) => {
   const expected = seededFor(JO);
   // Not a hard-coded number: if seed.json's conversation changes, the rules
   // still say what the answer should be. But it must not be zero, or this test

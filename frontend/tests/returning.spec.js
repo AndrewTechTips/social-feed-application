@@ -100,7 +100,10 @@ test("the brand fetches the feed again, from the feed", async ({ page, api }) =>
   await expect(page.locator(CARD)).toHaveCount(4);
 });
 
-test("pressing it from the feed is one render, not a journey", async ({ page, api }) => {
+test("pressing it from the feed is one render, not a journey", async ({
+  page,
+  api,
+}) => {
   await api.seed(3, EMAIL);
   await page.goto("/");
   await expect(page.locator(CARD)).toHaveCount(3);
@@ -347,7 +350,10 @@ test("a list that is mid-fetch is not aborted by one either", async ({ page, api
 // reads at the moment they were expecting something, so each one says what to
 // do next rather than only reporting the absence.
 
-test("an empty room invites whoever can accept the invitation", async ({ page, api }) => {
+test("an empty room invites whoever can accept the invitation", async ({
+  page,
+  api,
+}) => {
   // `api` is asked for even though nothing is seeded. Taking the fixture is
   // what resets the backend before a test — a spec that only asks for `page`
   // never runs it, and reads whatever the test before it left behind.
@@ -395,7 +401,10 @@ test("somebody else's empty profile says whose it is", async ({ page, api }) => 
   );
 });
 
-test("your own empty profile tells you what the space is for", async ({ page, api }) => {
+test("your own empty profile tells you what the space is for", async ({
+  page,
+  api,
+}) => {
   await api.register(EMAIL, "seedpassword", "ada");
   await api.signIn(page, EMAIL, "seedpassword");
   await page.goto("/#/u/ada");
