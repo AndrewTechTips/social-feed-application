@@ -210,3 +210,124 @@ test.describe("what a ranking turns off", () => {
     expect(await titles(page)).toEqual(warmest);
   });
 });
+
+test.describe("changing the order is not going anywhere", () => {
+  // ── re-ordering is not a journey ──────────────────────────────────────────
+  //
+  // Pressing Warmest used to be served exactly like following a link to another
+  // screen: the page-level view transition faded and raised every pixel, and
+  // five skeleton cards went up in place of a list that was about to be
+  // replaced by the same posts in a different order. Both are sentences about
+  // having gone somewhere, and nobody went anywhere — which is why it read as
+  // the whole page reloading. See the notes on `sameScreen` and `reordering`
+  // in js/views/feed.js.
+
+  /** Watch for the two things a re-order must not do. */
+  async function watchTheSwap(page) {
+    await page.evaluate(() => {
+      window.__swap = { transitions: 0, maxSkeletons: 0 };
+      const original = document.startViewTransition?.bind(document);
+      if (original) {
+        document.startViewTransition = (callback) => {
+          window.__swap.transitions++;
+          return original(callback);
+        };
+      }
+      const count = () => {
+        window.__swap.maxSkeletons = Math.max(
+          window.__swap.maxSkeletons,
+          document.querySelectorAll(".card--skeleton").length
+        );
+      };
+      new MutationObserver(count).observe(document.getElementById("view"), {
+        childList: true,
+        subtree: true,
+      });
+      count();
+    });
+  }
+
+  const swapped = (page) => page.evaluate(() => window.__swap);
+
+  test("a re-order does not replay the page-change animation", async ({ page, api }) => {
+    await api.seed(3);
+    await page.goto("/");
+    await ordered(page, "Newest", 3);
+
+    await watchTheSwap(page);
+    await page.locator(OPTION, { hasText: "Warmest" }).click();
+    await ordered(page, "Warmest", 3);
+
+    // Not a journey, so nothing travels. startViewTransition is what draws the
+    // whole screen fading and rising, and it belongs to going somewhere.
+    expect((await swapped(page)).transitions).toBe(0);
+  });
+
+  test("a re-order does not flash skeletons over a list it already has", async ({
+    page,
+    api,
+  }) => {
+    await api.seed(3);
+    await page.goto("/");
+    await ordered(page, "Newest", 3);
+
+    await watchTheSwap(page);
+    await page.locator(OPTION, { hasText: "Warmest" }).click();
+    await ordered(page, "Warmest", 3);
+
+    // The old order stays up until the new one is in hand. Both lists hold the
+    // same posts, so nothing on screen during the wait is untrue.
+    expect((await swapped(page)).maxSkeletons).toBe(0);
+  });
+
+  test("the cards never go away while the order changes", async ({ page, api }) => {
+    await api.seed(3);
+    await page.goto("/");
+    await ordered(page, "Newest", 3);
+
+    // Sampled every frame across the swap: if the list were ever emptied or
+    // replaced by placeholders, the count would dip below three.
+    await page.evaluate(() => {
+      window.__low = Infinity;
+      const tick = () => {
+        window.__low = Math.min(
+          window.__low,
+          document.querySelectorAll(".feed__list .card:not(.card--skeleton)").length
+        );
+        window.__raf = requestAnimationFrame(tick);
+      };
+      window.__raf = requestAnimationFrame(tick);
+    });
+
+    await page.locator(OPTION, { hasText: "Warmest" }).click();
+    await ordered(page, "Warmest", 3);
+    const low = await page.evaluate(() => {
+      cancelAnimationFrame(window.__raf);
+      return window.__low;
+    });
+    expect(low).toBe(3);
+  });
+
+  test("a search keeps its skeletons, because the posts really do change", async ({
+    page,
+    api,
+  }) => {
+    await api.seed(6);
+    await page.goto("/");
+    await expect(page.locator(CARD)).toHaveCount(6);
+
+    await watchTheSwap(page);
+    // Held cards are live cards — clickable, and still what the post screen
+    // reads its "more from" list out of. On a re-order that is honest, because
+    // both lists hold the same posts. On a search it would leave the reader
+    // able to open a result that does not match what they just typed, so the
+    // loading state is the truthful thing to show.
+    await page.goto("/#/?search=Seeded");
+    await expect(page.locator(CARD).first()).toBeVisible();
+
+    const { transitions, maxSkeletons } = await swapped(page);
+    expect(maxSkeletons).toBeGreaterThan(0);
+    // Still the same screen, though, so it still doesn't travel.
+    expect(transitions).toBe(0);
+  });
+});

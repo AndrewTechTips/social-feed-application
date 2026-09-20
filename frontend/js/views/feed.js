@@ -14,7 +14,7 @@ import {
   setKnownPosts,
 } from "../store.js";
 import { isNewSince, lastVisit, sinceLabel, spellCount } from "../reading.js";
-import { onLeavingScreen } from "../router.js";
+import { onLeavingScreen, previousScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
 import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
@@ -39,6 +39,17 @@ const PAGE_SIZE = 10;
 // looking at is not waiting for news.
 const POLL_MS = 45000;
 const FIRST_SKELETONS = 5;
+// How long a re-order gets to answer before the reader is shown a loading
+// state, when there is already a list on screen worth holding.
+//
+// The same number and the same argument as views/post.js: under about a fifth
+// of a second a change reads as instant, and a skeleton that appears and is
+// gone again inside that window is not feedback, it is a flinch. A local API
+// or the in-browser demo answers a re-order in well under this, so the list
+// simply changes; a slow connection still gets its skeletons, a quarter of a
+// second late, which is the point at which they start being reassuring rather
+// than noisy.
+const SKELETON_AFTER = 250;
 // How far below the fold the sentinel still counts as "coming up" — the feed
 // starts fetching the next page this far before you reach the end of this one.
 const PREFETCH_MARGIN = 700;
@@ -101,7 +112,26 @@ const SORTS = [
   ["discussed", "Discussed", "#/?sort=discussed"],
 ];
 
-/** @param {string} current */
+/**
+ * @param {string} current
+ *
+ * The mark moves when the list does, and not a moment before.
+ *
+ * It was tempting to move it on the press instead — the re-order now holds the
+ * old list for as long as the fetch takes (see `reordering` below), so for that
+ * moment the bar is still marked on the option you pressed it *from*, which
+ * looks like a control that did not hear you. Saying "heard you" early is what
+ * .card--opening does on a card, and it is the right answer there.
+ *
+ * It is the wrong answer here, and tests/sort.spec.js says why in as many
+ * words: two orderings of the same posts have the same number of cards, so the
+ * marked option is the *only* thing that distinguishes the new list from the
+ * old one. Move it early and it stops being a fact about what is on screen and
+ * becomes a promise about what is coming — which is exactly the kind of claim
+ * this app doesn't make anywhere else. The press is not silent without it:
+ * .sortbar__option:active answers the finger, and the list itself is the
+ * answer to the press.
+ */
 function sortbar(current) {
   return h(
     "nav",
@@ -519,6 +549,78 @@ export function renderFeed({ query, isStale }) {
   activeTeardown = teardown;
   const stopLeaving = onLeavingScreen(teardown);
 
+  // Where the reader was a moment ago, and what they were asking for there.
+  const from = previousScreen() || "";
+  const wasSearching = new URLSearchParams(from.split("?")[1] || "")
+    .get("search")
+    ?.trim() || "";
+
+  /**
+   * Is this the same screen still, showing a different answer?
+   *
+   * Pressing Warmest is not going anywhere. The header does not change, the
+   * masthead does not change, the bar you pressed does not change — the list
+   * under it does, and that is the whole of it. But it arrives here as a
+   * hashchange like any other, so it used to be served like any other: the
+   * page-level view transition faded and raised every pixel of the screen, and
+   * the whole `.feed` section was rebuilt underneath it. Both are sentences
+   * about having gone somewhere, and nobody went anywhere.
+   *
+   * The route is what settles it, not the DOM. `.feed` is also worn by the
+   * profile and by the notifications screen — both of which *are* journeys and
+   * must keep their transition — so asking "is a .feed on screen?" would
+   * quietly answer yes for two screens this must not touch. Asking where the
+   * reader came from cannot: only the feed's own address matches, with or
+   * without a query on it.
+   */
+  const sameScreen = /^#\/(\?.*)?$/.test(from);
+
+  /**
+   * ...and is it the same posts, only in a different order?
+   *
+   * This is the narrower question, and it is the one that decides whether the
+   * list already on screen can be left there while the new one is fetched —
+   * which is what replaces the five skeleton cards that used to flash for a
+   * sixth of a second every time somebody pressed Warmest.
+   *
+   * It has to be narrower, because a held list is a *live* list: it is still
+   * clickable, still keyboard-reachable, still what `knownPosts` describes. On
+   * a re-order that is honest — the same posts are in both lists, so a card
+   * pressed during the wait opens a post that genuinely is in the list, and
+   * "More from the feed" at the bottom of it is true.
+   *
+   * On a search it is not. Type "kettle" and the posts that answer it are a
+   * different set; holding the previous ones would leave the reader looking at,
+   * and able to open, results that do not match what they just typed — and the
+   * post they landed on would offer to walk them through a list they had
+   * already left. So a search change keeps its skeletons, which are the honest
+   * thing to show when the answer genuinely isn't known yet. It still loses the
+   * page-level transition, because it is still the same screen.
+   */
+  const reordering = sameScreen && wasSearching === search;
+
+  /**
+   * Put this screen on the page, once.
+   *
+   * There are three callers and two of them race — the timer that gives up
+   * waiting, and the fetch that lands — so the guard is the point. `isStale`
+   * is the other half: while the screen is being held back the reader can
+   * leave, and mounting then would paint this list over whatever they went to.
+   *
+   * @param {{ restoreScroll?: number }} [options]
+   */
+  let shown = false;
+  function show(options = {}) {
+    if (shown || isStale()) return;
+    shown = true;
+    // "none", not false: false is still an arrival and still animates. See
+    // mountView.
+    mountView(root, { ...options, transition: sameScreen ? "none" : true });
+    // After the mount, always. The sentinel has to be in the document for the
+    // observer to have anything to say about it.
+    setupObserver();
+  }
+
   const cached = readFeedCache(key);
   if (cached) {
     // The anchor comes back with the rest of it: without it, the next page
@@ -528,11 +630,23 @@ export function renderFeed({ query, isStale }) {
     appendPosts(list, cached.items);
     setKnownPosts(items, listName);
     renderTail();
-    mountView(root, { restoreScroll: cached.scrollY });
-    setupObserver();
+    show({ restoreScroll: cached.scrollY });
+  } else if (reordering) {
+    // The screen this is replacing is this screen, holding the same posts.
+    // Build the new one out of sight and leave the old one where it is until
+    // there is something to put in its place — see the note on `reordering`.
+    //
+    // `list` is not in the document yet, so the skeletons load() puts in it
+    // cost a few nodes nobody sees. They are still worth putting there: if the
+    // answer is slow, the timer below mounts what exists at that moment, and
+    // what exists is a screen already wearing its loading state.
+    const late = setTimeout(() => show(), SKELETON_AFTER);
+    load(true).finally(() => {
+      clearTimeout(late);
+      show();
+    });
   } else {
-    mountView(root);
-    setupObserver();
+    show();
     load(true);
   }
 

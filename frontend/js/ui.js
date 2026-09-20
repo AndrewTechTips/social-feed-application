@@ -98,16 +98,29 @@ const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view")
 
 /**
  * @param {Element | DocumentFragment} node
- * @param {{ restoreScroll?: number, focus?: HTMLElement, transition?: boolean }} [options]
+ * @param {{ restoreScroll?: number, focus?: HTMLElement, transition?: boolean | "none" }} [options]
  *   `focus` is where the cursor should land — a form's first field, say.
  *   Defaults to #view, which is what a reading screen wants.
  *
- *   `transition` is the opt-out. A view transition is a sentence about a
- *   journey — this screen became that one — and a loading state is not a
- *   screen, it's the absence of one. Animating into a skeleton says something
+ *   `transition` has three answers, because there are three things a swap can
+ *   be.
+ *
+ *   `true` — a journey. This screen became that one, and the view transition
+ *   is the sentence saying so.
+ *
+ *   `false` — not a journey, but still an arrival. A loading state is not a
+ *   screen, it's the absence of one: animating into a skeleton says something
  *   untrue, costs the app 160ms of not taking input, and then has to be
- *   animated out of again the moment the real thing lands. Callers that are
- *   putting up a placeholder pass false and get the quiet cross-fade instead.
+ *   animated out of again the moment the real thing lands. Callers putting up
+ *   a placeholder pass this and get the quiet cross-fade instead.
+ *
+ *   `"none"` — not an arrival at all. The same screen, still here, showing a
+ *   different answer: the feed re-ordered from Newest to Warmest, or a search
+ *   narrowing as it is typed. Nothing has travelled and nothing has arrived,
+ *   so nothing should move — the page-level fade-and-rise is a sentence about
+ *   a journey, and applied to a list changing under a control the reader is
+ *   still pointing at, it reads as the whole page having been reloaded. That
+ *   is the entire complaint it exists to answer. See views/feed.js.
  */
 export function mountView(node, { restoreScroll, focus, transition = true } = {}) {
   const view = viewEl();
@@ -156,8 +169,10 @@ export function mountView(node, { restoreScroll, focus, transition = true } = {}
   const replacingAView = view.childElementCount > 0;
 
   // A transition and the cross-fade at the same time reads as a stutter, so
-  // exactly one of them runs.
-  if (!(transition && replacingAView && tryTransition(swap, node))) {
+  // exactly one of them runs — or, for `"none"`, neither.
+  if (transition === "none") {
+    swap();
+  } else if (!(transition && replacingAView && tryTransition(swap, node))) {
     swap();
     const el = /** @type {Element} */ (node);
     el.classList.add("route-enter");
