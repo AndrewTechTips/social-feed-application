@@ -23,6 +23,7 @@ import { h } from "../dom.js";
 import { mountView } from "../view.js";
 import { REPO_URL } from "../config.js";
 import { openPalette } from "../components/palette.js";
+import { installBlock, installButton, installHowTo } from "../install.js";
 
 const adr = (file) => `${REPO_URL}/blob/main/docs/adr/${file}`;
 
@@ -183,6 +184,29 @@ function honest() {
       " is committed and re-checked in CI, and the end-to-end suite runs twice — " +
         "once against this in-browser adapter and once against a real HTTP server " +
         "standing in for the backend."
+    ),
+    // Somebody reading this page is exactly the person who will install it, so
+    // the offer belongs here as well as on the feed. Empty, and out of the
+    // document's flow entirely, in the two states where there is nothing to
+    // offer — the paragraph goes with the control rather than standing on its
+    // own, because a page that explains how to install and then doesn't let
+    // you is worse than a page that says nothing.
+    installBlock(
+      (state) => [
+        h(
+          "p",
+          { class: "colophon__prose" },
+          "It installs, too. Almost nothing is downloaded when you do: the " +
+            "files, the reading face and the data are already in this browser, " +
+            "so installing mostly means giving them a window of their own and " +
+            "an icon to open it with. What you have read stays readable with " +
+            "the connection off."
+        ),
+        state === "prompt"
+          ? installButton("Install Commons", "btn--ghost")
+          : installHowTo(),
+      ],
+      { class: "colophon__install" }
     )
   );
 }

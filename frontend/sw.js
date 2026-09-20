@@ -93,6 +93,7 @@ const SHELL = [
   "./js/shelf.js",
   "./js/draft.js",
   "./js/notify.js",
+  "./js/install.js",
   "./js/components/vote.js",
   "./js/components/card.js",
   "./js/components/palette.js",

@@ -23,6 +23,7 @@ import { unreadCount } from "../notify.js";
 import { navigate, currentPath } from "../router.js";
 import { focusCursor, hasCards, hasOnward, readOn, typing } from "./feedkeys.js";
 import { focusIsOn, toggleFocus } from "./reader.js";
+import { INSTALL_HELP, installState, promptToInstall } from "../install.js";
 
 const MAX_POSTS = 7; // a palette you scroll is a list, not a palette
 
@@ -38,6 +39,11 @@ let lastFocused = null;
 function commands() {
   const signedIn = !!get("session");
   const onPost = /^\/posts\/\d+$/.test(currentPath());
+  // Either of the two states that have something to offer, or null. The
+  // palette is the app's index of itself, so it carries the row — but it is an
+  // index of what can be done *now*, which is why there is no row at all when
+  // the app is already installed or the browser cannot install it.
+  const install = installState();
 
   const rows = [
     {
@@ -73,6 +79,16 @@ function commands() {
       id: "colophon",
       label: "How this was made",
       run: () => navigate("/colophon"),
+    },
+    // iOS has no prompt to open, so the row says the one sentence instead of
+    // pretending to do something. A toast because that is how this app already
+    // answers a question in one line.
+    install && {
+      id: "install",
+      label:
+        install === "prompt" ? "Install Commons" : "Add Commons to your home screen",
+      run:
+        install === "prompt" ? () => void promptToInstall() : () => toast(INSTALL_HELP),
     },
     // Only when there is an account to change. Signed out, the row would lead
     // to a screen that immediately sends you to sign in, which is a promise

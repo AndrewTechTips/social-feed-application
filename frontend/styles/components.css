@@ -780,3 +780,36 @@
   border-left: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
+
+/* — the install disclosure ----------------------------------------------------
+   "Add it to your home screen", and the four lines of Share-sheet instructions
+   behind it. A <details> because it opens with the keyboard, announces itself
+   as expandable, and needs no state of its own in JavaScript.
+
+   The native marker is left exactly as the browser draws it, which is unusual
+   for this app and is the right call here: the only people who ever see this
+   control are on iOS Safari, where the triangle is the platform's own
+   affordance and rotates on open for free. A drawn chevron would be a second
+   icon that had to be kept in step with a behaviour CSS already gets right.
+   -------------------------------------------------------------------------- */
+.install-how__summary {
+  /* Padding rather than min-height, and no flex box to centre it in: a summary
+     is display:list-item, and both of the usual ways to make a box 44px tall
+     take the marker off it. So the target is built out of the line box —
+     12 + (14px x 1.5) + 12 = 45px, which clears the 44 with a pixel to spare.
+     tests/install.spec.js measures it rather than trusting this sum. */
+  padding: var(--s-3) 0;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.install-how__body {
+  margin-top: var(--s-1);
+  max-width: 46ch;
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+}

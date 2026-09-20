@@ -21,6 +21,7 @@ import { onLeavingScreen, previousScreen } from "../router.js";
 import { forgetReturn } from "../transitions.js";
 import { IS_DEMO } from "../config.js";
 import { demoNote } from "../demo/strip.js";
+import { installBlock, installButton, installHowTo } from "../install.js";
 
 const PAGE_SIZE = 10;
 
@@ -83,6 +84,23 @@ function masthead() {
       "Anyone can read what's here. You need an account to post or to upvote."
     ),
     IS_DEMO ? demoNote() : null,
+    // It installs, too — and this is the recruiter-facing surface, the one
+    // block of type a first-timer actually reads. One more line in the same
+    // voice, and *nothing at all* in the two states where saying it would be a
+    // lie: already an app, or a browser that cannot install one. No banner, no
+    // bar across the top, no second colour — the amber is spent on a vote, on
+    // warmth, and on where you are, and this is none of the three.
+    installBlock(
+      (state) => [
+        h(
+          "p",
+          { class: "masthead__install-line" },
+          "It installs, too — it works on a plane."
+        ),
+        state === "prompt" ? installButton() : installHowTo(),
+      ],
+      { class: "masthead__install" }
+    ),
     // The one place a first-time visitor is already reading a block of type
     // about what this is, so it is the one place to offer the longer answer.
     h(

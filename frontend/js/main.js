@@ -2,6 +2,11 @@
 // Boot: paint the header, wire the theme toggle and search, register routes,
 // start the router.
 
+// First, and for one reason: `beforeinstallprompt` is fired once at the window
+// and a listener added after it has fired never hears it. Importing this
+// module is what registers that listener — see js/install.js.
+import "./install.js";
+
 import {
   route,
   startRouter,

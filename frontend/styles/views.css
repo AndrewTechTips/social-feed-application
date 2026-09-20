@@ -54,6 +54,31 @@
   font-size: var(--fs-ui);
   max-width: 46ch;
 }
+/* The install offer. Type and a quiet control, stacked — not a bar, not a
+   banner, and not amber: the accent is spent on a vote, on warmth and on where
+   you are, so a fifth thing wanting attention has to earn it with weight and
+   position instead. Stacked rather than laid out in a row because the sentence
+   and the control wrap unpredictably against each other at phone widths, and a
+   block that is the same shape everywhere is worth more than a saved line.
+
+   It is hidden, not absent, whenever there is nothing to offer — the event
+   that turns it on arrives some time after the feed has drawn, so there has to
+   be somewhere for the control to appear. */
+.masthead__install {
+  margin-top: var(--s-4);
+}
+.masthead__install-line {
+  margin-bottom: var(--s-2);
+  max-width: 46ch;
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+}
+/* Pulled back by the button's own inline padding, so the label lines up with
+   the type above it rather than sitting a few pixels to the right of it. */
+.masthead__install .btn--quiet {
+  margin-left: calc(var(--s-3) * -1);
+}
+
 /* One line, and the last thing in the block — an offer rather than a call to
    action. Somebody who wants to know how this was built will follow it; the
    reader who came to read scrolls past it in one movement. */
@@ -304,6 +329,14 @@
 .colophon__prose:last-child {
   margin-bottom: 0;
 }
+/* The install offer at the end of "What's honest about this demo". It is often
+   not there at all — two of the four states draw nothing — and when it isn't,
+   the paragraph above it is the last box in the section and its bottom margin
+   collapses into the section's, so the page is the same shape either way. */
+.colophon__install {
+  margin-top: var(--s-5);
+}
+
 .colophon__section code {
   font-size: 0.9em;
   color: var(--text-dim);
