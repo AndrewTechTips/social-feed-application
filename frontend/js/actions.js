@@ -22,6 +22,31 @@ export function otherTheme() {
   return currentTheme() === "dark" ? "light" : "dark";
 }
 
+/**
+ * Paint the browser's own chrome to match the theme: the title bar of an
+ * installed window, and the address bar on Android Chrome.
+ *
+ * index.html ships two `<meta name="theme-color">` keyed to
+ * `prefers-color-scheme`, which is the right answer for the moment before any
+ * of this has run. It stops being the right answer as soon as it does: the
+ * theme here is the reader's own choice, kept in localStorage, and it is
+ * allowed to disagree with what the operating system thinks. An installed
+ * window in light mode on a dark desktop had a dark title bar.
+ *
+ * Every one of them is set, to the same value, rather than working out which
+ * the browser will use. The rule is "the first whose media matches", and a
+ * wrong guess about that is invisible — so this makes the question not worth
+ * asking. The colour is read from --bg rather than typed here, so the title
+ * bar cannot drift from the page under it.
+ */
+export function syncThemeColor() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (!bg) return;
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    meta.setAttribute("content", bg);
+  }
+}
+
 export function toggleTheme() {
   const next = otherTheme();
 
@@ -36,6 +61,7 @@ export function toggleTheme() {
     // can change it from the other side of the app. Announce it rather than
     // letting the button quietly go stale.
     dispatchEvent(new CustomEvent("commons:theme", { detail: next }));
+    syncThemeColor();
   };
 
   // Every colour in the app is a custom property, so the flip is one attribute

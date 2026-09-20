@@ -190,6 +190,36 @@ export async function promptToInstall() {
   }
 }
 
+// — the badge -----------------------------------------------------------------
+/**
+ * Put the unread count on the app's own icon: the dock on a Mac, the home
+ * screen on Android, the taskbar on Windows. js/notify.js calls this from the
+ * one place the count changes.
+ *
+ * Fifteen lines, no server and no permission prompt — the count is already
+ * being polled for the lamp in the header, and this is the same number in the
+ * one place a closed app can still be seen.
+ *
+ * **Not gated on isInstalled().** It is tempting, and it would be wrong: on a
+ * desktop Chrome the app can be installed while you are reading it in an
+ * ordinary tab, and the badge still belongs on the installed icon. The browser
+ * is the one that knows, so let it decide and say nothing when it declines.
+ *
+ * @param {number} count
+ */
+export function setAppBadge(count) {
+  const nav = /** @type {any} */ (navigator);
+  if (typeof nav.setAppBadge !== "function") return;
+  try {
+    const done = count > 0 ? nav.setAppBadge(count) : nav.clearAppBadge?.();
+    // Safari rejects this when the app is only a tab. That is not a fault and
+    // it is certainly not worth a line in somebody's console.
+    done?.catch?.(() => {});
+  } catch (e) {
+    /* and a browser that throws where Safari rejects */
+  }
+}
+
 // — the pieces ----------------------------------------------------------------
 
 /**

@@ -142,11 +142,20 @@ function commands() {
       key: "F",
       run: toggleFocus,
     },
+    // The same command with a better answer where the phone has one: a share
+    // sheet has Copy in it, and Messages and Mail and whatever else is
+    // installed, and it is one press from a post rather than a paste into
+    // something else.
+    //
+    // The label follows the capability rather than promising one and doing the
+    // other. This palette's rule is that every row does what it says, and a
+    // row reading "Copy a link" that opens a share sheet breaks it — so the
+    // row is named after whichever of the two is actually going to happen.
     onPost && {
       id: "copy",
-      label: "Copy a link to this post",
+      label: canShare() ? "Share this post" : "Copy a link to this post",
       key: "C",
-      run: copyLink,
+      run: canShare() ? shareLink : copyLink,
     },
     signedIn
       ? { id: "signout", label: "Sign out", run: signOut }
@@ -158,6 +167,9 @@ function commands() {
   return /** @type {import("../types.js").Command[]} */ (rows.filter(Boolean));
 }
 
+/** Whether this browser has a share sheet to open at all. */
+const canShare = () => typeof navigator.share === "function";
+
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(location.href);
@@ -166,6 +178,27 @@ async function copyLink() {
     // Clipboard access needs a secure context and, in some browsers, a
     // permission. Say so rather than failing silently.
     toast("Couldn't copy the link.");
+  }
+}
+
+async function shareLink() {
+  // navigator.share needs the user gesture that started this, so it has to be
+  // reached before anything is awaited. The palette calls run() straight out
+  // of the keydown or the click, which is what makes that possible.
+  const data = {
+    title: document.querySelector(".detail__title")?.textContent?.trim() || "Commons",
+    url: location.href,
+  };
+  try {
+    await navigator.share(data);
+  } catch (e) {
+    // Closing the sheet without picking anything is an AbortError, and it is
+    // not a failure — it is the reader changing their mind, and saying
+    // anything about it would be the app arguing with them.
+    if (/** @type {any} */ (e)?.name === "AbortError") return;
+    // Anything else — no handler, a permission, a browser that advertises the
+    // API and then refuses — falls back to the thing that always works.
+    await copyLink();
   }
 }
 

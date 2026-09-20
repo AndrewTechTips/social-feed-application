@@ -36,6 +36,36 @@
   height: 1px;
   background: var(--hairline);
 }
+/* — installed, in a window of its own -------------------------------------------
+   The one place the app knows it is not in a tab.
+
+   In a frameless window there is no address bar and no tab strip, so this
+   header is the only thing between the content and the operating system's
+   title bar — and a 1px hairline that reads as "the chrome ends here" when
+   there is chrome above it reads as nothing at all when there isn't. So the
+   bottom edge is drawn from --border-strong instead. It is the same line, one
+   step more definite, which is the whole change: an installed app should feel
+   like the same app.
+
+   Both modes, because display_override in the manifest asks for standalone and
+   falls back to minimal-ui, and minimal-ui is a window with no tab strip too.
+
+   The safe-area inset needs nothing here: .site-header__inner already pads by
+   env(safe-area-inset-top), which is what viewport-fit=cover is for, and an
+   installed iOS app is the case it was written for in the first place.
+
+   No env(titlebar-area-*). That rectangle only exists under
+   display-mode: window-controls-overlay, which this manifest never asks for —
+   so a browser would never populate it, and a branch for a mode the app cannot
+   enter is a branch nobody can check. If WCO is ever wanted it belongs in
+   display_override first, with the layout work that goes with it.
+   -------------------------------------------------------------------------- */
+@media (display-mode: standalone), (display-mode: minimal-ui) {
+  .site-header {
+    border-bottom-color: var(--border-strong);
+  }
+}
+
 /* — reading progress ------------------------------------------------------------
    A 2px amber hairline lying along the header's bottom edge, filling as you
    read. It exists because long serif posts are the reading experience the

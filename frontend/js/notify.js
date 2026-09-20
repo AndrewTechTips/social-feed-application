@@ -21,6 +21,7 @@
 
 import { api } from "./api.js";
 import { get, subscribe } from "./store.js";
+import { setAppBadge } from "./install.js";
 
 const POLL_MS = 45000;
 
@@ -34,6 +35,11 @@ export const unreadCount = () => unread;
 function announce(next) {
   if (next === unread) return;
   unread = next;
+  // The same number, in the one place it can be seen with the app shut. It
+  // goes here rather than beside the header's lamp because this is where the
+  // count actually changes, and a badge kept in step from a render is a badge
+  // that goes stale the moment nothing renders.
+  setAppBadge(next);
   // The header draws from this. An event rather than a subscription on the
   // store, because the count is not part of the session and repainting the
   // whole account cluster on a number changing would be the app telling the
@@ -98,6 +104,13 @@ function start() {
  * does not sit in the header with somebody else's number on it.
  */
 export function startNotifications() {
+  // A badge outlives the window that set it: it is on the icon, and the icon
+  // is still there tomorrow. So the first thing to do on a fresh boot is say
+  // zero — announce() below is a no-op when the count has not changed, and at
+  // this point it has not, which would otherwise leave yesterday's number on
+  // the home screen until the first notification of the day arrived.
+  setAppBadge(unread);
+
   subscribe(() => {
     if (!get("session")) {
       stop();

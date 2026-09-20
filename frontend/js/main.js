@@ -19,7 +19,13 @@ import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
-import { currentTheme, otherTheme, toggleTheme, signOut } from "./actions.js";
+import {
+  currentTheme,
+  otherTheme,
+  toggleTheme,
+  signOut,
+  syncThemeColor,
+} from "./actions.js";
 import { h, icon } from "./dom.js";
 import { toast } from "./toast.js";
 import { mountPalette, openPalette } from "./components/palette.js";
@@ -402,6 +408,13 @@ startRouter();
 // After load, so registering never competes with the first paint for the
 // connection. A failure is not worth a word to the reader — there is no
 // feature here they asked for, only one they get.
+// The title bar of an installed window, and Android Chrome's address bar. The
+// two <meta name="theme-color"> in index.html are keyed to the operating
+// system's preference; this is where the reader's own choice takes over. Once
+// at boot, because the choice was restored from storage before first paint and
+// nothing has dispatched a change.
+syncThemeColor();
+
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => {
     navigator.serviceWorker
