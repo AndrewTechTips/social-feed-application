@@ -258,10 +258,33 @@ test("signing out takes the list with it", async ({ page, api }) => {
   await expect(page.locator(".palette__row")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
+  // Caught at the moment it happens, rather than looked for afterwards.
+  //
+  // This used to sign out and then open the palette again, and it was a coin
+  // flip: signing out navigates home, the feed refetches, and the same three
+  // posts — public, so still there signed out — go straight back into the
+  // list. clearSession's own comment says as much ("the feed comes back
+  // without them a moment later"), and a moment is exactly how long the old
+  // assertion had to run in. It passed most of the time and failed about one
+  // run in three, which is worse than failing.
+  //
+  // The guarantee is that the list is empty *at* the moment the session ends,
+  // so that is what is measured: a subscriber runs synchronously inside
+  // setSession(null), by which point setKnownPosts([]) has already happened.
+  // Nothing here is timed, and the sign-out is still the real one through the
+  // menu.
+  await page.evaluate(async () => {
+    const store = await import("/js/store.js");
+    window.__listAtSignOut = null;
+    store.subscribe(() => {
+      if (!store.get("session") && window.__listAtSignOut === null) {
+        window.__listAtSignOut = store.knownPosts().length;
+      }
+    });
+  });
+
   await signOutViaMenu(page);
   await expect(page.locator(".account")).toContainText("Sign in");
 
-  await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".palette__input").fill("Seeded");
-  await expect(page.locator(".palette__empty")).toBeVisible();
+  expect(await page.evaluate(() => window.__listAtSignOut)).toBe(0);
 });

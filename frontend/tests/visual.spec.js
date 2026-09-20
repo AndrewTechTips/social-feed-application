@@ -189,6 +189,73 @@ for (const theme of ["dark", "light"]) {
   });
 }
 
+// The data panel, which is the one screen in this file made of rows the app
+// composes out of storage rather than out of the API. A picture of it catches
+// what no assertion in browserdata.spec.js is looking at: the size column
+// falling out of line, a key chip losing its tint, a row's sentence running
+// under its own control at the default width.
+//
+// Both themes, because the key chips are the one place in the app where text
+// sits on a tinted surface over a card — a stack that was already 4.31:1 in
+// the light theme once, and would be again the next time a neutral moves.
+// Tall enough that the panel fits on one screen, which is not a detail.
+// Playwright captures an element taller than the viewport by scrolling and
+// stitching, and this app has a sticky header — so the first recording of
+// this baseline had a white band of header composited across the middle of
+// the first row. A picture with a capture artifact in it is a baseline that
+// will disagree with itself.
+test.describe("the data panel", () => {
+  test.use({ viewport: { width: 1280, height: 1500 } });
+
+  for (const theme of ["dark", "light"]) {
+    test(`the data panel, ${theme}`, async ({ page, api }) => {
+      await api.seed(2, "ada@commons.test");
+      await api.signIn(page, "ada@commons.test", "seedpassword");
+
+      // Something in every row, so the picture is of a panel with work to do
+      // rather than of five empty states.
+      await page.goto("/#/");
+      await expect(page.locator(CARD).first()).toBeVisible();
+      await page.evaluate(async () => {
+        const { toggleShelf } = await import("/js/shelf.js");
+        const { saveDraft } = await import("/js/draft.js");
+        const { markRead } = await import("/js/reading.js");
+        const { get } = await import("/js/store.js");
+        const first = Number(
+          document
+            .querySelector(".card .card__link")
+            .getAttribute("href")
+            .split("/")
+            .pop()
+        );
+        markRead(first);
+        toggleShelf(first);
+        saveDraft(get("session")?.id ?? null, {
+          title: "Notes on the good mug",
+          content: "Unfinished.",
+          published: true,
+        });
+      });
+
+      await page.goto("/#/settings");
+      await expect(page.locator(".data")).toBeVisible();
+      await setTheme(page, theme);
+      await page.evaluate(() => document.fonts.ready);
+      await settled(page);
+      // The element, not the page — the only shot in this file that is. A
+      // viewport screenshot of #/settings is a picture of the username field:
+      // the panel is most of a scroll down, and "scroll far enough" is not a
+      // baseline anybody can keep stable. The part is a self-contained block
+      // with its own heading, so framing it exactly is both possible and what
+      // the picture is actually of.
+      await expect(page.locator(".settings__group").nth(1)).toHaveScreenshot(
+        `data-panel-${theme}.png`,
+        SHOT
+      );
+    });
+  }
+});
+
 test("the sign-in form", async ({ page }) => {
   await page.goto("/#/login");
   await expect(page.locator("#email")).toBeVisible();

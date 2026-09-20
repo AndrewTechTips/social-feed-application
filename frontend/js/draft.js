@@ -20,7 +20,8 @@
 // It is stamped with who wrote it, for the reason the feed cache is: two people
 // sharing a browser must not be handed each other's unfinished sentences.
 
-const KEY = "commons.draft";
+// Exported for js/browserdata.js — see the note on READ_KEY in reading.js.
+export const DRAFT_KEY = "commons.draft";
 
 /**
  * @typedef {object} Draft
@@ -34,7 +35,7 @@ const KEY = "commons.draft";
 /** @returns {Draft | null} */
 function read() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw);
     if (!value || typeof value !== "object") return null;
@@ -79,7 +80,7 @@ export function saveDraft(who, fields) {
   // wrote would leave a draft behind that the next visit offers to restore.
   if (!fields.title.trim() && !fields.content.trim()) return clearDraft();
   try {
-    localStorage.setItem(KEY, JSON.stringify({ who, ...fields, at: Date.now() }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ who, ...fields, at: Date.now() }));
   } catch (e) {
     /* storage disabled, or full — the composer still works, it just forgets */
   }
@@ -87,7 +88,7 @@ export function saveDraft(who, fields) {
 
 export function clearDraft() {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(DRAFT_KEY);
   } catch (e) {
     /* nothing to do, and nothing worth saying about it */
   }

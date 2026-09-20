@@ -1220,11 +1220,157 @@
   padding-bottom: var(--s-7);
   border-bottom: 1px solid var(--border);
 }
-/* The last block is the destructive one, and a rule under it would read as a
-   line above whatever came next — there is nothing next. */
+/* A rule under the last block of a part would read as a line above the next
+   part's heading, which already has one of its own. */
 .settings__section:last-child {
   border-bottom: 0;
   padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* — the three parts ------------------------------------------------------------
+   The screen grew a level: three numbered groups, each holding the titled
+   blocks that used to sit directly under the page title. The number is the
+   only new piece of furniture, and it is set in the meta face at meta size so
+   it reads as an index rather than as part of the sentence — it is
+   aria-hidden, so the heading a screen reader announces is "Your account".
+   -------------------------------------------------------------------------- */
+.settings__group {
+  margin-bottom: var(--s-9);
+}
+.settings__group:last-child {
+  margin-bottom: 0;
+}
+.settings__group-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-h2);
+}
+.settings__group-n {
+  flex: none;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+.settings__group-blurb {
+  max-width: var(--measure);
+  margin-bottom: var(--s-7);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.55;
+}
+
+/* — what this browser knows ----------------------------------------------------
+   A list, not a table. A table would be the obvious shape for "name, size,
+   control" and it is the wrong one here: every row also carries a sentence
+   explaining what the thing is for and where it goes, which is the part that
+   makes this honest rather than decorative, and a sentence in a table cell at
+   320px is a column two words wide.
+
+   So each row is a small block: the name and the amount on one line with the
+   size pushed to the end, the sentence under it, the key names under that, and
+   the control last. It reads down the page at every width and needs no
+   horizontal scroll at any of them.
+   -------------------------------------------------------------------------- */
+.data {
+  list-style: none;
+  margin: 0 0 var(--s-6);
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+.data__row {
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+}
+/* The row takes focus after its own control has been used and removed — see
+   the note in views/settings.js. It is not in the tab order, so this ring only
+   ever appears as the result of a press the reader just made. */
+.data__row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.data__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+}
+.data__title {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  margin: 0;
+}
+.data__what {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Pushed to the end and set in tabular figures, so a column of sizes lines up
+   down the list even though nothing here is a table. */
+.data__size {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+.data__why {
+  max-width: var(--measure);
+  margin-top: var(--s-2);
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+}
+.data__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  margin-top: var(--s-3);
+}
+/* --text-dim, not --text-faint. The faint neutral is 4.31:1 on this chip at
+   12px in the light theme, and AA wants 4.5 — the token is scaled for body
+   text on the page background, and a tinted chip under it eats the margin.
+   Caught by axe on the settings screen rather than by eye, which is the whole
+   reason that check is in the suite. */
+.data__key {
+  padding: 2px var(--s-2);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+}
+.data__do {
+  margin-top: var(--s-3);
+}
+/* What the bottom of the panel says once there is nothing left to sweep. Said
+   rather than drawn as a disabled button, for the reason the install control
+   is built on: a control that cannot do anything should not be on the page. */
+.data__said {
+  margin-top: var(--s-3);
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+}
+.data__sweep {
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--border);
+}
+.data__ask {
+  max-width: var(--measure);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.55;
 }
 .settings__heading {
   font-size: var(--fs-h2);

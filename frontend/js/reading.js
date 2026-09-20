@@ -22,8 +22,10 @@
 // sees a feed already half-dimmed — a small and reversible wrong, against
 // losing the feature for every reader who signs in halfway through.
 
-const READ_KEY = "commons.read";
-const VISIT_KEY = "commons.visit";
+// Exported so js/browserdata.js can name these on the screen that lists what
+// this browser is holding. One copy of each string, in the module that owns it.
+export const READ_KEY = "commons.read";
+export const VISIT_KEY = "commons.visit";
 
 // Enough to cover any plausible amount of reading and still be a bounded value
 // in storage. Trimmed from the front, so what falls off is what you read
@@ -66,6 +68,40 @@ function persistRead() {
   } catch (e) {
     /* storage disabled — nothing is remembered, and nothing else breaks */
   }
+}
+
+/** How many posts this browser has a read mark for. */
+export const readCount = () => readIds.size;
+
+/**
+ * Forget what has been read here.
+ *
+ * Both keys, because they are one idea. `commons.read` is which posts are
+ * dimmed and `commons.visit` is where the "new since you were last here" line
+ * falls; clearing one and keeping the other would leave a feed that had
+ * forgotten what you opened while still claiming to know when you last looked.
+ *
+ * `previousVisit` is reset in memory as well as on disk. Without that the
+ * value resolved at boot would keep drawing the line until the next reload,
+ * which is exactly the "it says it cleared it but it hasn't" this control
+ * exists to avoid. Null is the first-visit value, so nothing is new — which is
+ * the honest state for a browser that has just forgotten having been here.
+ *
+ * stampVisit() will write a fresh mark on the way out, and that is correct:
+ * this clears the history, it does not opt out of keeping one.
+ */
+export function forgetRead() {
+  readIds.clear();
+  previousVisit = null;
+  try {
+    localStorage.removeItem(READ_KEY);
+    localStorage.removeItem(VISIT_KEY);
+  } catch (e) {
+    /* storage disabled — there was nothing stored to forget */
+  }
+  // Nothing polls this. The panel that offers the control repaints from it,
+  // and anything else drawing read state gets it fresh on its next render.
+  dispatchEvent(new CustomEvent("commons:read", { detail: 0 }));
 }
 
 /** @param {number | string} id */
@@ -162,7 +198,7 @@ export function markReadOnceSeen(id, isStale) {
 // inline bootstrap in index.html before first paint — a post that arrives at
 // one size and resets to another a frame later is worse than not offering the
 // choice.
-const SIZE_KEY = "commons.textsize";
+export const SIZE_KEY = "commons.textsize";
 const SIZES = ["s", "m", "l"];
 const DEFAULT_SIZE = "m";
 
@@ -213,7 +249,7 @@ export const textSizes = () => SIZES.slice();
 // Stored and applied exactly like the size, including the pre-paint bootstrap
 // in index.html, because a column that reflows one frame after it renders is
 // the same broken promise a resizing font is.
-const MEASURE_KEY = "commons.measure";
+export const MEASURE_KEY = "commons.measure";
 const MEASURES = ["normal", "narrow"];
 const DEFAULT_MEASURE = "normal";
 
@@ -242,6 +278,30 @@ export function setMeasure(next) {
 
 /** The names, in order, for a control that steps through them. */
 export const measures = () => MEASURES.slice();
+
+/**
+ * Put the size and the measure back to the ones the type system chose.
+ *
+ * Removing the keys rather than writing the defaults into them, for the same
+ * reason forgetTheme does: a stored "m" and no stored value at all look
+ * identical on screen and are not the same thing. One is a choice that happens
+ * to match; the other is no choice, which is what "reset" means and what the
+ * panel offering it has just claimed to do.
+ */
+export function forgetReadingPrefs() {
+  try {
+    localStorage.removeItem(SIZE_KEY);
+    localStorage.removeItem(MEASURE_KEY);
+  } catch (e) {
+    /* storage disabled — nothing was pinned */
+  }
+  document.documentElement.dataset.textSize = DEFAULT_SIZE;
+  document.documentElement.dataset.measure = DEFAULT_MEASURE;
+  // The reader panel on a post draws both of these as radio groups, and it can
+  // be sitting behind this screen. Same events its own controls fire.
+  dispatchEvent(new CustomEvent("commons:textsize", { detail: DEFAULT_SIZE }));
+  dispatchEvent(new CustomEvent("commons:measure", { detail: DEFAULT_MEASURE }));
+}
 
 document.documentElement.dataset.measure =
   document.documentElement.dataset.measure || measure();
@@ -293,9 +353,11 @@ function loadVisit() {
   }
 }
 
-// Resolved once, at boot, and held for the life of the page.
+// Resolved once, at boot, and held for the life of the page — `let` rather
+// than `const` for one caller: forgetRead below, which has to be able to make
+// this page a first visit again without a reload.
 /** @type {number | null} */
-const previousVisit = (() => {
+let previousVisit = (() => {
   const stored = loadVisit();
   if (!stored) return null; // nobody has been here before
   if (Date.now() - stored.seen > SESSION_GAP_MS) return stored.seen;

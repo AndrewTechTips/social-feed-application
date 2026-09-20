@@ -33,11 +33,11 @@
 import { api } from "./api.js";
 import { get, subscribe } from "./store.js";
 
-const SHELF_KEY = "commons.shelf";
+export const SHELF_KEY = "commons.shelf";
 // Whose shelf the mirror holds, or absent when it is this browser's own.
 // It is what lets sign-out tell "an account's saves, which should go" from
 // "saves made before there was an account, which should not".
-const OWNER_KEY = "commons.shelf.owner";
+export const OWNER_KEY = "commons.shelf.owner";
 
 // A shelf is a reading list, not an archive. Two hundred is far past anything
 // anyone will put on one and still a bounded value in storage; the oldest save
@@ -139,6 +139,49 @@ export function toggleShelf(id) {
   }
 
   return now;
+}
+
+/**
+ * Take everything off the shelf.
+ *
+ * **The one control on the data panel that is not purely local, and the
+ * reason the panel could not be a loop over localStorage.** Since the shelf
+ * grew an account half, clearing the mirror alone would last exactly until
+ * the next boot: syncShelf() pushes the local list up and pulls the account's
+ * down, so every post would come straight back and the control would read as
+ * broken. Signed in, emptying the shelf has to mean emptying the account's.
+ *
+ * Local first and synchronously, because the caller repaints from it and the
+ * count in the header should drop on the press rather than after a round
+ * trip — the same optimism toggleShelf is built on.
+ *
+ * The rollback is what is left, not what there was. `allSettled` rather than
+ * `all`, so one refused delete does not abandon the rest half-done: whatever
+ * the server still holds is exactly the set whose request failed, so putting
+ * that back leaves the mirror agreeing with the account instead of guessing.
+ * The original entries are reused rather than rebuilt, which keeps `at` — the
+ * save order — intact for the ones that survived.
+ *
+ * @returns {Promise<boolean>} whether the shelf is now empty everywhere
+ */
+export async function emptyShelf() {
+  const before = entries;
+  if (!before.length) return true;
+
+  entries = [];
+  persist();
+
+  if (!get("session")) return true;
+
+  const results = await Promise.allSettled(
+    before.map((e) => api.del(`/posts/${e.id}/save`))
+  );
+  const left = before.filter((_, i) => results[i].status === "rejected");
+  if (!left.length) return true;
+
+  entries = left;
+  persist();
+  return false;
 }
 
 /**

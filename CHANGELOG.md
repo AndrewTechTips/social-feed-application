@@ -27,6 +27,52 @@ below.
 
 ### Added
 
+- **Settings is three parts now, and the middle one says what this browser
+  knows about you.** The screen was four blocks about an account. It is
+  `1 · Your account`, `2 · This browser`, `3 · About`, and the division
+  answers a question rather than tidying a list: what lives on the server and
+  follows you to another machine, what lives on this disk and has never been
+  anywhere else, and what is neither.
+
+  **Part 2 is the one worth having.** Ten storage keys, in plain English, each
+  with its size, what it buys, where it goes — which is nowhere — the key
+  names themselves so the whole thing can be checked against the browser's own
+  inspector, and a control that removes it. `reading.js` has always carried a
+  careful comment about why a record of what somebody has read belongs on the
+  machine doing the reading; this is that reasoning on screen instead of in a
+  source file. Plus one *Forget everything on this browser* at the bottom.
+
+  **None of the clearing functions existed.** `reading.js` and `shelf.js`
+  exported readers and togglers and no resets, so this added `forgetRead`,
+  `forgetReadingPrefs`, `forgetTheme` and `emptyShelf`. Two of them are more
+  than a `removeItem`:
+
+  *`forgetTheme` removes the key rather than writing a default into it.* The
+  bootstrap in `index.html` consults `prefers-color-scheme` only when the key
+  is absent, so storing the system's current answer looks identical on screen
+  and pins the reader to it for ever. Same for the text size and the measure.
+
+  *`emptyShelf` empties the account's shelf, not just the mirror.* The shelf
+  grew a server half, and `syncShelf()` pushes the local list up and pulls the
+  account's down at every boot — so clearing only the mirror would have lasted
+  until the next reload and then put everything back. There is a test that
+  reloads, because that is the visit where the mirror-only version would have
+  been caught, and not the first.
+
+  **The panel repaints from storage, never from a number it was told**, and it
+  listens to the same events the theme toggle and the reader panel already
+  fire — a list whose whole claim is "this is what is stored" cannot be the
+  last thing on the page to find out that something changed. The row that was
+  just cleared keeps focus, because the control it was pressed with is gone.
+
+  **`browserdata.spec.js` greps the source for `commons.*` and fails on any
+  key that is neither listed nor exempt by name**, the same trick
+  `offline.spec.js` plays on the service worker's shell. The exemptions are
+  written down with their reasons, and the load-bearing one is
+  `commons.demo.v1`: it holds every post on the published demo, so a
+  `localStorage.clear()` would have emptied the site and left a reader looking
+  at an app with no way to refill it.
+
 - **An account menu, and a door to Settings.** The header carried six controls
   signed in — notifications, write, shelf, username, sign out, theme — and the
   comment beside them admitted they had been fighting for space at 320px for

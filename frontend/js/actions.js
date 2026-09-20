@@ -12,7 +12,9 @@ import { toast } from "./toast.js";
 import { navigate } from "./router.js";
 import { crossFade } from "./transitions.js";
 
-const THEME_KEY = "commons.theme";
+// Exported so js/browserdata.js can name it on the screen that lists what
+// this browser is holding, rather than keeping a second copy of the string.
+export const THEME_KEY = "commons.theme";
 
 export function currentTheme() {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -45,6 +47,35 @@ export function syncThemeColor() {
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     meta.setAttribute("content", bg);
   }
+}
+
+/**
+ * Stop having a theme of your own, and go back to following the system.
+ *
+ * Not `setTheme("dark")`. The difference matters and is the whole reason this
+ * is a separate function: the bootstrap in index.html reads the key and falls
+ * back to `prefers-color-scheme` only when it is *absent*, so writing a
+ * concrete value — even the one the system would have chosen — pins the
+ * reader to it for ever. Removing the key is the only way back to "whatever
+ * the machine is doing", and re-reading the media query here is what makes
+ * that visible now rather than on the next reload.
+ *
+ * The cross-fade is deliberately not used. This is reached from a row in a
+ * list of things being forgotten, next to three others that take effect
+ * instantly, and a theme that dissolved while the rest snapped would read as
+ * the reset being half-applied.
+ */
+export function forgetTheme() {
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch (e) {
+    /* storage disabled — there was nothing pinned to begin with */
+  }
+  const system = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  document.documentElement.dataset.theme = system;
+  dispatchEvent(new CustomEvent("commons:theme", { detail: system }));
+  syncThemeColor();
+  return system;
 }
 
 export function toggleTheme() {

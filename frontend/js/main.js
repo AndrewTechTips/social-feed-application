@@ -252,7 +252,7 @@ function syncChrome() {
     "/compose": "New post · Commons",
     "/shelf": "Your shelf · Commons",
     "/colophon": "Colophon · Commons",
-    "/settings": "Your account · Commons",
+    "/settings": "Settings · Commons",
     "/notifications": "Notifications · Commons",
   };
   document.title = titles[currentPath()] || "Commons";

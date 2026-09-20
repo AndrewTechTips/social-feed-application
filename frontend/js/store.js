@@ -17,7 +17,7 @@
 // optimistically — the header paints signed-in straight away — and the first
 // request that needs a token trades the cookie for one. If that fails, the
 // identity is dropped and the app settles into signed-out.
-const IDENTITY_KEY = "commons.identity";
+export const IDENTITY_KEY = "commons.identity";
 // The CSRF token that goes with the refresh cookie. It is in storage rather
 // than in memory for a reason that only shows up on a reload: the cookie
 // survives one and everything in memory doesn't, so a client with nowhere to
@@ -28,13 +28,13 @@ const IDENTITY_KEY = "commons.identity";
 // a request to /auth could read one of our responses, which a page on another
 // origin cannot do and cannot read this to fake. The thing that *is* a
 // credential is in a cookie this code cannot see.
-const CSRF_KEY = "commons.csrf";
-const LEGACY_SESSION_KEY = "commons.session";
+export const CSRF_KEY = "commons.csrf";
+export const LEGACY_SESSION_KEY = "commons.session";
 // The API had no "did I vote on this" flag, so this held a set of post ids and
 // the app guessed from it. PostOut carries `voted` now, so the guess is gone —
 // and so is the key, actively rather than by being left alone. A guess about
 // somebody's voting left in their browser is still a record of it.
-const LEGACY_VOTES_KEY = "commons.votes";
+export const LEGACY_VOTES_KEY = "commons.votes";
 
 /** @returns {import("./types.js").Session | null} */
 function loadIdentity() {
