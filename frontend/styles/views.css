@@ -1239,6 +1239,20 @@
   margin-bottom: 0;
 }
 
+/* The line a signed-out reader gets where the account part would be. Set as
+   prose rather than as a notice: it is context, not a warning, and a tinted
+   box would make an ordinary state look like something had gone wrong. */
+.settings__signedout {
+  max-width: var(--measure);
+  margin-bottom: var(--s-8);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
 /* — the three parts ------------------------------------------------------------
    The screen grew a level: three numbered groups, each holding the titled
    blocks that used to sit directly under the page title. The number is the

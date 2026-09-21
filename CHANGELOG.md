@@ -21,11 +21,52 @@ now finished; what they contained is here, in `docs/adr/`, and in the history.
 The last of it closed on 2026-09-20 — the findings that had been carried,
 unfixed, from the first audit, the three items of the second plan that never
 shipped, and then the third plan, which was about a feature that was already
-built and that nobody could find. A fourth is in progress:
-[`SETTINGS_UPGRADE_PLAN.md`](SETTINGS_UPGRADE_PLAN.md), whose first step is
-below.
+built and that nobody could find. A fourth — the settings plan — is finished
+too, and retired with the others; what it decided is in
+[ADR 0011](docs/adr/0011-a-popover-menu-positioned-in-javascript.md),
+[ADR 0012](docs/adr/0012-notification-preferences-are-a-view-filter.md) and
+[ADR 0013](docs/adr/0013-an-export-is-one-request-and-arrives-whole.md).
 
 ### Added
+
+- **Settings works signed out, and your writing is yours to take away.** The
+  two candidates the plan ranked but never scheduled, and the end of it.
+
+  **`#/settings` no longer sends a signed-out reader to the sign-in form.**
+  Two of the three parts are about this machine rather than about an account
+  — a shelf, a draft, a reading history and a theme all exist before anybody
+  signs in — and the reader who most wants to know what a site is keeping
+  about them is exactly the one who has not handed it a name. It renders
+  immediately and asks the server for nothing: the account half is the only
+  part that needs `/users/me`, and it is not on the page, so there is no
+  request that could fail and no loading line to show. The parts renumber to
+  1 and 2, because the numbers are an index of what is on *this* screen, and
+  a line says where the account half went.
+
+  **Download your data.** A JSON file of your account, your posts including
+  the drafts, and every comment wherever you left it — indented, because the
+  point is that a person can open it, and dated so a second download does not
+  replace the first.
+
+  It needed a new endpoint, `GET /users/me/export`, and
+  [ADR 0013](docs/adr/0013-an-export-is-one-request-and-arrives-whole.md) has
+  why it could not be assembled from the endpoints that already existed:
+  `/users/{username}/posts` hides unpublished posts from everybody but their
+  author, so an export built on it would silently lose the draft you have not
+  finished, and there is no "comments by one person" list at all — from the
+  outside there is no way to find what you said under somebody else's post.
+  Asking as yourself makes the visibility question disappear.
+
+  It is unpaged on purpose. An export arrives whole or it is not an export,
+  and a client that stopped halfway would hand somebody a file that looked
+  complete. There is a backend test that seeds twenty-five posts against a
+  default page size of ten, so anything that quietly grew a page boundary
+  fails rather than returning a plausible first page.
+
+  The file is its own shape rather than the feed's: no vote count, no
+  `voted`, no shelf state. Each of those is computed for a viewer at a moment
+  and in a file would be a number that was true once — `voted: false` against
+  your own post most of all.
 
 - **The last three settings, and the plan is finished.** Notifications,
   motion, and an About section that says what this copy of Commons is doing.

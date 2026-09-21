@@ -211,6 +211,139 @@
         "title": "Detail",
         "type": "object"
       },
+      "Export": {
+        "description": "Everything Commons holds that is yours.\n\nYour drafts are in here. They are unpublished, not secret, and an export\nthat quietly skipped the thing you have not finished would be the one\nomission most likely to matter.",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedComment"
+            },
+            "title": "Comments",
+            "type": "array"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/ExportedPost"
+            },
+            "title": "Posts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "exported_at",
+          "account",
+          "email",
+          "posts",
+          "comments"
+        ],
+        "title": "Export",
+        "type": "object"
+      },
+      "ExportedComment": {
+        "description": "One comment of your own, with enough of its post to make sense alone.\n\n``post_title`` is denormalised into this on purpose. A comment exported as\ncontent plus a post id is a line of text and a number nobody can resolve\nonce the file has left the app; the title is what makes the export\nreadable on its own, which is the only reason anybody downloads one.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_title": {
+            "title": "Post Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "created_at",
+          "post_id",
+          "post_title"
+        ],
+        "title": "ExportedComment",
+        "type": "object"
+      },
+      "ExportedPost": {
+        "description": "A post as you wrote it, which is not a post as the feed shows it.\n\nNo ``votes``, ``voted``, ``saved`` or ``excerpt``. Those are computed for\na viewer — how many people agreed, whether *you* did, whether it is on\nyour shelf, which words matched a search you have just run — and every\none of them is a fact about a moment rather than about the writing. In a\nfile they would be a number that was true once, and ``voted: false``\nagainst your own post would be actively confusing.\n\nNo nested ``user`` either: the account is at the top of the document, and\nrepeating it on every row would be the export padding itself out.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "published": {
+            "default": true,
+            "title": "Published",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "id",
+          "created_at",
+          "updated_at",
+          "user_id"
+        ],
+        "title": "ExportedPost",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2289,6 +2422,80 @@
           }
         ],
         "summary": "Change your username",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/export": {
+      "get": {
+        "description": "Everything you have written here, in one JSON document.\n\n── why this is one endpoint and not two paged ones ────────────────────\nYour posts are already at ``/users/{username}/posts``, and a\n``/users/{username}/comments`` beside it would have been the consistent\nthing to build. Two problems with composing an export out of those.\n\nThey are public, so they have to hide anything on an unpublished post —\nwhich means the export would silently omit the draft you have not\nfinished and the conversation under it, and an export with a silent\nomission is worse than no export. Asking as yourself makes the visibility\nquestion disappear: it is all yours, so you may all have it.\n\nAnd an export arrives whole or it is not an export. Paging it means a\nclient that stops halfway hands somebody a file that looks complete and\nis not. There is no page size here for the same reason there is no\n``fields`` parameter: the answer to \"give me my data\" is all of it.\n\n── what that costs ────────────────────────────────────────────────────\nAn unbounded response, which on a feed this size is a few hundred\nkilobytes at the very worst. If that ever stops being true the fix is a\njob that builds the file and a link that fetches it, not a page\nparameter — the shape of the promise does not change.",
+        "operationId": "export_me_api_v1_users_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "account": {
+                    "created_at": "2026-08-21T09:14:02.511Z",
+                    "id": 7,
+                    "username": "marenholt"
+                  },
+                  "comments": [
+                    {
+                      "content": "I walked past it a hundred times.",
+                      "created_at": "2026-09-19T08:14:00Z",
+                      "id": 12,
+                      "post_id": 3,
+                      "post_title": "The bus timetable is a work of fiction"
+                    }
+                  ],
+                  "email": "ada@example.com",
+                  "exported_at": "2026-09-21T10:00:00Z",
+                  "posts": [
+                    {
+                      "content": "There's a reading room near the old tram depot that never closes. No membership, no desk, no one checking whether you belong there.",
+                      "created_at": "2026-09-08T22:41:07.220Z",
+                      "id": 12,
+                      "published": true,
+                      "saved": false,
+                      "title": "The library that stays open all night",
+                      "updated_at": "2026-09-08T22:41:07.220Z",
+                      "user": {
+                        "created_at": "2026-08-21T09:14:02.511Z",
+                        "id": 7,
+                        "username": "marenholt"
+                      },
+                      "user_id": 7,
+                      "voted": false,
+                      "votes": 4
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Export"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Take your writing with you",
         "tags": [
           "Users"
         ]

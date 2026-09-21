@@ -76,11 +76,18 @@ test("the palette can get there, and only offers it when there's an account", as
   await expect(page).toHaveURL(/#\/settings$/);
 });
 
-test("a signed-out visitor who types the address is sent to sign in", async ({
+test("a signed-out visitor is shown the screen, not the sign-in form", async ({
   page,
 }) => {
   await page.goto("/#/settings");
-  await expect(page).toHaveURL(/#\/login$/);
+
+  // This used to redirect. Two of the three parts are about this machine
+  // rather than about an account, and the reader who most wants to know what
+  // a site keeps about them is the one who has not handed it a name — so
+  // being bounced to a form was the last thing here that only worked one
+  // way. export.spec.js has the rest of it.
+  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(page.locator(".settings__signedout")).toBeVisible();
 });
 
 // ── your name ──────────────────────────────────────────────────────────────

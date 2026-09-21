@@ -120,8 +120,7 @@ def decayed(count: int, created_at: str, gravity: float) -> float:
 #
 # Verbatim from Postgres 18's share/tsearch_data/english.stop, so a query of
 # only stop words parses to nothing here exactly as it does there.
-STOP_WORDS = frozenset(
-    """
+STOP_WORDS = frozenset("""
     i me my myself we our ours ourselves you your yours yourself yourselves he
     him his himself she her hers herself it its itself they them their theirs
     themselves what which who whom this that these those am is are was were be
@@ -131,8 +130,7 @@ STOP_WORDS = frozenset(
     again further then once here there when where why how all any both each few
     more most other some such no nor not only own same so than too very s t can
     will just don should now
-    """.split()
-)
+    """.split())
 
 # Order matters: the longest suffix that applies wins, and the bare "e" comes
 # last so "kettle" and "kettles" both land on "kettl" — which is exactly what
@@ -165,9 +163,7 @@ def search_terms(search: str) -> list[str]:
     """What the caller actually asked for. Empty when they asked nothing —
     an empty box, punctuation only, or nothing but stop words."""
     return [
-        stem(w)
-        for w in WORD_RE.findall((search or "").lower())
-        if w not in STOP_WORDS
+        stem(w) for w in WORD_RE.findall((search or "").lower()) if w not in STOP_WORDS
     ]
 
 
@@ -323,9 +319,7 @@ class State:
         row["secret"] = secrets.token_urlsafe(32)
         return row["secret"]
 
-    def rotate(
-        self, raw: str | None, csrf: str | None
-    ) -> tuple[str, str, str] | str:
+    def rotate(self, raw: str | None, csrf: str | None) -> tuple[str, str, str] | str:
         """Mirrors oauth2.rotate_refresh_session.
 
         Returns (email, cookie, csrf) on success, or one of two strings on
@@ -400,7 +394,9 @@ class State:
                 break
             for cid in orphans:
                 self.comments.pop(cid, None)
-        self.votes = {(e, pid) for (e, pid) in self.votes if e != email and pid not in mine}
+        self.votes = {
+            (e, pid) for (e, pid) in self.votes if e != email and pid not in mine
+        }
         # Both directions of the `saves` cascade: this person's shelf, and
         # everyone else's saves of the posts that just went with them.
         self.saves = [
@@ -568,8 +564,7 @@ class State:
             for nid, row in self.notifications.items()
             if not (comment_ids is not None and row["comment_id"] in comment_ids)
             and not (
-                email is not None
-                and email in (row["user_email"], row["actor_email"])
+                email is not None and email in (row["user_email"], row["actor_email"])
             )
         }
 
@@ -889,6 +884,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/users/me" and method == "DELETE":
             return self._delete_me()
 
+        if path == "/users/me/export" and method == "GET":
+            return self._export_me()
+
         m = re.match(r"^/users/([^/]+)/posts$", path)
         if m and method == "GET":
             return self._user_posts(m.group(1), query)
@@ -1018,6 +1016,73 @@ class Handler(BaseHTTPRequestHandler):
                 "username": user["username"],
                 "email": user["email"],
                 "created_at": user["created_at"],
+            },
+        )
+
+    def _export_me(self) -> None:
+        """Everything the caller has written, in one document.
+
+        Unpaged and including drafts, the same as the real endpoint — see
+        ``export_me`` in backend/app/routers/user.py for why both of those are
+        the point rather than an oversight.
+        """
+        email = self._require_auth()
+        if not email:
+            return
+        user = ST.users[email]
+
+        posts = sorted(
+            (row for row in ST.posts.values() if row["author_email"] == email),
+            key=lambda row: (row["created_at"], row["id"]),
+            reverse=True,
+        )
+        comments = sorted(
+            (row for row in ST.comments.values() if row["author_email"] == email),
+            key=lambda row: (row["created_at"], row["id"]),
+            reverse=True,
+        )
+
+        self._send(
+            200,
+            {
+                "exported_at": now_iso(),
+                "account": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "created_at": user["created_at"],
+                },
+                "email": user["email"],
+                "posts": [
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "content": row["content"],
+                        "published": row.get("published", True),
+                        "created_at": row["created_at"],
+                        "updated_at": row.get("updated_at") or row["created_at"],
+                        "user_id": user["id"],
+                    }
+                    for row in posts
+                ],
+                "comments": [
+                    {
+                        "id": row["id"],
+                        "content": row["content"],
+                        "created_at": row["created_at"],
+                        "post_id": row["post_id"],
+                        # The title is what makes a comment resolvable once the
+                        # file has left the app. A comment whose post has gone
+                        # cannot happen — deleting a post cascades — but this
+                        # mock is not a database, so it says so rather than
+                        # raising a KeyError at the reader.
+                        "post_title": (
+                            ST.posts.get(row["post_id"], {}).get("title")
+                            or "(a post that has since been deleted)"
+                        ),
+                        "parent_id": row.get("parent_id"),
+                    }
+                    for row in comments
+                ],
             },
         )
 
@@ -1156,17 +1221,13 @@ class Handler(BaseHTTPRequestHandler):
     def _profile(self, username: str) -> None:
         user = ST.user_by_username(username)
         if not user:
-            return self._send(
-                404, {"detail": f"There's nobody here called {username}"}
-            )
+            return self._send(404, {"detail": f"There's nobody here called {username}"})
         self._send(200, ST.public_user(user["email"]))
 
     def _user_posts(self, username: str, query: dict) -> None:
         user = ST.user_by_username(username)
         if not user:
-            return self._send(
-                404, {"detail": f"There's nobody here called {username}"}
-            )
+            return self._send(404, {"detail": f"There's nobody here called {username}"})
         # Same page shape and the same draft rule as the feed.
         self._list_posts(query, only_author=user["email"])
 
@@ -1184,9 +1245,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _refresh(self) -> None:
-        rotated = ST.rotate(
-            self._cookie(REFRESH_COOKIE), self.headers.get(CSRF_HEADER)
-        )
+        rotated = ST.rotate(self._cookie(REFRESH_COOKIE), self.headers.get(CSRF_HEADER))
         if isinstance(rotated, str):
             # Cleared only when the cookie itself is no good, for the same
             # reason the real backend draws that line: what's held can only
@@ -1209,9 +1268,7 @@ class Handler(BaseHTTPRequestHandler):
         # cookie, and clearing regardless would let any page sign a reader out.
         presented = self._cookie(REFRESH_COOKIE)
         ST.close_session(presented, self.headers.get(CSRF_HEADER))
-        self._send(
-            204, None, cookie=self._cleared_cookie() if presented else None
-        )
+        self._send(204, None, cookie=self._cleared_cookie() if presented else None)
 
     def _list_posts(self, query: dict, only_author: str | None = None) -> None:
         try:
@@ -1283,8 +1340,15 @@ class Handler(BaseHTTPRequestHandler):
         if len(search) > 100:  # matches max_length on the real endpoint
             return self._send(
                 422,
-                {"detail": [{"loc": ["query", "search"], "msg": "too long",
-                             "type": "value_error"}]},
+                {
+                    "detail": [
+                        {
+                            "loc": ["query", "search"],
+                            "msg": "too long",
+                            "type": "value_error",
+                        }
+                    ]
+                },
             )
         viewer = ST.email_for(self._token())
 
@@ -1305,8 +1369,10 @@ class Handler(BaseHTTPRequestHandler):
             # is there: "the warmest, in relevance order" means nothing.
             scored = [(search_rank(r, terms), r) for r in visible]
             ranked = [(rank, r) for rank, r in scored if rank is not None]
-            ranked.sort(key=lambda pair: (pair[0], pair[1]["created_at"], pair[1]["id"]),
-                        reverse=True)
+            ranked.sort(
+                key=lambda pair: (pair[0], pair[1]["created_at"], pair[1]["id"]),
+                reverse=True,
+            )
             rows = [r for _rank, r in ranked]
         elif sort in ("warm", "discussed"):
             if sort == "warm":
@@ -1335,9 +1401,7 @@ class Handler(BaseHTTPRequestHandler):
         total = len(rows)
         pages = (total + page_size - 1) // page_size if total else 0
         start = (page - 1) * page_size
-        items = [
-            ST.post_out(r, viewer, terms) for r in rows[start : start + page_size]
-        ]
+        items = [ST.post_out(r, viewer, terms) for r in rows[start : start + page_size]]
         envelope = {
             "items": items,
             "total": total,

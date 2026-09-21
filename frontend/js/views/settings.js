@@ -214,6 +214,103 @@ function emailSection(me) {
   );
 }
 
+// ── taking it with you ─────────────────────────────────────────────────────
+//
+// A JSON file of everything you have written here: the account, your posts
+// including the drafts, and every comment wherever you left it. One request
+// to `/users/me/export`, which exists because there is no way to assemble
+// this from the public endpoints — they hide unpublished posts, and there is
+// no "comments by one person" list at all. See ADR 0013.
+//
+// **In part 1, not part 2.** Everything in this section is on the server and
+// follows you to another machine, which is exactly what this downloads. Part
+// 2 is about what is on this disk, and would have been the wrong neighbour:
+// the reader who wants their writing and the reader who wants to know what
+// is being kept about them are asking two different questions.
+//
+// It sits above Leaving on purpose. Somebody who has decided to delete their
+// account should pass the way to keep a copy on the way to the button that
+// throws it away.
+function exportSection(me) {
+  const button = h(
+    "button",
+    { class: "btn btn--quiet", type: "button" },
+    "Download your data"
+  );
+  const status = h("p", { class: "settings__note", role: "status" });
+
+  let pending = false;
+
+  button.addEventListener("click", async () => {
+    if (pending) return;
+    pending = true;
+    // Disabling a focused control hands focus to the body, so a reader who
+    // pressed this with the keyboard would be returned to the top of the tab
+    // order by their own press. Noted here and put back below.
+    const hadFocus = document.activeElement === button;
+    button.disabled = true;
+    button.textContent = "Gathering…";
+    status.textContent = "";
+
+    /** @type {string | null} */
+    let href = null;
+    try {
+      const data = await api.get("/users/me/export");
+
+      // Two spaces. The file is meant to be opened and read by a person —
+      // that is the whole point of offering it — and minified JSON is a
+      // wall. The size cost is nothing at this scale.
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      href = URL.createObjectURL(blob);
+
+      // Dated, so a second download does not overwrite the first in the
+      // downloads folder and so the file says when it was true.
+      const day = new Date().toISOString().slice(0, 10);
+      const link = h("a", { href, download: `commons-${me.username}-${day}.json` });
+      // Not appended to the document. A click on a detached anchor still
+      // triggers the download in every browser that supports the attribute,
+      // and appending one means a stray element if anything below throws.
+      link.click();
+
+      // Numerals, not spellCount: its words are capitalised for the start of
+      // a sentence ("Four new posts since…") and this is the middle of one.
+      // A count of records reads better as a figure anyway.
+      const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+      status.textContent =
+        `Downloaded — ${n(data.posts.length, "post", "posts")} and ` +
+        `${n(data.comments.length, "comment", "comments")}.`;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) {
+        status.textContent = "That didn't download. Try again?";
+      }
+    } finally {
+      // Released on the next turn of the loop rather than immediately: the
+      // click above starts the download asynchronously, and revoking the URL
+      // in the same task can cancel it out from under itself.
+      // `url` rather than `href` inside the closure: TypeScript narrows the
+      // outer `let` back to `string | null` across the await boundary, and it
+      // is right to — nothing else guarantees it has not been reassigned.
+      const url = href;
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 0);
+      pending = false;
+      button.disabled = false;
+      button.textContent = "Download your data";
+      if (hadFocus) button.focus();
+    }
+  });
+
+  return section(
+    "Your writing",
+    "A JSON file of everything you have written here: your posts, including " +
+      "any drafts, and every comment wherever you left it. Yours to keep, and " +
+      "readable without Commons — it is a text file, not an archive.",
+    button,
+    status
+  );
+}
+
 // ── sign out everywhere ────────────────────────────────────────────────────
 function sessionsSection() {
   const button = h(
@@ -793,9 +890,10 @@ function themeSection() {
 // ── 2 · this browser ───────────────────────────────────────────────────────
 // The settings that live on this machine, and then the list of everything it
 // is keeping. In that order: what you can change, then what is there.
-function browserGroup() {
+/** @param {number} n which part this is on the screen it is being put on */
+function browserGroup(n) {
   return group(
-    2,
+    n,
     "This browser",
     "None of this is on your account — it is on this machine, and it stays " +
       "here. Another device signed in as you knows none of it.",
@@ -804,6 +902,25 @@ function browserGroup() {
     motionSection(),
     notificationsSection(),
     dataPanel()
+  );
+}
+
+/**
+ * What is missing, and where it went.
+ *
+ * Without this the screen is two parts that begin at "This browser", and a
+ * reader who came looking for their account finds no account and no
+ * explanation — which reads as the page having failed rather than as the
+ * page being complete for somebody who is not signed in.
+ */
+function signedOutNote() {
+  return h(
+    "p",
+    { class: "settings__signedout" },
+    "You're not signed in, so there's no account half to show. Everything " +
+      "below is about this browser and about Commons itself. ",
+    h("a", { href: "#/login" }, "Sign in"),
+    " to change your name, end your other sessions, or delete your account."
   );
 }
 
@@ -889,7 +1006,8 @@ function offlineSection() {
   return section("Offline", "", line, check);
 }
 
-function aboutGroup() {
+/** @param {number} n which part this is — see the note in renderSettings. */
+function aboutGroup(n) {
   const keys = h(
     "button",
     { class: "btn btn--quiet", type: "button" },
@@ -901,7 +1019,7 @@ function aboutGroup() {
   keys.addEventListener("click", openPalette);
 
   return group(
-    3,
+    n,
     "About",
     "What Commons is, and what this copy of it is doing.",
     section(
@@ -935,7 +1053,11 @@ function aboutGroup() {
 
 // Built twice — once under the loading line and once under the real screen —
 // so that the title doesn't arrive after the page it titles.
-const head = () =>
+/**
+ * @param {boolean} signedIn what the line underneath can honestly promise —
+ *   there is no account half to offer somebody who has not signed in
+ */
+const head = (signedIn) =>
   h(
     "header",
     { class: "settings__head" },
@@ -943,17 +1065,46 @@ const head = () =>
     h(
       "p",
       { class: "settings__line" },
-      "Your account, and what this browser is keeping."
+      signedIn
+        ? "Your account, and what this browser is keeping."
+        : "What this browser is keeping, and what Commons is."
     )
   );
 
 export async function renderSettings({ isStale }) {
-  if (!get("session")) return navigate("/login");
+  // ── signed out, and not sent away ─────────────────────────────────────
+  // Two of the three parts are about this machine rather than about an
+  // account: a shelf, a draft, a reading history and a theme all exist
+  // before anybody signs in, and the reader who most wants to know what a
+  // site is keeping about them is exactly the one who has not handed it a
+  // name. Bouncing them to a sign-in form to be told that was the last
+  // thing on this screen that only worked one way.
+  //
+  // It renders straight away and asks for nothing. The account half needs
+  // /users/me for the email; the browser half needs the disk, which is
+  // already here — so there is no request to fail and no loading line to
+  // show, and a signed-out reader cannot be handed an auth error by a screen
+  // that never spoke to the server.
+  if (!get("session")) {
+    const out = h(
+      "section",
+      { class: "settings", "aria-label": "Settings" },
+      head(false),
+      // Numbered from one. The parts are an index of what is on *this*
+      // screen, so a screen with two of them starts at 1 — a gap where an
+      // account section would be is a question nobody can answer from here.
+      signedOutNote(),
+      browserGroup(1),
+      aboutGroup(2)
+    );
+    mountView(out);
+    return;
+  }
 
   const root = h(
     "section",
     { class: "settings", "aria-label": "Settings" },
-    head(),
+    head(true),
     h("p", { class: "settings__loading" }, "Loading…")
   );
   mountView(root);
@@ -981,7 +1132,7 @@ export async function renderSettings({ isStale }) {
   if (isStale()) return;
 
   root.replaceChildren(
-    head(),
+    head(true),
     group(
       1,
       "Your account",
@@ -990,9 +1141,10 @@ export async function renderSettings({ isStale }) {
       nameSection(me),
       emailSection(me),
       sessionsSection(),
+      exportSection(me),
       dangerSection(me)
     ),
-    browserGroup(),
-    aboutGroup()
+    browserGroup(2),
+    aboutGroup(3)
   );
 }

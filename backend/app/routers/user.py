@@ -9,9 +9,11 @@ from fastapi import (
     Request,
     Response,
 )
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..limiter import limiter
@@ -215,6 +217,99 @@ def delete_me(
     db.delete(current_user)
     db.commit()
     oauth2.clear_refresh_cookie(response)
+
+
+@router.get(
+    "/me/export",
+    response_model=schemas.Export,
+    summary="Take your writing with you",
+    responses={
+        200: docs.ok(
+            {
+                "exported_at": "2026-09-21T10:00:00Z",
+                "account": docs.USER_EXAMPLE,
+                "email": "ada@example.com",
+                "posts": [docs.POST_EXAMPLE],
+                "comments": [
+                    {
+                        "id": 12,
+                        "content": "I walked past it a hundred times.",
+                        "created_at": "2026-09-19T08:14:00Z",
+                        "post_id": 3,
+                        "post_title": "The bus timetable is a work of fiction",
+                        "parent_id": None,
+                    }
+                ],
+            }
+        ),
+        **docs.errors(401),
+    },
+)
+def export_me(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+) -> dict[str, Any]:
+    """Everything you have written here, in one JSON document.
+
+    ── why this is one endpoint and not two paged ones ────────────────────
+    Your posts are already at ``/users/{username}/posts``, and a
+    ``/users/{username}/comments`` beside it would have been the consistent
+    thing to build. Two problems with composing an export out of those.
+
+    They are public, so they have to hide anything on an unpublished post —
+    which means the export would silently omit the draft you have not
+    finished and the conversation under it, and an export with a silent
+    omission is worse than no export. Asking as yourself makes the visibility
+    question disappear: it is all yours, so you may all have it.
+
+    And an export arrives whole or it is not an export. Paging it means a
+    client that stops halfway hands somebody a file that looks complete and
+    is not. There is no page size here for the same reason there is no
+    ``fields`` parameter: the answer to "give me my data" is all of it.
+
+    ── what that costs ────────────────────────────────────────────────────
+    An unbounded response, which on a feed this size is a few hundred
+    kilobytes at the very worst. If that ever stops being true the fix is a
+    job that builds the file and a link that fetches it, not a page
+    parameter — the shape of the promise does not change.
+    """
+    posts = db.scalars(
+        select(models.Post)
+        .options(selectinload(models.Post.user))
+        .where(models.Post.user_id == current_user.id)
+        .order_by(models.Post.created_at.desc(), models.Post.id.desc())
+    ).all()
+
+    comments = db.scalars(
+        select(models.Comment)
+        # The title comes from here. One extra query for the whole set rather
+        # than a join that repeats a post once per comment on it.
+        .options(selectinload(models.Comment.post))
+        .where(models.Comment.user_id == current_user.id)
+        .order_by(models.Comment.created_at.desc(), models.Comment.id.desc())
+    ).all()
+
+    return {
+        "exported_at": datetime.now(timezone.utc),
+        "account": current_user,
+        "email": current_user.email,
+        # schemas.ExportedPost, not PostOut: the feed's view of a post — the
+        # vote count, whether you voted, whether it is shelved — is a fact
+        # about a moment and not about the writing, and page_of_posts is what
+        # computes it. This asks the table for the rows and nothing else.
+        "posts": posts,
+        "comments": [
+            {
+                "id": c.id,
+                "content": c.content,
+                "created_at": c.created_at,
+                "post_id": c.post_id,
+                "post_title": c.post.title,
+                "parent_id": c.parent_id,
+            }
+            for c in comments
+        ],
+    }
 
 
 @router.get(

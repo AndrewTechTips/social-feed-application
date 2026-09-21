@@ -743,6 +743,63 @@ export function createDemoBackend({
     });
   }
 
+  /**
+   * Everything the viewer has written, in one document.
+   *
+   * Unpaged and including drafts, the same as the real endpoint — see
+   * `export_me` in backend/app/routers/user.py for why both of those are the
+   * point rather than an oversight. The published demo answers this out of
+   * localStorage, so a reader can download a file of their own writing on a
+   * site with no server at all, which is a pleasing thing to be able to say.
+   *
+   * @param {string} viewer
+   */
+  function exportMe(viewer) {
+    const u = userByEmail(viewer);
+    if (!u) return detail(401, "Could not validate credentials");
+
+    const newestFirst = (a, b) =>
+      a.created_at === b.created_at
+        ? b.id - a.id
+        : a.created_at < b.created_at
+          ? 1
+          : -1;
+
+    const posts = state.posts
+      .filter((p) => p.author_email === viewer)
+      .sort(newestFirst);
+    const comments = state.comments
+      .filter((c) => c.author_email === viewer)
+      .sort(newestFirst);
+
+    return json(200, {
+      exported_at: new Date().toISOString(),
+      account: { id: u.id, username: u.username, created_at: u.created_at },
+      email: u.email,
+      posts: posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        published: p.published,
+        created_at: p.created_at,
+        updated_at: p.updated_at || p.created_at,
+        user_id: u.id,
+      })),
+      comments: comments.map((c) => {
+        const post = state.posts.find((p) => p.id === c.post_id);
+        return {
+          id: c.id,
+          content: c.content,
+          created_at: c.created_at,
+          post_id: c.post_id,
+          // What makes a comment resolvable once the file has left the app.
+          post_title: post ? post.title : "(a post that has since been deleted)",
+          parent_id: c.parent_id ?? null,
+        };
+      }),
+    });
+  }
+
   // Change the name everybody else sees. Only the username — the email and the
   // password are the credential half of an account and changing either is a
   // flow with a confirmation in it. Mirrors PATCH /users/me.
@@ -1582,6 +1639,9 @@ export function createDemoBackend({
     if (route === "/auth/logout" && method === "POST") return logout(csrfHeader);
     if (route === "/auth/logout-all" && method === "POST") {
       return requireAuth() || logoutEverywhere(viewer);
+    }
+    if (route === "/users/me/export" && method === "GET") {
+      return requireAuth() || exportMe(viewer);
     }
     if (route === "/users/me" && method === "PATCH") {
       return requireAuth() || updateMe(body(), viewer);

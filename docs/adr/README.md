@@ -22,3 +22,4 @@ comment nobody reads.
 | [0010](0010-an-install-control-with-a-silent-state.md) | An install control with a silent state |
 | [0011](0011-a-popover-menu-positioned-in-javascript.md) | A popover menu, positioned in JavaScript |
 | [0012](0012-notification-preferences-are-a-view-filter.md) | Notification preferences are a view filter, kept on the client |
+| [0013](0013-an-export-is-one-request-and-arrives-whole.md) | An export is one request, and arrives whole |

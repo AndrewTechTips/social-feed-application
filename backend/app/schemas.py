@@ -186,6 +186,66 @@ class CommentPage(BaseModel):
     has_prev: bool
 
 
+# Taking your writing with you. One shape, one request, and deliberately not
+# paged — see ``export_me`` in routers/user.py for why an export that arrives
+# in instalments is an export a client can get half of.
+
+
+class ExportedComment(BaseModel):
+    """One comment of your own, with enough of its post to make sense alone.
+
+    ``post_title`` is denormalised into this on purpose. A comment exported as
+    content plus a post id is a line of text and a number nobody can resolve
+    once the file has left the app; the title is what makes the export
+    readable on its own, which is the only reason anybody downloads one.
+    """
+
+    id: int
+    content: str
+    created_at: datetime
+    post_id: int
+    post_title: str
+    # Which comment this answered, or nothing for something said to the post.
+    parent_id: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExportedPost(PostBase):
+    """A post as you wrote it, which is not a post as the feed shows it.
+
+    No ``votes``, ``voted``, ``saved`` or ``excerpt``. Those are computed for
+    a viewer — how many people agreed, whether *you* did, whether it is on
+    your shelf, which words matched a search you have just run — and every
+    one of them is a fact about a moment rather than about the writing. In a
+    file they would be a number that was true once, and ``voted: false``
+    against your own post would be actively confusing.
+
+    No nested ``user`` either: the account is at the top of the document, and
+    repeating it on every row would be the export padding itself out.
+    """
+
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    user_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Export(BaseModel):
+    """Everything Commons holds that is yours.
+
+    Your drafts are in here. They are unpublished, not secret, and an export
+    that quietly skipped the thing you have not finished would be the one
+    omission most likely to matter.
+    """
+
+    exported_at: datetime
+    account: UserOut
+    email: EmailStr
+    posts: list[ExportedPost]
+    comments: list[ExportedComment]
+
+
 def usable_username(value: str) -> str:
     """Folded, checked, and the same check wherever a username is offered.
 
