@@ -29,6 +29,28 @@ too, and retired with the others; what it decided is in
 
 ### Added
 
+- **Pressing a button on `#/settings` no longer costs you your place.**
+  Every control there that says "Saving…" or "Deleting…" while it works
+  disables itself to do it, and **disabling a focused control hands focus to
+  the body** — so a reader working by keyboard was returned to the top of the
+  tab order by their own press, then had to Tab back down a long screen to
+  find out whether it had worked. Invisible with a mouse, constant without
+  one.
+
+  Six controls, one helper. `keepingFocus()` is called before the disable and
+  its result after the re-enable, and it has two guards that are as much the
+  point as the fix: it only restores focus if the control *had* it, so a
+  mouse press is not rewarded with a focus ring; and only if focus is
+  currently nowhere, so a reader who tabbed away during a slow request is
+  left where they chose to be.
+
+  That second guard is why this could be applied to six controls without
+  reading each error path first — the rename already moves focus into the
+  field on a rejection, because the next thing to do is fix the name, and the
+  restore declines to fight it. `settingsfocus.spec.js` pins that, both
+  guards, and sweeps every button on the screen so a control added later is
+  covered without anybody remembering to come back.
+
 - **Settings works signed out, and your writing is yours to take away.** The
   two candidates the plan ranked but never scheduled, and the end of it.
 

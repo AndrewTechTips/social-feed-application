@@ -64,6 +64,39 @@ import { isInstalled, installBlock, installButton, installHowTo } from "../insta
 import { isOffline } from "../offline.js";
 import { radioGroup, toggleSwitch } from "../components/radiogroup.js";
 
+// — keeping the reader's place -----------------------------------------------
+//
+// **Disabling a focused control hands focus to the body**, so a reader who
+// pressed a button with the keyboard is returned to the top of the tab order
+// by their own press — and then has to Tab back down a long screen to find
+// out what happened. Every button here that says "Saving…" or "Deleting…"
+// while it works had this.
+//
+// Call before disabling; call the result after re-enabling.
+//
+// Two guards, and both matter. It only puts focus back if the control *had*
+// it — otherwise pressing a button with the mouse would yank focus to it for
+// no reason. And it only does so if focus is currently nowhere, because a
+// reader who has tabbed somewhere else while a request was out has chosen to
+// be there, and a slow response should not drag them back.
+//
+// `isConnected` because a few of these controls are gone by the time their
+// own work finishes: the data panel rebuilds its rows, and two of them
+// navigate away entirely.
+//
+/** @param {HTMLElement} el @returns {() => void} */
+function keepingFocus(el) {
+  const had = document.activeElement === el;
+  return () => {
+    if (!had || !el.isConnected) return;
+    const nowhere =
+      !document.activeElement ||
+      document.activeElement === document.body ||
+      document.activeElement === document.documentElement;
+    if (nowhere) el.focus();
+  };
+}
+
 // Mirrors schemas.USERNAME_RE. Case-insensitive, because the server folds what
 // it is given rather than refusing it — so ADA is offered and `ada` is stored,
 // and the field says so by putting the folded name back afterwards.
@@ -157,6 +190,7 @@ function nameSection(me) {
     setError("");
 
     pending = true;
+    const restoreFocus = keepingFocus(save);
     save.disabled = true;
     save.textContent = "Saving…";
     try {
@@ -190,6 +224,7 @@ function nameSection(me) {
       pending = false;
       save.disabled = false;
       save.textContent = "Save name";
+      restoreFocus();
     }
   });
 
@@ -244,10 +279,7 @@ function exportSection(me) {
   button.addEventListener("click", async () => {
     if (pending) return;
     pending = true;
-    // Disabling a focused control hands focus to the body, so a reader who
-    // pressed this with the keyboard would be returned to the top of the tab
-    // order by their own press. Noted here and put back below.
-    const hadFocus = document.activeElement === button;
+    const restoreFocus = keepingFocus(button);
     button.disabled = true;
     button.textContent = "Gathering…";
     status.textContent = "";
@@ -297,7 +329,7 @@ function exportSection(me) {
       pending = false;
       button.disabled = false;
       button.textContent = "Download your data";
-      if (hadFocus) button.focus();
+      restoreFocus();
     }
   });
 
@@ -320,6 +352,7 @@ function sessionsSection() {
   );
 
   button.addEventListener("click", async () => {
+    const restoreFocus = keepingFocus(button);
     button.disabled = true;
     button.textContent = "Signing out…";
     try {
@@ -334,6 +367,7 @@ function sessionsSection() {
     } catch (error) {
       button.disabled = false;
       button.textContent = "Sign out everywhere";
+      restoreFocus();
       if (!(error instanceof ApiError) || error.status !== 401) {
         toast("That didn't go through. Try again?");
       }
@@ -407,6 +441,7 @@ function dangerSection(me) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (go.disabled) return;
+      const restoreFocus = keepingFocus(go);
       go.disabled = true;
       go.textContent = "Deleting…";
       try {
@@ -420,6 +455,7 @@ function dangerSection(me) {
       } catch (error) {
         go.disabled = false;
         go.textContent = "Delete my account";
+        restoreFocus();
         if (!(error instanceof ApiError) || error.status !== 401) {
           toast("That didn't go through. Try again?");
         }
@@ -664,6 +700,7 @@ function dataPanel() {
 
     if (control) {
       control.addEventListener("click", async () => {
+        const restoreFocus = keepingFocus(control);
         control.disabled = true;
         const was = control.textContent;
         control.textContent = "Working…";
@@ -674,6 +711,7 @@ function dataPanel() {
         if (!ok) {
           control.disabled = false;
           control.textContent = was;
+          restoreFocus();
           toast("Couldn't empty your shelf. Try again?");
           return;
         }
@@ -973,6 +1011,7 @@ function offlineSection() {
   };
 
   check.addEventListener("click", async () => {
+    const restoreFocus = keepingFocus(check);
     check.disabled = true;
     const was = check.textContent;
     check.textContent = "Checking…";
@@ -992,6 +1031,7 @@ function offlineSection() {
     } finally {
       check.disabled = false;
       check.textContent = was;
+      restoreFocus();
     }
   });
 
