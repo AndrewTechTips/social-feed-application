@@ -120,11 +120,27 @@ const TRIGGER_ID = "account-menu-button";
  * paint, and there is nothing to jump. The left edge needs no clamp either —
  * the panel's own `width: min(17rem, 100vw - …)` already guarantees it fits.
  *
- * `clientWidth`/`clientHeight` rather than `innerWidth`/`innerHeight`: a fixed
- * element's containing block is the viewport *minus the scrollbar*, and the
- * trigger's rect is in that same space. `innerWidth` includes the scrollbar
- * and would push the panel that far off the right edge — the same trap the
- * toast's width rule in chrome.css already has a note about.
+ * **The right edge comes from the root element's own box, not from
+ * `clientWidth`, and the two are not the same number here.** base.css sets
+ * `overflow-y: scroll` *and* `scrollbar-gutter: stable` so the page never
+ * jumps sideways when a screen changes height. Where the browser draws
+ * overlay scrollbars, that gutter is reserved space that no scrollbar
+ * occupies — `documentElement.clientWidth` reports the full viewport (it sees
+ * no scrollbar to subtract) while the layout is eleven pixels narrower, and a
+ * fixed `right` resolves against the narrower one. The panel landed eleven
+ * pixels left of the avatar, on exactly the class of alignment bug this
+ * function's right-edge anchoring exists to make impossible.
+ *
+ * `getBoundingClientRect().right` on the root is the layout width in both
+ * worlds: with classic scrollbars it is the viewport minus the track, with
+ * overlay scrollbars it is the viewport minus the reserved gutter. `* { margin: 0 }`
+ * in base.css is what lets the root's border box stand in for the containing
+ * block.
+ *
+ * The height still comes from `clientHeight`, and the asymmetry is deliberate:
+ * the root's *height* is the document's, which is usually far taller than the
+ * screen, while `clientHeight` on the root is the viewport. There is no
+ * horizontal gutter to miss — `overflow-x` is hidden.
  *
  * No scroll listener. The header is `position: sticky; top: 0`, so the trigger
  * does not move relative to the viewport while the page does, and a listener
@@ -138,9 +154,10 @@ function place(trigger, panel) {
   const doc = document.documentElement;
   const r = trigger.getBoundingClientRect();
   const top = r.bottom + GAP;
+  const viewportRight = doc.getBoundingClientRect().right;
   panel.style.top = `${Math.round(top)}px`;
   panel.style.left = "auto";
-  panel.style.right = `${Math.round(Math.max(EDGE, doc.clientWidth - r.right))}px`;
+  panel.style.right = `${Math.round(Math.max(EDGE, viewportRight - r.right))}px`;
   // A floor, so a viewport too short for any of this leaves something to
   // scroll rather than a sliver.
   panel.style.maxHeight = `${Math.max(120, Math.round(doc.clientHeight - top - EDGE))}px`;

@@ -615,8 +615,12 @@
   border: 0;
 }
 .choice__legend {
-  /* A legend is out of flow by default, which in a flex row leaves it stacked
-     above everything instead of beside it. float:none puts it back in. */
+  /* A rendered <legend> is laid out by the UA rather than as a flex item, so
+     it sits on its own line above the segments whatever this fieldset's
+     `display` says — measured in Chromium on both screens that use this, and
+     it reads well, so it is left alone rather than forced into the row with a
+     wrapper div. `float: none` stays because the UA sheet floats a legend in
+     some engines and this has only been checked in one; it costs a line. */
   float: none;
   padding: 0;
   color: var(--text-dim);
@@ -1270,6 +1274,34 @@
   color: var(--text-dim);
   font-size: var(--fs-ui);
   line-height: 1.55;
+}
+
+/* — two choices stacked, and a line of type to judge them by --------------------
+   The theme picker is one group and needs no help; the reading section is two,
+   and a flex row of legend-plus-segments twice over needs telling that they
+   are separate rows rather than one long one.
+   -------------------------------------------------------------------------- */
+.settings__section .choice {
+  margin-bottom: var(--s-4);
+}
+/* The specimen. Asking for the two properties the controls above set, so it
+   is the same type at the same width a post will be by construction rather
+   than by being kept in step — see the note in views/settings.js. */
+.specimen {
+  max-width: var(--measure);
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  /* The same travel a post's own column has, for the same reason and from the
+     same tokens: the specimen claims to be set the way a post will be, and a
+     column that snapped here while the real one narrowed would be the claim
+     failing at the one moment somebody is watching it. Reduced motion
+     collapses it to 0.01ms via base.css, exactly as it does there. */
+  transition: max-width var(--t-slow) var(--ease);
 }
 
 /* — what this browser knows ----------------------------------------------------

@@ -27,6 +27,35 @@ below.
 
 ### Added
 
+- **Text size and line width are on the settings screen too, with a specimen
+  to judge them by.** Both have existed since the reader panel shipped; this
+  is the same two settings offered where somebody looks for them when they are
+  not on a post. Settings is arguably the better home for the width in
+  particular — the size is something you reach for mid-read, the width is
+  something you decide once.
+
+  **Not a default with a per-post override.** There is one value each and both
+  controls write it, so choosing here moves the panel's radios and choosing
+  there moves these. The word *default* is deliberately absent from the copy,
+  because it would promise an override that does not exist, and two tests hold
+  the line in both directions.
+
+  **The specimen is a specimen, not an illustration.** Settings has no long
+  serif column on it, so without one the two controls are a pair of numbers
+  you set blind and confirm by navigating somewhere else. It costs no
+  JavaScript: both settings are custom properties on `<html>`, so a paragraph
+  asking for `--fs-read` and `--measure` *is* the type a post will be, and it
+  moves the moment a radio is pressed. It carries the post column's own
+  `transition: max-width` too, so it travels rather than snapping.
+
+  That claim — "set the way a post will be" — is asserted rather than
+  asserted-to: `reading-settings.spec.js` measures the specimen and a real
+  post body at all six combinations of size and width and requires them to be
+  pixel-identical. They are, because both ask for the same two properties
+  inside the same `--col-max` column. It also shows the one interaction
+  between the controls nobody would otherwise see: the measure is written in
+  `ch`, so a narrow column at Large is wider than a narrow column at Small.
+
 - **The theme has three states, and one of them is "follow my machine".** The
   bootstrap in `index.html` has always followed `prefers-color-scheme` while
   `commons.theme` is absent — but the header toggle writes a concrete value,
@@ -709,6 +738,27 @@ below.
 - **Tests**: full-text search, comments, the API's edges (pagination bounds,
   `updated_at`, rejected writes leaving rows untouched, tokens that are signed
   but useless), axe on every screen, and a keyboard-only journey.
+
+### Fixed
+
+- **The account menu sat eleven pixels left of the avatar.** Latent since the
+  menu shipped and invisible until now, because it only appears where the
+  browser draws overlay scrollbars. `base.css` reserves a scrollbar gutter —
+  `overflow-y: scroll` *and* `scrollbar-gutter: stable`, so the page never
+  jumps sideways as screens change height — and with overlay scrollbars that
+  gutter is reserved space with no scrollbar in it. `documentElement.clientWidth`
+  reports the whole viewport, having no track to subtract, while the layout and
+  any fixed `right` resolve against a width eleven pixels narrower. `place()`
+  was using `clientWidth`; it uses the root element's own box now, which is the
+  right number whether scrollbars are classic or overlay.
+
+  Caught by `accountmenu.spec.js` asserting the right edges are flush, which is
+  the assertion that exists for exactly this. Recorded in
+  [ADR 0011](docs/adr/0011-a-popover-menu-positioned-in-javascript.md), along
+  with a measurement of the claim that ADR rests on and had asserted without
+  checking: a plain fixed element inside a `backdrop-filter` ancestor *is*
+  positioned against that ancestor, and a popover in the same place is not.
+  The claim holds; it is now checked rather than read off the spec.
 
 ### Changed
 

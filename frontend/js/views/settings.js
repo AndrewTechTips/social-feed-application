@@ -44,6 +44,14 @@ import { get, setSession, clearSession, dropFeedCache } from "../store.js";
 import { navigate, forgetCurrentScreen, onLeavingScreen } from "../router.js";
 import { themeChoice, themeChoices, setThemeChoice } from "../actions.js";
 import {
+  textSize,
+  textSizes,
+  setTextSize,
+  measure,
+  measures,
+  setMeasure,
+} from "../reading.js";
+import {
   inventory,
   anythingToForget,
   saySize,
@@ -337,6 +345,86 @@ function dangerSection(me) {
   );
 }
 
+// ── 2 · this browser: reading ──────────────────────────────────────────────
+//
+// The same two settings the panel on a post already offers, in the place
+// somebody looks for them when they are not on a post. **Not a default that a
+// post can override** — there is one value each and both controls write it,
+// which is why choosing here moves the panel's radios and vice versa. Saying
+// "default" would promise a per-post override that does not exist and that
+// nothing in this app wants to exist.
+//
+// Settings is arguably the better home for the width in particular: the size
+// is something you reach for mid-read, and the width is something you decide
+// once and never think about again.
+//
+// Two widths, not four, and no slider. The type system already decided what a
+// good measure is — 66ch, chosen with Newsreader and 18px together — and what
+// this offers is not "any width" but "the one the type picked, or a narrower
+// one for a long sitting". A slider would invite somebody to set 90ch and
+// conclude the typography was bad.
+function readingSection() {
+  return section(
+    "Reading",
+    "The two settings the reading panel on a post offers, for when you are " +
+      "not on one. They change the long serif column a post is set in, and " +
+      "nothing else — this is not a zoom control, and your browser already " +
+      "has one of those that is better.",
+    radioGroup({
+      legend: "Text size",
+      // A different `name` from the panel's group for the same setting. They
+      // are never on screen together — one is a post, one is this — and if
+      // they ever were, a shared name would make the browser treat two
+      // fieldsets in two places as one radio group.
+      name: "settings-text-size",
+      values: textSizes(),
+      labels: { s: "Small", m: "Medium", l: "Large" },
+      current: textSize,
+      choose: setTextSize,
+      event: "commons:textsize",
+    }),
+    radioGroup({
+      legend: "Line width",
+      name: "settings-measure",
+      values: measures(),
+      labels: { normal: "Normal", narrow: "Narrow" },
+      current: measure,
+      choose: setMeasure,
+      event: "commons:measure",
+    }),
+    specimen()
+  );
+}
+
+/**
+ * A line of type, set the way a post is.
+ *
+ * Beyond what the plan asked for, and the reason is the screen it is on. The
+ * panel on a post needs no specimen because the post *is* the specimen — you
+ * change the size and the thing you are reading changes under your hand.
+ * Settings has no long serif column anywhere on it, so without this the two
+ * controls are a pair of numbers you set blind and confirm by navigating
+ * somewhere else.
+ *
+ * It costs no JavaScript. Both settings are custom properties on <html>, so a
+ * paragraph asking for `--fs-read` and `--measure` is *by construction* the
+ * same type at the same width a post will be, and it moves the instant a
+ * radio is pressed without anything having to tell it to. It also shows the
+ * one interaction between the two that is genuinely surprising: the measure
+ * is written in `ch`, so a narrow column at Large is not the same number of
+ * pixels as a narrow column at Small.
+ */
+function specimen() {
+  return h(
+    "p",
+    { class: "specimen" },
+    "Commons is set in Newsreader, a face drawn for long paragraphs on a " +
+      "screen rather than on paper. This line is set the way a post will be, " +
+      "so the change is something you can see rather than something you have " +
+      "to go and check."
+  );
+}
+
 // ── 2 · this browser ───────────────────────────────────────────────────────
 // The data panel. js/browserdata.js owns what the rows *are*; this owns what
 // they look like and what pressing one feels like.
@@ -616,6 +704,7 @@ function browserGroup() {
     "None of this is on your account — it is on this machine, and it stays " +
       "here. Another device signed in as you knows none of it.",
     themeSection(),
+    readingSection(),
     dataPanel()
   );
 }

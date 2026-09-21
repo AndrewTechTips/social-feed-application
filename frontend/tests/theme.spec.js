@@ -26,6 +26,11 @@ const radio = (page, value) =>
   page.locator(`input[name="commons-theme"][value="${value}"]`);
 const toggle = (page) =>
   page.getByRole("button", { name: /switch to (light|dark) theme/i });
+// Scoped to the theme's own fieldset. `.choice` and `.choice__step` were
+// unique when this was the only radio group on the screen; the reading
+// controls added two more, and a selector that was precise by accident is a
+// selector that starts matching the wrong thing the moment the screen grows.
+const themeGroup = (page) => page.locator('.choice:has(input[name="commons-theme"])');
 
 /** What the three places currently say, which is the only thing worth asserting. */
 const state = (page) =>
@@ -335,7 +340,7 @@ test("the legend names the group without printing it twice", async ({ page, api 
 
   // The h3 above it already says "Theme". The legend stays for the accessible
   // name and comes off the screen, so the group is still announced as a group.
-  await expect(page.locator(".choice legend")).toHaveClass(/visually-hidden/);
+  await expect(themeGroup(page).locator("legend")).toHaveClass(/visually-hidden/);
   await expect(page.getByRole("group", { name: "Theme" })).toBeAttached();
 });
 
@@ -360,12 +365,14 @@ test.describe("at 320px", () => {
   test("all three fit on one row without a sideways scroll", async ({ page, api }) => {
     await onSettings(page, api);
 
-    const boxes = await page.locator(".choice__step").evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { top: Math.round(r.top), height: Math.round(r.height) };
-      })
-    );
+    const boxes = await themeGroup(page)
+      .locator(".choice__step")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { top: Math.round(r.top), height: Math.round(r.height) };
+        })
+      );
     expect(boxes).toHaveLength(3);
     // Same row: a three-way choice that wraps reads as two choices and one
     // stray, which is how somebody misses that System is an option.

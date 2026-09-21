@@ -48,6 +48,14 @@ already makes this exact call about `env(titlebar-area-*)` — *a branch for a
 mode the app cannot enter is a branch nobody can check.* One code path is
 twelve lines and behaves the same everywhere.
 
+**The claim about the top layer was checked, and it holds.** It was written
+here before it had been: a plain `position: fixed` element inside an ancestor
+with a `backdrop-filter` is positioned against *that ancestor*, and a popover
+in the same place is positioned against the viewport. Measured in Chromium
+against a deliberately narrow filtered ancestor, where the two answers differ —
+400px for the plain element, 1269px for the popover. The reasoning below stands
+on a measurement now rather than on a reading of the spec.
+
 **`place()` anchors by `right`, not `left`, and that is the whole trick.**
 Anchoring by the left edge needs the panel's width, and a popover that has not
 been shown yet is `display: none` and measures zero — so a width-based place
@@ -86,6 +94,23 @@ takes it out of the document, which closes it — so the menu would shut by
 itself somewhere between one poll and the next. It is now rebuilt only when
 the person changes, and everything else repaints in place.
 
+**The viewport's right edge is not `documentElement.clientWidth`.** Found by a
+test failing two steps later, and worth the paragraph because the reasoning
+that produced the bug was the reasoning in this file. base.css sets
+`overflow-y: scroll` *and* `scrollbar-gutter: stable`, so the page never jumps
+sideways as screens change height. Where the browser draws overlay scrollbars
+that gutter is reserved space with no scrollbar in it: `clientWidth` reports
+the whole viewport, having no track to subtract, while the layout — and any
+fixed `right` — resolves eleven pixels narrower. The panel sat eleven pixels
+left of the avatar, which is precisely the alignment bug the right-edge
+anchoring above exists to make impossible.
+
+`documentElement.getBoundingClientRect().right` is the number that is correct
+in both worlds, and `accountmenu.spec.js` asserts the edges are flush, which is
+what caught it. The lesson generalises past this file: on a page that reserves
+a scrollbar gutter, `clientWidth` and the fixed-positioning viewport are two
+different widths.
+
 **No scroll listener, on purpose.** The header is `position: sticky; top: 0`,
 so the trigger does not move relative to the viewport while the page does. A
 listener recomputing an unchanged rectangle every frame is the per-frame cost
@@ -98,6 +123,9 @@ have been.
 
 ## When to change our minds
 
+- **If base.css ever stops reserving the scrollbar gutter**, the root's border
+  box and `clientWidth` agree again and either would do — but there is no
+  reason to go back, and the rect is right either way.
 - **If CSS anchor positioning reaches all three engines**, `place()` becomes a
   `position-area` and a `position-try` and this ADR's third row is deleted. The
   right-edge trick goes with it — the whole reason for it is measuring before
