@@ -23,7 +23,7 @@ import { relativeTime } from "../format.js";
 import { mountView } from "../view.js";
 import { get } from "../store.js";
 import { navigate, onLeavingScreen } from "../router.js";
-import { markAllSeen, refreshUnread } from "../notify.js";
+import { markAllSeen, refreshUnread, wanted, notifyPrefs } from "../notify.js";
 
 const PAGE_SIZE = 20;
 const PREFETCH_MARGIN = 700;
@@ -95,6 +95,9 @@ export function renderNotifications({ isStale }) {
   let loading = false,
     controller = null,
     observer = null;
+  // How many rows survived the reader's own filters, across every page loaded
+  // so far. `total` is the server's count and knows nothing about them.
+  let shown = 0;
 
   const setStatus = (text, pad) => {
     status.textContent = text || "";
@@ -110,6 +113,18 @@ export function renderNotifications({ isStale }) {
         "Nothing yet. Say something on a post and this is where the answers land.",
         true
       );
+    } else if (shown === 0 && !hasNext) {
+      // The server has rows and the filters are hiding all of them. Saying
+      // "nothing yet" here would be the app blaming an empty inbox for a
+      // setting the reader chose, with no hint of where to undo it.
+      const p = notifyPrefs();
+      const off =
+        !p.reply && !p.comment
+          ? "both kinds"
+          : !p.reply
+            ? "replies"
+            : "comments on your posts";
+      setStatus(`Nothing to show — you've turned off ${off} in Settings.`, true);
     } else if (!hasNext) {
       setStatus("That's everything.");
     } else {
@@ -136,9 +151,21 @@ export function renderNotifications({ isStale }) {
       if (isStale()) return;
 
       ({ page, pages, has_next: hasNext, total } = data);
-      if (initial) list.replaceChildren();
+      if (initial) {
+        list.replaceChildren();
+        shown = 0;
+      }
       const frag = document.createDocumentFragment();
-      data.items.forEach((row) => frag.append(notificationRow(row)));
+      // The same rule the count uses, from the same function. A screen that
+      // showed a kind the header had been told to stop counting would make
+      // one of the two numbers a lie, and it would be this one.
+      //
+      // Filtered here rather than asked for: the endpoint has no `kind`
+      // parameter, and this is a view preference rather than something the
+      // server should know — see the note in notify.js.
+      const kept = data.items.filter((row) => wanted(row));
+      kept.forEach((row) => frag.append(notificationRow(row)));
+      shown += kept.length;
       list.append(frag);
       renderTail();
       landed = true;

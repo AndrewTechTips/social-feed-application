@@ -48,6 +48,8 @@ import {
   forgetReadingPrefs,
 } from "./reading.js";
 import { SHELF_KEY, OWNER_KEY, shelfCount, emptyShelf } from "./shelf.js";
+import { NOTIFY_KEY, notifyPrefs, setNotifyPref } from "./notify.js";
+import { MOTION_KEY, motionReduced, setMotionReduced } from "./transitions.js";
 import { DRAFT_KEY, readDraft, clearDraft } from "./draft.js";
 import {
   IDENTITY_KEY,
@@ -162,6 +164,17 @@ export function inventory() {
   const draft = readDraft(get("session")?.id ?? null);
   const session = get("session");
 
+  // Named rather than counted, because "two settings" tells a reader nothing
+  // about which two. Only the ones that differ from the default are stored,
+  // so this list is exactly what is on disk.
+  const prefs = notifyPrefs();
+  const chosen = [
+    !prefs.reply && "replies off",
+    !prefs.comment && "comments off",
+    !prefs.badge && "app badge off",
+    motionReduced() && "reduced motion",
+  ].filter(Boolean);
+
   /** @type {DataRow[]} */
   const rows = [
     {
@@ -235,6 +248,25 @@ export function inventory() {
       run: () => {
         forgetTheme();
         forgetReadingPrefs();
+      },
+      done: "Back to the defaults.",
+    },
+    {
+      id: "settings",
+      title: "Settings you've changed",
+      what: chosen.length ? chosen.join(", ") : "Nothing changed",
+      why:
+        "Only what you have moved away from the default is written down — " +
+        "the switches you have left alone are stored nowhere at all, which " +
+        "is why this line is usually empty.",
+      keys: [NOTIFY_KEY, MOTION_KEY],
+      bytes: totalSize([NOTIFY_KEY, MOTION_KEY]),
+      action: chosen.length ? "Put them back" : undefined,
+      run: () => {
+        setNotifyPref("reply", true);
+        setNotifyPref("comment", true);
+        setNotifyPref("badge", true);
+        setMotionReduced(false);
       },
       done: "Back to the defaults.",
     },

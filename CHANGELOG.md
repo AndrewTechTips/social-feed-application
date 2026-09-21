@@ -27,6 +27,65 @@ below.
 
 ### Added
 
+- **The last three settings, and the plan is finished.** Notifications,
+  motion, and an About section that says what this copy of Commons is doing.
+
+  **Two notification switches, and they are a view filter.** `notify.js` has
+  polled unconditionally since it shipped; now *Replies to you* and *Comments
+  on your posts* can be turned off, and a third switch keeps the count off the
+  app icon for somebody who wants the first without the second. Turning a kind
+  off hides it and stops counting it — the rows are still made, so turning it
+  back on shows what arrived meanwhile.
+  [ADR 0012](docs/adr/0012-notification-preferences-are-a-view-filter.md) has
+  why that is a client-side filter and not a `kind` parameter on the endpoint,
+  and what it costs: with both kinds on — everybody who has never opened
+  settings — the unread count is the same one-row ask it always was; with one
+  off, the *same single request* returns a page and the matching rows are
+  counted here.
+
+  The count and the list are filtered by one exported function, because two
+  copies of "which kinds count" is how a header and the screen under it start
+  disagreeing. And an emptied list says which switch emptied it: "Nothing yet"
+  over a server holding rows would blame an empty inbox for a setting the
+  reader chose.
+
+  Two races were found by the demo project and not by the mock, which is the
+  whole reason the suite runs twice. A count asked for under the old
+  preferences could land after the new ones had already answered, and put the
+  stale number back; and the fix for that — dropping the late answer — turned
+  out not to be enough, because the press that changed the preferences had
+  itself been turned away by the in-flight share and so never announced
+  anything. The zero case now answers before it can be shared away, and a
+  dropped answer asks again.
+
+  **Reduce motion in Commons.** The app has honoured `prefers-reduced-motion`
+  thoroughly since the beginning and only ever obeyed the operating system.
+  Honouring the system is table stakes; turning the motion down in one app
+  without turning it down everywhere is not. One switch, not three states:
+  off means *follow your device*, on means *less whatever your device says*,
+  and there is deliberately no way to ask for more — a machine that has
+  requested reduced motion has requested it.
+
+  It is set before the first paint by the inline script in `index.html`, for
+  the reason the theme is: the aurora starts on the first frame. base.css
+  carries the same six declarations twice — a media query and an attribute
+  cannot share a rule — and a test compares what the browser computes under
+  each, which is the only thing standing between that and the usual fate of a
+  duplicated block.
+
+  **About.** Whether Commons is installed, with the same silent-state install
+  control the colophon and masthead use; whether the app is being served from
+  this machine's own cache, and a *Check for a new version* that asks the
+  service worker; and the way through to the colophon and the shortcuts.
+
+  **No version number, and that is not an oversight.** The plan asked for one.
+  This app has no build step ([ADR 0001](docs/adr/0001-vanilla-js-with-jsdoc-types.md))
+  and a network-first worker whose cache name is a constant on purpose
+  ([ADR 0007](docs/adr/0007-a-network-first-service-worker.md)) — there is no
+  artefact to number, and a number typed in by hand is wrong the first time
+  somebody forgets it. The colophon carries the measurements that are real and
+  checked by CI.
+
 - **Text size and line width are on the settings screen too, with a specimen
   to judge them by.** Both have existed since the reader panel shipped; this
   is the same two settings offered where somebody looks for them when they are

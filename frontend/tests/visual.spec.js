@@ -209,11 +209,12 @@ for (const theme of ["dark", "light"]) {
 // Hence PART_MAX and the assertion below: the next thing added to this part
 // fails the test with a sentence saying what to do, rather than quietly
 // recording a picture with a seam in it.
-// Raised from 1500 → 2000 → 2800 as part 2 gained the theme picker and then
-// the reading controls. Headroom on purpose: the plan still has notifications
-// and a motion override to put here, and the assertion below is what turns
-// outgrowing it into a sentence rather than into a seam in the picture.
-const PART_H = 2800;
+// Raised from 1500 → 2000 → 2800 → 3400 as part 2 gained the theme picker,
+// the reading controls, and then motion and notifications. The assertion
+// below is what turned each of those into a sentence naming the new height
+// rather than into a seam through the picture; it has now earned its keep
+// three times.
+const PART_H = 3400;
 const PART_MAX = PART_H - 40;
 
 test.describe("this browser", () => {

@@ -1,5 +1,6 @@
 // @ts-check
-// A small set of mutually exclusive choices, drawn as segments.
+// A small set of mutually exclusive choices, drawn as segments — and the
+// on/off switch that keeps it company.
 //
 // ── why it moved out of reader.js ─────────────────────────────────────────
 // It was a closure inside `readerControl`, shared between the text size and
@@ -85,5 +86,46 @@ export function radioGroup({
     // twice in two type sizes is how a form starts to look generated.
     h("legend", { class: hideLegend ? "visually-hidden" : "choice__legend" }, legend),
     steps
+  );
+}
+
+/**
+ * One on/off switch, with its own label.
+ *
+ * The markup the reader panel's focus toggle already uses, lifted here for
+ * the same reason the radio group was: `#/settings` now has four of these,
+ * and four copies of a label-wrapping-a-checkbox-and-two-spans is four
+ * chances for one of them to lose its focus ring.
+ *
+ * A real `<input type="checkbox">` inside the label, visually hidden and
+ * painted by `:has(input:checked)` on the track. That means the whole label
+ * is the hit area, the word is the accessible name, and the keyboard gets
+ * Space for free.
+ *
+ * @param {object} spec
+ * @param {string} spec.label
+ * @param {() => boolean} spec.current  asked again whenever `event` fires
+ * @param {(on: boolean) => unknown} spec.choose
+ * @param {string} [spec.event]  the app-wide event meaning "this changed"
+ * @param {string} [spec.describedBy]  id of a line explaining the switch
+ */
+export function toggleSwitch({ label, current, choose, event, describedBy }) {
+  const input = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox" }));
+  input.checked = current();
+  if (describedBy) input.setAttribute("aria-describedby", describedBy);
+  input.addEventListener("change", () => choose(input.checked));
+
+  if (event) {
+    addEventListener(event, () => {
+      input.checked = current();
+    });
+  }
+
+  return h(
+    "label",
+    { class: "switch" },
+    input,
+    h("span", { class: "switch__track" }, h("span", { class: "switch__thumb" })),
+    h("span", {}, label)
   );
 }

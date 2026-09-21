@@ -58,7 +58,11 @@ import {
   forgetEverything,
 } from "../browserdata.js";
 import { openPalette } from "../components/palette.js";
-import { radioGroup } from "../components/radiogroup.js";
+import { notifyPrefs, setNotifyPref } from "../notify.js";
+import { motionReduced, setMotionReduced } from "../transitions.js";
+import { isInstalled, installBlock, installButton, installHowTo } from "../install.js";
+import { isOffline } from "../offline.js";
+import { radioGroup, toggleSwitch } from "../components/radiogroup.js";
 
 // Mirrors schemas.USERNAME_RE. Case-insensitive, because the server folds what
 // it is given rather than refusing it — so ADA is offered and `ada` is stored,
@@ -425,6 +429,94 @@ function specimen() {
   );
 }
 
+// ── 2 · this browser: notifications ────────────────────────────────────────
+//
+// `notify.js` has polled unconditionally since it shipped. These switch off
+// what you are told about, and what a switched-off kind means is written down
+// in that file: the rows are still made, they are simply not shown or counted
+// here, so turning one back on reveals what arrived while you were not
+// listening. That is the right behaviour for a setting somebody may change
+// twice in a week.
+//
+// The badge is a third switch rather than a consequence of the other two,
+// because it answers a different question. "Tell me about replies" is about
+// this app; "put the number on my dock" is about the reader's desktop, and
+// somebody can reasonably want the first without the second.
+function notificationsSection() {
+  const kinds = h(
+    "div",
+    { class: "settings__switches" },
+    toggleSwitch({
+      label: "Replies to you",
+      current: () => notifyPrefs().reply,
+      choose: (on) => setNotifyPref("reply", on),
+      event: "commons:notifyprefs",
+    }),
+    toggleSwitch({
+      label: "Comments on your posts",
+      current: () => notifyPrefs().comment,
+      choose: (on) => setNotifyPref("comment", on),
+      event: "commons:notifyprefs",
+    })
+  );
+
+  const badgeNote = h(
+    "p",
+    { class: "settings__note", id: "settings-badge-note" },
+    isInstalled()
+      ? "The count on the app's icon, which is the one part of this you can " +
+          "see with Commons closed."
+      : "The count on the app's icon. It needs Commons installed to have an " +
+          "icon to put it on, so nothing will change until it is."
+  );
+
+  const badge = toggleSwitch({
+    label: "Show the count on the app icon",
+    current: () => notifyPrefs().badge,
+    choose: (on) => setNotifyPref("badge", on),
+    event: "commons:notifyprefs",
+    describedBy: "settings-badge-note",
+  });
+
+  return section(
+    "Notifications",
+    "Somebody replying to you, or commenting on a post of yours. Nothing else " +
+      "is ever a notification here — a vote is a number moving, and this app " +
+      "does not turn that into something you have to look at.",
+    kinds,
+    badge,
+    badgeNote
+  );
+}
+
+// ── 2 · this browser: motion ───────────────────────────────────────────────
+//
+// The app has honoured `prefers-reduced-motion` thoroughly since the
+// beginning and only ever obeyed the operating system. Honouring the system
+// is table stakes; being able to turn the motion down in *one* app without
+// turning it down everywhere is not, and it is a genuine accessibility
+// signal rather than a preference for its own sake.
+//
+// One switch and not three states, unlike the theme. Off means *follow your
+// device*; on means *less, whatever the device says*. There is deliberately
+// no way to ask for more: a machine that has requested reduced motion has
+// requested it, and an app offering to overrule that would be offering to
+// ignore an accessibility setting.
+function motionSection() {
+  return section(
+    "Motion",
+    "Commons already follows your device when it asks for less motion. This " +
+      "turns it down here whatever your device says — the page transitions, " +
+      "the aurora behind the feed, and everything that fades or slides.",
+    toggleSwitch({
+      label: "Reduce motion in Commons",
+      current: motionReduced,
+      choose: setMotionReduced,
+      event: "commons:motion",
+    })
+  );
+}
+
 // ── 2 · this browser ───────────────────────────────────────────────────────
 // The data panel. js/browserdata.js owns what the rows *are*; this owns what
 // they look like and what pressing one feels like.
@@ -632,6 +724,8 @@ function dataPanel() {
     "commons:measure",
     "commons:shelf",
     "commons:read",
+    "commons:notifyprefs",
+    "commons:motion",
   ]) {
     addEventListener(event, repaint);
   }
@@ -644,6 +738,8 @@ function dataPanel() {
       "commons:measure",
       "commons:shelf",
       "commons:read",
+      "commons:notifyprefs",
+      "commons:motion",
     ]) {
       removeEventListener(event, repaint);
     }
@@ -705,17 +801,94 @@ function browserGroup() {
       "here. Another device signed in as you knows none of it.",
     themeSection(),
     readingSection(),
+    motionSection(),
+    notificationsSection(),
     dataPanel()
   );
 }
 
 // ── 3 · about ──────────────────────────────────────────────────────────────
-// Two links and nothing else, for now. The plan puts the install state, the
-// version and the offline state here as its own later step; what is here is
-// what already exists and can be linked to honestly today. An empty third
-// part would have been worse than three parts where one is short — the
-// numbering is a promise about what the screen covers, and a heading with
-// nothing under it breaks it.
+//
+// What Commons is, and what this copy of it is doing right now. The two
+// states worth putting on screen are the two nobody can otherwise see:
+// whether the app is installed, and whether it is being served from this
+// machine's own cache.
+//
+// **There is no version number, and that is not an oversight.** The plan
+// asked for one. This app has no build step (ADR 0001) and a network-first
+// service worker whose cache name is a constant on purpose (ADR 0007) —
+// there is no artefact to number, and a number typed into a file by hand is
+// a number that is wrong the first time somebody forgets it. The colophon
+// carries the measurements that *are* real and checked by CI. What this
+// section can say honestly is whether there is a worker, and whether it has
+// anything newer to fetch — so that is what it says.
+
+/** Is a service worker in charge of this page right now? */
+const workerControls = () =>
+  typeof navigator !== "undefined" &&
+  "serviceWorker" in navigator &&
+  !!navigator.serviceWorker.controller;
+
+function offlineSection() {
+  const line = h("p", { class: "settings__note" });
+  const check = h(
+    "button",
+    { class: "btn btn--quiet", type: "button" },
+    "Check for a new version"
+  );
+
+  const paint = () => {
+    if (!workerControls()) {
+      // Either the worker has not taken over yet — it claims the page on the
+      // *next* load after it installs — or this browser has none.
+      line.textContent =
+        "Nothing is cached on this machine yet, so Commons needs the network. " +
+        "Reload once and the worker takes over.";
+      check.hidden = true;
+      return;
+    }
+    check.hidden = false;
+    line.textContent = isOffline()
+      ? "You are offline, and reading from this machine's own copy — which is " +
+        "the arrangement working, not failing."
+      : "The app itself is cached here, so it opens with no network at all. " +
+        "What you read still comes from the server when there is one.";
+  };
+
+  check.addEventListener("click", async () => {
+    check.disabled = true;
+    const was = check.textContent;
+    check.textContent = "Checking…";
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      // `update()` asks the network for sw.js and installs a new one if the
+      // bytes differ. It resolves either way — there is no "nothing changed"
+      // signal — so the honest report is that we looked, not what we found.
+      if (reg) await reg.update();
+      toast(
+        reg && reg.installing
+          ? "A new version is downloading. It takes over next time you open Commons."
+          : "Checked — this is the current version."
+      );
+    } catch (e) {
+      toast("Couldn't check just now. Try again when you're online?");
+    } finally {
+      check.disabled = false;
+      check.textContent = was;
+    }
+  });
+
+  paint();
+  // The band under the header says the same thing in one line; this says it
+  // in the place somebody goes to ask.
+  for (const event of ["online", "offline"]) addEventListener(event, paint);
+  onLeavingScreen(() => {
+    for (const event of ["online", "offline"]) removeEventListener(event, paint);
+  });
+
+  return section("Offline", "", line, check);
+}
+
 function aboutGroup() {
   const keys = h(
     "button",
@@ -730,12 +903,32 @@ function aboutGroup() {
   return group(
     3,
     "About",
-    "What Commons is, and how it was put together.",
-    h(
-      "div",
-      { class: "settings__row" },
-      h("a", { class: "btn btn--quiet", href: "#/colophon" }, "Read the colophon"),
-      keys
+    "What Commons is, and what this copy of it is doing.",
+    section(
+      "Installed",
+      isInstalled()
+        ? "Commons is installed on this machine and running in its own window."
+        : "Commons runs in a tab here. Installed, it opens in its own window " +
+            "and keeps working with no network.",
+      // Empty in the two states where there is nothing honest to offer — the
+      // same block the colophon and the masthead use. See ADR 0010.
+      installBlock(
+        (state) => [
+          state === "prompt" ? installButton("Install Commons") : installHowTo(),
+        ],
+        { class: "settings__install" }
+      )
+    ),
+    offlineSection(),
+    section(
+      "Reading further",
+      "How this was made, and what it can do without the mouse.",
+      h(
+        "div",
+        { class: "settings__row" },
+        h("a", { class: "btn btn--quiet", href: "#/colophon" }, "Read the colophon"),
+        keys
+      )
     )
   );
 }

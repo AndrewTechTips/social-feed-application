@@ -197,7 +197,13 @@ test("your email is shown, and is not a text box", async ({ page, api }) => {
   // count was a proxy for the claim; this is the claim.
   await expect(page.locator(".settings input[type='text']")).toHaveCount(1);
   await expect(page.locator(".settings input[type='email']")).toHaveCount(0);
-  await expect(page.locator(".settings__note")).toContainText("no way to send mail");
+  // Scoped to the section the email is in. `.settings__note` was unique when
+  // this was written and now names three lines — the email's, the app badge's
+  // and the offline one — which is what a class shared by "a quiet paragraph"
+  // is always going to become.
+  await expect(
+    page.locator(".settings__section", { has: page.locator(".settings__value") })
+  ).toContainText("no way to send mail");
 });
 
 // ── signed in elsewhere ────────────────────────────────────────────────────

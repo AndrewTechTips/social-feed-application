@@ -1304,6 +1304,22 @@
   transition: max-width var(--t-slow) var(--ease);
 }
 
+/* Switches stacked, for the pairs that belong together (the two notification
+   kinds). One column, because a row of two would read as a choice between
+   them rather than as two independent settings. */
+.settings__switches {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+  margin-bottom: var(--s-4);
+}
+.settings__section .switch {
+  margin-bottom: var(--s-3);
+}
+.settings__install:not(:empty) {
+  margin-top: var(--s-4);
+}
+
 /* — what this browser knows ----------------------------------------------------
    A list, not a table. A table would be the obvious shape for "name, size,
    control" and it is the wrong one here: every row also carries a sentence

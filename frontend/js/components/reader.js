@@ -17,7 +17,7 @@
 // only reason a mode like this can be a dozen lines rather than a component.
 
 import { h } from "../dom.js";
-import { radioGroup } from "./radiogroup.js";
+import { radioGroup, toggleSwitch } from "./radiogroup.js";
 import {
   textSize,
   setTextSize,
@@ -116,17 +116,17 @@ export function readerControl() {
   });
 
   // — focus --------------------------------------------------------------------
-  const focusInput = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox" }));
-  focusInput.checked = focusIsOn();
-  focusInput.addEventListener("change", () => setFocus(focusInput.checked));
-
-  const focusToggle = h(
-    "label",
-    { class: "switch typeset__focus" },
-    focusInput,
-    h("span", { class: "switch__track" }, h("span", { class: "switch__thumb" })),
-    h("span", {}, "Focus mode")
-  );
+  // The same switch #/settings uses for motion and notifications, from the
+  // same builder — see components/radiogroup.js. It listens for
+  // `commons:focus` because the palette and the `f` key can both turn this
+  // on from outside the panel.
+  const focusToggle = toggleSwitch({
+    label: "Focus mode",
+    current: focusIsOn,
+    choose: setFocus,
+    event: "commons:focus",
+  });
+  focusToggle.classList.add("typeset__focus");
 
   panel.append(
     sizeGroup,
@@ -145,12 +145,6 @@ export function readerControl() {
   };
 
   button.addEventListener("click", () => open(panel.hidden));
-
-  // Changed from the palette, from the key, or from the header's way out. The
-  // two radio groups look after themselves — see group().
-  addEventListener("commons:focus", () => {
-    focusInput.checked = focusIsOn();
-  });
 
   return { button, panel };
 }

@@ -86,7 +86,13 @@ test("the screen is three numbered parts, and the account one is unchanged", asy
   // doing the same thing. The plan asked for it to move in unchanged.
   await expect(page.locator("#settings-username")).toHaveValue("ada");
   await expect(page.locator(".settings__value")).toHaveText(ACCOUNT.email);
-  await expect(page.locator(".settings__note")).toContainText("no way to send mail");
+  // Scoped to the section the email is in. `.settings__note` was unique when
+  // this was written and now names three lines — the email's, the app badge's
+  // and the offline one — which is what a class shared by "a quiet paragraph"
+  // is always going to become.
+  await expect(
+    page.locator(".settings__section", { has: page.locator(".settings__value") })
+  ).toContainText("no way to send mail");
   await expect(page.getByRole("button", { name: "Sign out everywhere" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete your account" })).toBeVisible();
 

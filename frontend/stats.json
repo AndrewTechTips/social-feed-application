@@ -1,10 +1,10 @@
 {
-  "js_lines": 11177,
-  "css_lines": 4022,
-  "modules": 39,
+  "js_lines": 13274,
+  "css_lines": 4460,
+  "modules": 42,
   "runtime_dependencies": 0,
   "backend_tests": 371,
-  "e2e_tests": 910,
+  "e2e_tests": 1098,
   "coverage": 97,
-  "decision_records": 10
+  "decision_records": 12
 }

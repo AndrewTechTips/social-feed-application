@@ -17,11 +17,76 @@ const MORPH = "post-title";
 
 export const supported = () => typeof document.startViewTransition === "function";
 
+// — asking for less motion, from either direction --------------------------
+//
+// The app has honoured `prefers-reduced-motion` thoroughly since the
+// beginning, and only ever obeyed the operating system. Honouring the system
+// setting is table stakes; letting somebody turn the motion down *in one app*
+// without turning it down everywhere is not, and it is a handful of lines
+// here because the CSS already branches.
+//
+// **It only ever adds reduction.** There is no "always animate" — a reader
+// whose machine has asked for less motion has asked, and an app offering to
+// overrule that would be offering to ignore an accessibility setting. So this
+// is a switch rather than the theme's three states: off means *follow the
+// device*, on means *less, whatever the device says*.
+//
+// Stored as the presence of a key, the same shape the theme uses and for the
+// same reason — one representation of one state, and the data panel on
+// #/settings can say truthfully that nothing is stored when nothing is.
+export const MOTION_KEY = "commons.motion";
+const MOTION_ATTR = "motion";
+
+/** Has this browser been asked to reduce motion in Commons specifically? */
+export function motionReduced() {
+  try {
+    return localStorage.getItem(MOTION_KEY) === "reduce";
+  } catch (e) {
+    return false;
+  }
+}
+
+/** @param {boolean} on */
+export function setMotionReduced(on) {
+  try {
+    if (on) localStorage.setItem(MOTION_KEY, "reduce");
+    else localStorage.removeItem(MOTION_KEY);
+  } catch (e) {
+    /* storage disabled — the choice holds for this page and no longer */
+  }
+  applyMotion();
+  dispatchEvent(new CustomEvent("commons:motion", { detail: on }));
+  return on;
+}
+
+/**
+ * Put the attribute base.css branches on where the CSS can see it.
+ *
+ * Only the override sets it, never the media query: the two are independent
+ * and compose, so the stylesheet keeps its `@media` block for the system's
+ * request and gains a selector for this one. Mirroring the media query into
+ * the attribute as well would mean two sources for one state and a moment at
+ * boot where they disagree.
+ */
+export function applyMotion() {
+  const root = document.documentElement;
+  if (motionReduced()) root.dataset[MOTION_ATTR] = "reduce";
+  else delete root.dataset[MOTION_ATTR];
+}
+
+// The inline bootstrap in index.html normally does this before the first
+// paint; this covers a browser that ran it with storage disabled, and costs
+// one read.
+applyMotion();
+
 // The View Transitions API does *not* consult prefers-reduced-motion — the
 // user-agent's own cross-fade runs regardless, and base.css's blanket
 // animation-duration override can't reach ::view-transition-* pseudo-elements.
-// So the check has to happen here, before the transition starts.
-const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// So the check has to happen here, before the transition starts — and it has
+// to ask both questions, because a transition is exactly the kind of motion
+// somebody turning this on is asking to be rid of.
+const reducedMotion = () =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches || motionReduced();
 
 export const canMorph = () => supported() && !reducedMotion();
 

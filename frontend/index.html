@@ -17,6 +17,13 @@
         // after it paints is the same broken promise a resizing font is.
         var w = localStorage.getItem("commons.measure");
         document.documentElement.dataset.measure = w === "narrow" ? w : "normal";
+        // And the motion override, for the same reason as the three above:
+        // the aurora and the page's entrance animations start at the first
+        // frame, and a reader who asked for less motion should not get one
+        // frame of it while a module loads.
+        if (localStorage.getItem("commons.motion") === "reduce") {
+          document.documentElement.dataset.motion = "reduce";
+        }
       } catch (e) {
         document.documentElement.dataset.theme = "dark";
         document.documentElement.dataset.textSize = "m";

@@ -355,6 +355,35 @@ h3 {
   }
 }
 
+/* And the same again for the app's own switch, on #/settings.
+   ── why this is a copy and not a selector added to the block above ────────
+   A media query and an attribute cannot share one rule: you cannot put
+   `:root[data-motion="reduce"]` inside `@media (prefers-reduced-motion)` and
+   have it apply when the media query is false. The declarations are therefore
+   written twice and **have to stay in step** — `motion.spec.js` compares the
+   computed animation-duration under each and fails if they diverge, which is
+   the only thing standing between this and the usual fate of a duplicated
+   block.
+
+   The attribute is set only by the override, never mirrored from the media
+   query, so the two compose rather than racing: either one is enough, and
+   turning the app's switch off leaves the system's request untouched. The
+   inline bootstrap in index.html sets it before the first paint, for the same
+   reason the theme is set there.
+   -------------------------------------------------------------------------- */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduce"] .aurora-bloom {
+  animation: none;
+}
+
 /* — view transitions --------------------------------------------------------
    The one orchestrated movement in the app: the title you tapped becomes the
    heading of the screen you land on. js/transitions.js decides when that's
