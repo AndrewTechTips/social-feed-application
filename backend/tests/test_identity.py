@@ -189,6 +189,7 @@ def test_posts_for_an_unknown_name_is_a_404(client):
 # the installed alembic package once pytest puts backend/ on sys.path.)
 def test_the_backfill_copes_with_a_table_that_already_has_people_in_it():
     import subprocess
+    import sys
 
     import psycopg2
     from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -211,7 +212,28 @@ def test_the_backfill_copes_with_a_table_that_already_has_people_in_it():
     def alembic(target):
         env = {**os.environ, "DATABASE_NAME": DB}
         done = subprocess.run(
-            ["alembic", "-c", "backend/alembic.ini", "upgrade", target],
+            # `sys.executable -m alembic`, not the bare `alembic` script.
+            #
+            # The script is only on PATH when the virtualenv has been
+            # activated, so `python -m pytest` from an unactivated checkout —
+            # which is how this is usually run by hand — failed here with
+            # FileNotFoundError and nothing to do with the migration. Going
+            # through the interpreter already running the test uses the same
+            # environment the test was collected in, activated or not.
+            #
+            # The shadowing noted above does not reach this: it happens
+            # because pytest puts `backend/` on sys.path, and this subprocess
+            # starts from ROOT, where `alembic` is the installed package and
+            # `backend.alembic` is the migrations directory.
+            [
+                sys.executable,
+                "-m",
+                "alembic",
+                "-c",
+                "backend/alembic.ini",
+                "upgrade",
+                target,
+            ],
             cwd=ROOT,
             env=env,
             capture_output=True,
