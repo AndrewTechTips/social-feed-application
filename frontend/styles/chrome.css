@@ -700,6 +700,17 @@
     gap: var(--s-2);
     padding-block: var(--s-3);
   }
+  /* The band's row only works while the sentence has room to be a paragraph.
+     On a phone the two actions and the chevron want ~280 of 375px, and
+     .demo__actions is flex: none, so the sentence is what gives — down to a
+     column one word wide. Stack it instead, exactly as the masthead's copy of
+     this notice already does below.
+
+     Folded is left as a row on purpose: the text is a single nowrap line then,
+     the actions are hidden, and the chevron belongs beside the label. */
+  .demo--band:not(.demo--folded) .demo__inner {
+    flex-direction: column;
+  }
   .demo--inline .demo__inner {
     flex-direction: column;
     align-items: flex-start;
