@@ -20,9 +20,9 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.55.0",
     "chrome-launcher": "^1.2.1",
-    "lighthouse": "^13.4.1",
+    "lighthouse": "^13.5.0",
     "prettier": "^3.9.8",
-    "typescript": "^5.9.2"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.12.0"
