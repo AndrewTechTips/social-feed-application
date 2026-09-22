@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..limiter import limiter
+from ..limiter import limiter, EXPORT
 from .. import models, schemas, utils, oauth2, docs
 from .post import page_of_posts, visible_to
 
@@ -242,10 +242,15 @@ def delete_me(
                 ],
             }
         ),
-        **docs.errors(401),
+        # 429 because this is the one read with a limit — see EXPORT in
+        # limiter.py. A contract that does not mention a status the endpoint
+        # returns is a contract a client gets surprised by.
+        **docs.errors(401, 429),
     },
 )
+@limiter.limit(EXPORT)
 def export_me(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ) -> dict[str, Any]:

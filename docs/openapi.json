@@ -2488,6 +2488,16 @@
               }
             },
             "description": "No access token, or one that has expired, been tampered with, or belongs to a deleted account. Trade the refresh cookie for a new token at `POST /auth/refresh` rather than sending the person back to a sign-in form."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Rate limited. The message names the limit you hit."
           }
         },
         "security": [

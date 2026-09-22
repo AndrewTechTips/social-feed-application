@@ -65,3 +65,19 @@ DELETE_COMMENT = "60/minute"
 # Saving to the shelf is a toggle next to a card, and a reader filling a shelf
 # taps several in a row.
 SHELVE = "60/minute"
+
+# ── the one read that is limited ─────────────────────────────────────────────
+# "Reads are never limited" above is a rule about *bounded* reads. Every other
+# one is a page: the caller names a `page_size`, the ceiling is 100, and the
+# work per request is capped whatever anybody asks for.
+#
+# `/users/me/export` is deliberately not paged — an export arrives whole or it
+# is not an export (ADR 0013) — so it is the only endpoint where the cost of
+# one request grows with the account and has no ceiling at all. Two unbounded
+# queries and a full serialisation, repeatable in a loop, behind a sign-up
+# that is itself only limited to ten an hour.
+#
+# So this is the exception, and it is deliberately generous: downloading your
+# own writing twice to check the file opened is a thing a person does, and
+# doing it ten times in an hour is not.
+EXPORT = "10/hour"

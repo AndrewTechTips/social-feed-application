@@ -184,3 +184,22 @@ def test_reading_your_shelf_is_never_rate_limited(limited_client, token):
     }
     for _ in range(20):
         assert limited_client.get("/shelf").status_code == 200
+
+
+def test_the_export_is_the_one_read_with_a_limit(limited_client, token):
+    """Every other read is a page with a ceiling on `page_size`. The export is
+    deliberately unpaged — an export arrives whole or it is not one — which
+    makes it the only endpoint whose cost per request grows with the account
+    and has no cap at all, behind a sign-up that is itself only limited to ten
+    an hour. Ten is generous for a person and a wall for a loop."""
+    limited_client.headers = {
+        **limited_client.headers,
+        "Authorization": f"Bearer {token}",
+    }
+
+    for attempt in range(10):
+        res = limited_client.get("/users/me/export")
+        assert res.status_code == 200, f"attempt {attempt + 1} should still be allowed"
+
+    res = limited_client.get("/users/me/export")
+    assert res.status_code == 429
