@@ -884,6 +884,43 @@ too, and retired with the others; what it decided is in
 
 ### Changed
 
+- **The controls on `#/settings` look like controls.** Every button on that
+  screen was a `.btn--quiet` — transparent fill, transparent border,
+  `--text-dim` type — and every block was separated from the next by a
+  hairline. That is the right button in a toolbar, where it sits beside
+  something louder and takes its meaning from the contrast. There was nothing
+  louder on this screen, so "Sign out everywhere" was drawn exactly like the
+  paragraph above it, and the submit button under the rename field sat flush
+  against its hint line with nothing at all between them.
+
+  Two changes, and the rest follows from them. Each titled block is a card —
+  the surface the feed already uses — which replaces 112px of margin and rule
+  between blocks with 12px and a border, and takes some 700px off the scroll.
+  And every control on the screen gets a fill, a border and full-strength
+  type, with the two destructive ones tinted rather than written in red on
+  nothing. The scope is `.settings` rather than the button itself: the quiet
+  button is right where it lives elsewhere — beside a vote, in the header,
+  under a card — and only wrong when it is the only thing in the room.
+
+  With that settled the rest is detail. The switches are full-width rows with
+  the name at one end and the state at the other, so the target is the strip
+  rather than the length of the label. The segmented choices sit in a
+  recessed tray, so three unchecked segments read as one control with one
+  answer instead of as three outlined buttons. Both confirm steps expand into
+  a tinted panel, because the old ones swapped one neutral thing for another
+  and nothing on screen said the page had changed mode. A field's label and
+  its hint are told apart by weight instead of being set identically. On a
+  phone every control is the full width of its card, which is where a button
+  that could be mistaken for a label does the most damage.
+
+  One thing this got wrong on the first pass, and the suite caught it: the
+  card's padding was taken out of the column rather than added outside it,
+  which left the reading specimen 590px wide against the 640 of the post it
+  claims to be set exactly like. `reading-settings.spec.js` measures both and
+  said so. The wrapper grows by what the card spends now, and everything that
+  is not in a card is padded by the same amount so that all of it still lines
+  up.
+
 - **`ui.js` is gone.** It was 549 lines holding a hyperscript builder, toasts,
   time formatting, avatars, skeletons, view mounting *and* the vote control —
   a stateful component that makes network calls — and it was the file

@@ -1199,21 +1199,55 @@
   }
 }
 
-/* — your account ----------------------------------------------------------------
+/* — settings -------------------------------------------------------------------
    A narrow column of titled blocks, ordered from the reversible to the
    permanent. It borrows the colophon's measure rather than the feed's, because
    what is on it is prose and form fields rather than cards — and the form
    fields are the ones from the sign-in screen, unchanged, so that a text box on
    this screen behaves exactly like the text box somebody already used to get
    here.
+
+   ── the blocks are cards now, and the controls look pressable ───────────────
+   The screen used to be set entirely in hairlines: every block was separated
+   from the next by a 1px rule, and every control on it was a `.btn--quiet` —
+   transparent fill, transparent border, --text-dim type. That reads correctly
+   in a toolbar, where a quiet button sits next to something louder and takes
+   its meaning from the contrast. There is nothing louder on this screen. A
+   column of quiet buttons with nothing to be quiet *against* is a column of
+   sentences, and "Sign out everywhere" looked exactly as pressable as the
+   paragraph above it.
+
+   So two changes, and the rest follows from them:
+
+     * each titled block is a surface — border, radius, its own background —
+       which is what turns a 5800px scroll into a list of things you can count;
+     * every control on this screen gets a fill and a border. The scope is
+       `.settings` rather than the button itself, because the quiet button is
+       right where it lives elsewhere: beside a vote, in the header, under a
+       card. It is only wrong when it is the only thing in the room.
    -------------------------------------------------------------------------- */
 .settings {
+  --settings-pad: var(--s-5);
   width: 100%;
-  max-width: var(--col-max);
+  /* The column is still --col-max — the card's padding and border are added
+     *outside* it rather than taken out of it. That is not tidiness: the
+     specimen in the reading block claims to be set exactly as a post will be,
+     and a post is a --col-max column. Inset by the card it was 590px against
+     the post's 640 at the one combination where the measure is wider than the
+     column, which tests/reading-settings.spec.js catches by measuring both.
+     So the wrapper grows by what the card spends, and everything that is not
+     in a card is padded by the same amount so that all of it still lines up. */
+  max-width: calc(var(--col-max) + 2 * var(--settings-pad) + 2px);
   margin-inline: auto;
 }
+.settings__head,
+.settings__signedout,
+.settings__group-head,
+.settings__group-blurb {
+  padding-inline: var(--settings-pad);
+}
 .settings__head {
-  margin-bottom: var(--s-8);
+  margin-bottom: var(--s-7);
   padding-bottom: var(--s-5);
   border-bottom: 1px solid var(--border);
 }
@@ -1226,25 +1260,16 @@
   font-family: var(--font-serif);
   font-size: 1.05rem;
 }
-.settings__section {
-  margin-bottom: var(--s-8);
-  padding-bottom: var(--s-7);
-  border-bottom: 1px solid var(--border);
-}
-/* A rule under the last block of a part would read as a line above the next
-   part's heading, which already has one of its own. */
-.settings__section:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-  margin-bottom: 0;
-}
 
 /* The line a signed-out reader gets where the account part would be. Set as
    prose rather than as a notice: it is context, not a warning, and a tinted
    box would make an ordinary state look like something had gone wrong. */
 .settings__signedout {
-  max-width: var(--measure);
-  margin-bottom: var(--s-8);
+  /* The padding is added to the cap rather than taken out of it, so the line
+     length is the same here as it is inside a card. Same reasoning as the
+     wrapper's own max-width above. */
+  max-width: calc(var(--measure) + 2 * var(--settings-pad));
+  margin-bottom: var(--s-7);
   padding-bottom: var(--s-5);
   border-bottom: 1px solid var(--border);
   color: var(--text-dim);
@@ -1255,46 +1280,282 @@
 
 /* — the three parts ------------------------------------------------------------
    The screen grew a level: three numbered groups, each holding the titled
-   blocks that used to sit directly under the page title. The number is the
-   only new piece of furniture, and it is set in the meta face at meta size so
-   it reads as an index rather than as part of the sentence — it is
-   aria-hidden, so the heading a screen reader announces is "Your account".
+   blocks that used to sit directly under the page title. The number is drawn as
+   a small amber counter rather than as a figure in the sentence — it is an
+   index, and at meta size in the meta face it was easy to read as a stray
+   character in front of the heading. It is aria-hidden either way, so the
+   heading a screen reader announces is "Your account".
    -------------------------------------------------------------------------- */
 .settings__group {
-  margin-bottom: var(--s-9);
+  margin-bottom: var(--s-8);
 }
 .settings__group:last-child {
   margin-bottom: 0;
 }
 .settings__group-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-3);
   margin-bottom: var(--s-3);
   font-size: var(--fs-h2);
 }
 .settings__group-n {
   flex: none;
-  color: var(--text-faint);
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
   font-family: var(--font-ui);
   font-size: var(--fs-meta);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
+/* No rule under it any more: the first card starts a few pixels below, and a
+   hairline plus a border is two lines saying the same thing. */
 .settings__group-blurb {
-  max-width: var(--measure);
-  margin-bottom: var(--s-7);
-  padding-bottom: var(--s-5);
-  border-bottom: 1px solid var(--border);
+  max-width: calc(var(--measure) + 2 * var(--settings-pad));
+  margin-bottom: var(--s-5);
   color: var(--text-dim);
   font-size: var(--fs-ui);
   line-height: 1.55;
 }
 
-/* — two choices stacked, and a line of type to judge them by --------------------
-   The theme picker is one group and needs no help; the reading section is two,
-   and a flex row of legend-plus-segments twice over needs telling that they
-   are separate rows rather than one long one.
+/* — a titled block -------------------------------------------------------------
+   The same surface the feed's cards are drawn on, for the same reason: it is
+   the app's one way of saying "this is a thing, and it ends here". The stack
+   is close-set — 12px between cards rather than the 112px of margin and rule
+   it replaces — because the border is doing the separating now and the old
+   gap existed only because nothing else was.
    -------------------------------------------------------------------------- */
+.settings__section {
+  margin-bottom: var(--s-3);
+  padding: var(--settings-pad);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-card);
+}
+.settings__section:last-child {
+  margin-bottom: 0;
+}
+/* A step down from the part's h2, which is what makes the two levels legible
+   as levels. --fs-h2 is a clamp that reaches 1.6rem, and at that size a block
+   title inside a card competed with the heading above it. */
+.settings__heading {
+  font-size: 1.2rem;
+  margin-bottom: var(--s-2);
+}
+.settings__blurb {
+  max-width: var(--measure);
+  margin-bottom: var(--s-4);
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+  line-height: 1.6;
+}
+/* A blurb is the last prose before the controls; a note is a footnote after
+   them, and wants air above it rather than below. */
+.settings__note {
+  max-width: var(--measure);
+  margin-top: var(--s-3);
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+}
+/* A control directly under a note has to bring its own air. One block does
+   this — Offline, whose heading is followed by a line of prose and then
+   "Check for a new version", with no blurb between them to space it. */
+.settings__note + .btn {
+  margin-top: var(--s-4);
+}
+.settings__loading {
+  color: var(--text-dim);
+  font-size: var(--fs-ui);
+}
+
+/* — controls on this screen ----------------------------------------------------
+   The whole of the "it doesn't look clickable" problem, and its fix. A quiet
+   button here gets a fill, a border and full-strength type — the same shape a
+   primary button has, in the neutrals rather than in amber, so that the one
+   amber button on the screen ("Save name") is still the loudest thing on it.
+
+   Set through the .btn custom properties where the base rule uses them, and
+   directly where it doesn't: `.btn--quiet` writes `color` and its hover writes
+   `background` as literals, so a variable alone would lose to them.
+   -------------------------------------------------------------------------- */
+.settings .btn--quiet {
+  --btn-bd: var(--border-strong);
+  min-height: 44px;
+  padding-inline: var(--s-4);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+/* "Read the colophon" is an <a> wearing .btn. Without this it is the only
+   control on the screen with an underline through it, which reads as a typo
+   rather than as a link. */
+.settings a.btn {
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .settings .btn--quiet:hover:not([disabled]) {
+    border-color: var(--text-faint);
+    background: color-mix(in srgb, var(--text) 11%, transparent);
+    color: var(--text);
+  }
+}
+.settings .btn--quiet:active:not([disabled]) {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  color: var(--text);
+}
+/* The two that throw something away. A tinted fill and a tinted border rather
+   than red type on nothing: the colour is the warning, and it could not do
+   that job while it was the only part of the button that existed. */
+.settings .btn--quiet.danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+@media (hover: hover) {
+  .settings .btn--quiet.danger:hover:not([disabled]) {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
+    color: var(--danger);
+  }
+}
+.settings .btn--quiet.danger:active:not([disabled]) {
+  background: color-mix(in srgb, var(--danger) 26%, transparent);
+  color: var(--danger);
+}
+.settings .btn--primary {
+  box-shadow: var(--shadow-card);
+}
+
+/* — forms ----------------------------------------------------------------------
+   A grid with one gap rather than a stack of margins. The submit button used
+   to sit flush against the hint line under the field — 0px between the last
+   word of "3–20 characters: letters, digits, - and _" and the top of "Save
+   name" — which is the other half of why nothing on this screen read as a
+   control.
+   -------------------------------------------------------------------------- */
+.settings__form {
+  display: grid;
+  gap: var(--s-4);
+  max-width: 30rem;
+}
+.settings__form > .btn {
+  justify-self: start;
+}
+/* The row brings its own top margin for the places it is used without a form
+   around it; inside one the grid gap has already done that. */
+.settings__form .settings__row {
+  margin-top: 0;
+}
+/* Weight rather than colour separates the label from the hint underneath it.
+   Both stay on --text/--text-dim, which clear AA on the card in both themes —
+   a fainter hint would have been the third thing axe caught on this screen. */
+.settings .field__label {
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+.settings .field__hint {
+  max-width: var(--measure);
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+/* The email. Set in the reading face because it is content — the one piece of
+   the account that is shown rather than edited — and given an inset chip so
+   that the one read-only value on a screen of editable ones looks read-only. */
+.settings__value {
+  display: inline-block;
+  max-width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  overflow-wrap: anywhere;
+}
+.settings__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+/* — the confirm step -----------------------------------------------------------
+   Both destructive controls expand in place rather than opening a dialog, and
+   what replaces them is now drawn as a tinted panel. The reason is that the
+   expansion is otherwise silent: the button disappears, a field and two more
+   buttons appear in the same neutral card, and nothing on screen says the page
+   has changed mode. The tint says it, and it is the one place on this screen
+   the danger colour is used as a surface rather than as an outline.
+   -------------------------------------------------------------------------- */
+.settings__confirm > form,
+.data__sweep > .settings__confirm {
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+}
+.data__sweep > .settings__confirm {
+  max-width: 30rem;
+}
+
+/* — a set of choices, in a tray ------------------------------------------------
+   Scoped to this screen. The same `.choice` renders inside the reading panel on
+   a post, where it sits in a bordered strip that already groups it — here there
+   was nothing around the segments, so the unchecked ones read as three separate
+   outlined buttons rather than as one control with one answer. The tray is what
+   makes it a segmented control: one recessed well, one raised segment in it.
+   -------------------------------------------------------------------------- */
+.settings .choice {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+}
+.settings .choice__legend {
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+.settings .choice__steps {
+  gap: var(--s-1);
+  padding: var(--s-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.settings .choice__step {
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  border-color: transparent;
+  font-size: var(--fs-ui);
+}
+@media (hover: hover) {
+  .settings .choice__step:hover {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+}
+.settings .choice__step:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+/* Two choices stacked (text size, then line width), and the specimen under
+   them. A flex row of legend-plus-segments twice over needs telling that they
+   are separate rows rather than one long one. */
 .settings__section .choice {
   margin-bottom: var(--s-4);
 }
@@ -1318,17 +1579,55 @@
   transition: max-width var(--t-slow) var(--ease);
 }
 
-/* Switches stacked, for the pairs that belong together (the two notification
-   kinds). One column, because a row of two would read as a choice between
-   them rather than as two independent settings. */
+/* — switches, as rows ----------------------------------------------------------
+   The markup is a <label> holding the track and then the words, which laid out
+   as a 40px control with a sentence trailing off it — and a hit area that
+   stopped at the end of the sentence, wherever that happened to be. Reversed
+   and stretched, it is the row every settings screen on every platform uses:
+   the name on the left, the state on the right, the whole strip pressable.
+   -------------------------------------------------------------------------- */
+.settings .switch {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: var(--text);
+  transition:
+    background-color var(--t-mid) var(--ease),
+    border-color var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .settings .switch:hover {
+    border-color: var(--border-strong);
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+}
+/* The ring belongs to the row rather than to the 40px track, now that the row
+   is what a press lands on. The track keeps its own — see components.css —
+   and the two never show together because only one of them can be focused. */
+.settings .switch:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+/* One column for the pairs that belong together (the two notification kinds),
+   because a row of two would read as a choice between them rather than as two
+   independent settings. Stretched, so the rows line up with the standalone
+   switch below them. */
 .settings__switches {
   display: grid;
-  gap: var(--s-3);
-  justify-items: start;
-  margin-bottom: var(--s-4);
+  gap: var(--s-2);
+  justify-items: stretch;
+  margin-bottom: var(--s-2);
 }
 .settings__section .switch {
-  margin-bottom: var(--s-3);
+  margin-bottom: var(--s-2);
 }
 .settings__install:not(:empty) {
   margin-top: var(--s-4);
@@ -1348,16 +1647,22 @@
    -------------------------------------------------------------------------- */
 .data {
   list-style: none;
-  margin: 0 0 var(--s-6);
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
+/* Tinted from the text rather than filled with --surface-solid. The rows sit
+   inside the section's card now, and in the light theme --surface-solid and
+   --card-bg are two shades of the same near-white — the rows vanished into
+   their own container. A percentage of --text is darker than the card in the
+   light theme and lighter in the dark one, which is what "inset" means in
+   both. */
 .data__row {
   padding: var(--s-4);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  background: var(--surface-solid);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 /* The row takes focus after its own control has been used and removed — see
    the note in views/settings.js. It is not in the tab order, so this ring only
@@ -1387,11 +1692,16 @@
   white-space: nowrap;
 }
 /* Pushed to the end and set in tabular figures, so a column of sizes lines up
-   down the list even though nothing here is a table. */
+   down the list even though nothing here is a table. Drawn as a chip because
+   the row is a card inside a card and the number was the one thing on it with
+   nothing to sit against. */
 .data__size {
   flex: none;
   margin-left: auto;
-  color: var(--text-faint);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text-dim);
   font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
@@ -1421,7 +1731,7 @@
   font-size: var(--fs-micro);
 }
 .data__do {
-  margin-top: var(--s-3);
+  margin-top: var(--s-4);
 }
 /* What the bottom of the panel says once there is nothing left to sweep. Said
    rather than drawn as a disabled button, for the reason the install control
@@ -1432,63 +1742,53 @@
   font-size: var(--fs-meta);
 }
 .data__sweep {
+  margin-top: var(--s-5);
   padding-top: var(--s-5);
   border-top: 1px solid var(--border);
 }
 .data__ask {
   max-width: var(--measure);
+  margin-bottom: var(--s-1);
   color: var(--text-dim);
   font-size: var(--fs-ui);
   line-height: 1.55;
 }
-.settings__heading {
-  font-size: var(--fs-h2);
-  margin-bottom: var(--s-3);
-}
-.settings__blurb {
-  max-width: var(--measure);
-  margin-bottom: var(--s-5);
-  color: var(--text-dim);
-  font-size: var(--fs-ui);
-  line-height: 1.55;
-}
-.settings__form {
-  max-width: 30rem;
-}
-/* The email. Set in the reading face because it is content — the one piece of
-   the account that is shown rather than edited. */
-.settings__value {
-  font-family: var(--font-serif);
-  font-size: var(--fs-read);
-  margin-bottom: var(--s-3);
-  overflow-wrap: anywhere;
-}
-.settings__note {
-  max-width: var(--measure);
-  color: var(--text-dim);
-  font-size: var(--fs-ui);
-  line-height: 1.55;
-}
-.settings__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-3);
-  margin-top: var(--s-5);
-}
-/* Both buttons do fit side by side at 320px — that is the problem. A thumb
-   aimed at "Keep it" lands a few millimetres from "Delete my account", and of
-   the two mistakes only one is recoverable. So below the project's narrow
-   breakpoint they stack and go full width: two unmissable targets with a gap
-   between them instead of two small ones in a row. */
-@media (max-width: 380px) {
+
+/* — narrow screens -------------------------------------------------------------
+   The card's inset comes off the 320px gutter twice, and everything inside it
+   is already at its minimum. Less padding on the card, and the section's own
+   heading steps down with it. The theme picker has to keep all three segments
+   on one row at 320px — asserted in tests/theme.spec.js — which is the number
+   the step padding below is set by.
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .settings {
+    --settings-pad: var(--s-4);
+  }
+  .settings__section {
+    border-radius: var(--r-md);
+  }
+  .data__row {
+    padding: var(--s-3);
+  }
+  .settings .choice__step {
+    padding: 0 var(--s-2);
+  }
+  /* Every control the full width of its card. A button that is as wide as the
+     thing it belongs to cannot be mistaken for a label, which is the failure
+     this whole pass is about and which is worst on a phone. */
+  .settings .btn {
+    width: 100%;
+  }
+  /* Both buttons do fit side by side at 320px — that is the problem. A thumb
+     aimed at "Keep it" lands a few millimetres from "Delete my account", and
+     of the two mistakes only one is recoverable. Stacked, they are two
+     unmissable targets with a gap between them instead of two small ones in a
+     row. */
   .settings__row {
     flex-direction: column;
     align-items: stretch;
   }
-}
-.settings__loading {
-  color: var(--text-dim);
-  font-size: var(--fs-ui);
 }
 
 /* The one link on your own profile that isn't a post. Same weight and the same

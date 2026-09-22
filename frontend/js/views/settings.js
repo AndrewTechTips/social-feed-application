@@ -166,7 +166,7 @@ function nameSection(me) {
       h("label", { class: "field__label", for: "settings-username" }, "Username"),
       input,
       err,
-      h("p", { class: "field__label" }, USERNAME_HINT)
+      h("p", { class: "field__hint" }, USERNAME_HINT)
     ),
     save
   );
@@ -422,7 +422,7 @@ function dangerSection(me) {
         // stays dead until the thing you typed matches.
         h(
           "p",
-          { class: "field__label", id: "settings-confirm-hint" },
+          { class: "field__hint", id: "settings-confirm-hint" },
           "This deletes your posts, your comments and your votes. It can't be undone."
         )
       ),
