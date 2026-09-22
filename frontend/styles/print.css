@@ -84,7 +84,6 @@
   .feed__sentinel,
   .feed__error,
   .quote-copy,
-  .scrollbar,
   .confirm {
     display: none !important;
   }

@@ -1,7 +1,7 @@
 /* ============================================================================
    chrome.css — the frame the app is drawn inside.
    The header and everything that lives in it (the search, the account cluster,
-   the account menu), the reading progress line, toasts, the command palette,
+   the account menu), the scroll progress line, toasts, the command palette,
    and the demo notice.
 
    Split out of components.css, which had become the file everything landed in.
@@ -66,31 +66,47 @@
   }
 }
 
-/* — reading progress ------------------------------------------------------------
-   A 2px amber hairline lying along the header's bottom edge, filling as you
-   read. It exists because long serif posts are the reading experience the
-   whole type system was built for, and a reader forty percent into one has no
-   other way to know it.
+/* — the scroll indicator --------------------------------------------------------
+   A 2px amber hairline lying along the header's bottom edge, filling from the
+   left as the page moves. It is the *only* scroll indicator this app has: the
+   native scrollbar is hidden on every scroller, in base.css, and this replaces
+   it rather than decorating it.
 
+   ── it used to be only on a post, and it is called `.progress` now ──────────
+   It began as a reading bar — `body:has(#view .detail) .reading` — on the
+   argument that a long serif post is the reading experience the type system
+   was built for and a reader forty percent into one has no other way to know
+   it. All of that is still true, and none of it turned out to be special to a
+   post. A fifty-card feed, the colophon, and a settings screen five thousand
+   pixels tall all have a reader somewhere in the middle of them with no other
+   way to know it either. So the selector lost its gate and the class lost the
+   name of the first screen it appeared on — the same rename, for the same
+   reason, that turned `.typeset__*` into `.choice`.
+
+   ── a page that fits gets nothing, and gets it for free ─────────────────────
+   No `:has()`, no class, no measuring. A scroll progress timeline whose
+   scroller has no scrollable overflow is *inactive*, and an animation with an
+   inactive timeline holds its base style — which here is `scaleX(0)`. So the
+   sign-in screen paints a bar zero pixels wide without anything having to
+   decide that it should. Measured, not assumed: see tests/progress.spec.js.
+
+   ── and it still costs nothing per frame ────────────────────────────────────
    No JavaScript and no scroll listener: animation-timeline hands the animation
    the document's own scroll progress, so it is exact by construction, cannot
-   drift out of step with the page, and costs nothing per frame — it animates a
-   transform, which never leaves the compositor.
-
-   It measures the page rather than the post element, comments included. That's
-   the honest reading: the thread is part of what you came for, and a bar that
-   filled up two thirds of the way down the screen would be telling you you had
-   finished something you hadn't.
+   drift out of step with the page, and animates a transform, which never
+   leaves the compositor. It is `position: absolute` inside the header, so it
+   takes no space and can shift nothing.
 
    Everything is inside @supports, and the element is display:none outside it,
    so a browser without scroll-driven animations gets an empty span and no
-   stray amber rule. That is the entire fallback story.
+   stray amber rule — and keeps its native scrollbar, because base.css only
+   takes that away where this can be drawn instead.
    -------------------------------------------------------------------------- */
-.reading {
+.progress {
   display: none;
 }
 @supports (animation-timeline: scroll()) {
-  body:has(#view .detail) .reading {
+  .progress {
     display: block;
     position: absolute;
     /* -1px so it lies *on* the header's bottom border rather than under it:
@@ -102,7 +118,7 @@
     background: var(--accent);
     transform: scaleX(0);
     transform-origin: 0 50%;
-    animation: reading linear both;
+    animation: progress linear both;
     animation-timeline: scroll(root block);
   }
 
@@ -112,134 +128,14 @@
      pixel. Nothing about this moves unless the reader moves the page, so it
      keeps its progress-based duration and stays truthful. */
   @media (prefers-reduced-motion: reduce) {
-    body:has(#view .detail) .reading {
+    .progress {
       animation-duration: auto !important;
     }
   }
 }
-@keyframes reading {
+@keyframes progress {
   to {
     transform: scaleX(1);
-  }
-}
-
-/* — the page's scrollbar --------------------------------------------------------
-   Built by js/scrollbar.js, which is also where the argument for having one at
-   all is written down. This is only what it looks like.
-
-   Out of flow and inset on every side, which is the whole point: the native
-   bar was drawn hard against the edge of the viewport, a hair from the
-   right-hand edge of the text, and it reserved its own width from the page
-   forever so that the layout would not jump. This costs the page nothing and
-   keeps two clear gaps — one to the edge of the window, one to the column.
-
-   It starts below the header because the header is sticky and translucent, and
-   a thumb travelling underneath it looked like a rendering fault rather than
-   like a scrollbar.
-   -------------------------------------------------------------------------- */
-.scrollbar {
-  position: fixed;
-  inset: calc(var(--header-h) + var(--s-3)) max(var(--s-2), env(safe-area-inset-right))
-    max(var(--s-3), env(safe-area-inset-bottom)) auto;
-  /* Above the page and below everything that is chrome: the header it already
-     starts underneath (20), the toast it must never cover (60), the account
-     menu (70) and the palette (80). This is page furniture, not something
-     that wins an argument with a dialogue. */
-  z-index: 15;
-  width: 10px;
-  border-radius: var(--r-pill);
-  /* Always laid out, never `display: none`, and that is load-bearing rather
-     than lazy: js/scrollbar.js sizes the thumb from this element's own height,
-     and a rail that hid itself on a page with nothing to scroll would measure
-     zero and could never decide it had become scrollable. So the box stays and
-     only the paint is conditional — `is-live` is added the moment there is
-     somewhere to go, and nothing below draws without it. */
-  pointer-events: none;
-}
-/* The rail takes presses — one above or below the thumb is a page up or down —
-   but only where there is a pointer that can be precise about it. A 10px
-   target is not something to hand a thumb, and a phone scrolls by dragging the
-   page rather than by dragging a bar. */
-@media (hover: hover) and (pointer: fine) {
-  .scrollbar.is-live {
-    pointer-events: auto;
-  }
-}
-/* The rail itself only appears under the pointer. Drawn all the time it would
-   be a second vertical line beside the text, which is the thing being removed
-   rather than a smaller version of it. */
-@media (hover: hover) {
-  .scrollbar.is-live:hover {
-    background: color-mix(in srgb, var(--text) 6%, transparent);
-  }
-}
-.scrollbar__thumb {
-  width: 100%;
-  border-radius: var(--r-pill);
-  background: var(--rail-thumb);
-  /* A hair of lift, so the thumb reads as floating over the column rather
-     than as a mark painted on it. */
-  box-shadow: var(--shadow-card);
-  /* Set from JavaScript, and declared here so the first frame has a value
-     rather than an auto height it has to be talked out of. */
-  height: 0;
-  opacity: 0;
-  /* `transform` is written every frame and is deliberately not transitioned —
-     a thumb easing towards where the page already is would visibly lag the
-     content it is reporting on. It is a 3d translate so the move stays on the
-     compositor without a standing `will-change` layer on an element that is
-     on every screen. */
-  transition:
-    opacity var(--t-mid) var(--ease),
-    background-color var(--t-mid) var(--ease);
-}
-/* Awake while the page is moving, and for a second after it stops. Every one
-   of these needs `is-live` as well: the rail is always in the layout, so this
-   is what keeps a page that fits from drawing a thumb it has no use for. */
-.scrollbar.is-live.is-awake .scrollbar__thumb,
-.scrollbar.is-live.is-held .scrollbar__thumb,
-.scrollbar.is-live:hover .scrollbar__thumb {
-  opacity: 1;
-}
-@media (hover: hover) {
-  .scrollbar.is-live:hover .scrollbar__thumb,
-  .scrollbar.is-live.is-held .scrollbar__thumb {
-    background: var(--rail-thumb-hover);
-  }
-}
-
-/* While a view transition runs the page is a pair of still images, and the
-   scrollbar is the one thing still moving: it snaps to the top because the
-   swap scrolled there, and changes size because the next screen is a different
-   height. Taking the thumb out for those two hundred milliseconds and putting
-   it back, already correct, is the whole fix. Set by tryTransition() in
-   js/transitions.js. */
-html.is-transitioning .scrollbar__thumb {
-  opacity: 0;
-}
-
-/* Focus mode is everything that isn't the post, gone — and on a post the
-   amber line under the header is already saying how far down you are. */
-:root[data-focus] .scrollbar {
-  display: none;
-}
-
-/* — narrow screens ---------------------------------------------------------
-   The page's side gutter is 16px on a phone, so every pixel the rail spends
-   is a pixel of clearance it does not have. At the desktop's 10px wide and
-   8px in, the thumb ran two pixels *under* the right-hand edge of the card —
-   which is the complaint this whole thing was built to answer, reproduced at
-   a smaller size. Slimmer and closer to the window edge puts it in the margin
-   instead of on the card: seven pixels clear of the content, three from the
-   edge of the screen.
-
-   Nothing is lost by the narrower target, because the rail takes no presses
-   on a touch screen anyway — see the pointer-events rule above. */
-@media (max-width: 640px) {
-  .scrollbar {
-    inset: calc(var(--header-h) + var(--s-2)) max(3px, env(safe-area-inset-right))
-      max(var(--s-2), env(safe-area-inset-bottom)) auto;
-    width: 6px;
   }
 }
 

@@ -12,17 +12,6 @@
   visibility: hidden !important;
 }
 
-/* The page's own scrollbar (js/scrollbar.js) fades in while the page moves and
-   fades out a second after it stops, so whether it is in the picture depends on
-   how quickly the run got here — which is the definition of a flaky baseline.
-   Pinned open rather than hidden: its height and its position are a pure
-   function of how long the page is, so shown it is one more thing these
-   pictures are checking, and hidden it is one less. */
-.scrollbar__thumb {
-  opacity: 1 !important;
-  transition: none !important;
-}
-
 /* The caret in a focused field blinks, and a screenshot catches it up or down
    at random. */
 * {

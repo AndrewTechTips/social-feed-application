@@ -54,86 +54,124 @@ html {
   /* No 300ms click delay, and no double-tap-to-zoom swallowing taps. */
   touch-action: manipulation;
 
-  /* — the page's scrollbar ---------------------------------------------------
-     `overflow-x` moved up here from body, and it had to. With overflow on html
-     left at `visible`, the body's value propagates to the viewport — which is
-     what used to make this work at all. Set overflow on html and that
-     propagation stops, body becomes a scroll container of its own, and
-     `position: sticky` on the header starts measuring itself against *that*
-     instead of the page: the header scrolls straight off the top and never
-     comes back. Both properties belong to whichever element is the scroller,
-     and now that's this one.
+  /* — the page is the scroller -----------------------------------------------
+     `overflow-y: scroll` is the load-bearing one, and for two reasons that
+     have nothing to do with looks.
 
-     `overflow-y: scroll` stays for the same reason — it is what names this
-     element the scroller — and no longer costs anything, because the native
-     bar it would have drawn is hidden below.
+     It is what makes *this* element the scroller. `overflow-x` moved up here
+     from body and had to: with overflow on html left at `visible`, the body's
+     value propagates to the viewport, which is what used to make this work at
+     all. Set overflow on html and that propagation stops, body becomes a
+     scroll container of its own, and `position: sticky` on the header starts
+     measuring itself against *that* instead of the page — the header scrolls
+     straight off the top and never comes back. Both properties belong to
+     whichever element is the scroller, and now that's this one.
 
-     **There used to be a reserved gutter here, and it is gone.** Screens in
-     this app are wildly different heights, and a scrollbar that comes and goes
-     takes its own width of page with it every time: every line of every card
-     re-wraps and the layout slides sideways and back, twice per visit to a
-     post. `scrollbar-gutter: stable` bought that off by paying the eleven
-     pixels always instead of intermittently. A scrollbar with no width cannot
-     take any away, so the reflow stops being compensated for and stops
-     happening — and the eleven pixels come back to the page. js/scrollbar.js
-     draws the real one, out of flow, inset from the edge, and fading when
-     nothing is moving; the whole argument for it is at the top of that file. */
+     And it is what stops the layout jumping. Screens here are wildly
+     different heights — a fourteen-card feed, then one short post — and a
+     scrollbar that comes and goes takes its own width of page with it every
+     time: every line of every card re-wraps and the whole layout slides
+     sideways and back, twice per visit to a post. `scroll` rather than `auto`
+     means the track is there on every screen, so there is nothing to appear
+     and disappear.
+
+     **`scrollbar-gutter: stable` used to be here as well, and is gone.** It
+     was making the same promise as the line above, and only one of the two
+     charged for it: the reserved strip is part of the scroller's box, so
+     everything centred inside it was centred against a narrower page and drawn
+     a few pixels left of the middle of the window. The app sat very slightly
+     off-centre on every screen for as long as it was here. Removing it costs
+     nothing — the bar is hidden below, so the gutter it would reserve is zero
+     pixels wide anyway — and tests/progress.spec.js keeps the centring
+     measured.
+
+     The two lines of styling are the fallback and nothing else: they are what
+     a browser that cannot draw the progress bar will show. `thin`, a neutral
+     thumb from the same family as --border, and no track. Everything else
+     gets no scrollbar at all — see the block under this one. */
   overflow-x: hidden;
   overflow-y: scroll;
-  scrollbar-width: none;
-}
-/* Firefox takes `scrollbar-width: none` above; this is the same instruction in
-   the dialect WebKit and Blink still answer to. Scoped to the page's own
-   scroller rather than written bare, or it would take the scrollbars off the
-   palette and the account menu with it — those are small panels where the bar
-   is the only clue there is more below, and they keep theirs. */
-html::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-/* — the scrollbars this app did not replace ---------------------------------
-   The two panels that scroll inside the page. `thin` plus a neutral thumb from
-   the same family as --border, on a track that isn't drawn at all. */
-.account__menu,
-.palette__list,
-.textarea {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-/* Safari only learned `scrollbar-color` in 18.2, and older WebKit needs the
-   pseudo-elements instead. Behind @supports because Chrome honours whichever
+/* Fallback too, and only ever reached by a browser still drawing a scrollbar.
+   While a view transition runs the page is a pair of still images, and the
+   scrollbar — which is browser chrome, outside the transition — is the one
+   thing still moving: it snaps to the top because the swap scrolled there, and
+   changes size because the next screen is a different height. Taking the thumb
+   out for those two hundred milliseconds and putting it back, already correct,
+   is the whole fix. It reflows nothing: `overflow-y: scroll` holds the track
+   either way. Set by tryTransition() in js/transitions.js.
+
+   The progress bar needs no equivalent: it is inside the transition rather
+   than beside it, and it is already showing the scroll position the next
+   screen will have. */
+html.is-transitioning {
+  scrollbar-color: transparent transparent;
+}
+
+/* Fallback, again. Safari only learned `scrollbar-color` in 18.2, and older
+   WebKit needs the pseudo-elements instead. Behind @supports because Chrome honours whichever
    it is given and would otherwise take the wide legacy scrollbar over the thin
    modern one. The transparent border plus background-clip is what insets the
    thumb from the edge of the track without drawing the track. */
 @supports not (scrollbar-color: transparent transparent) {
-  .account__menu::-webkit-scrollbar,
-  .palette__list::-webkit-scrollbar,
-  .textarea::-webkit-scrollbar {
+  ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
   }
-  .account__menu::-webkit-scrollbar-track,
-  .palette__list::-webkit-scrollbar-track,
-  .textarea::-webkit-scrollbar-track,
-  .account__menu::-webkit-scrollbar-corner,
-  .palette__list::-webkit-scrollbar-corner,
-  .textarea::-webkit-scrollbar-corner {
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
     background: transparent;
   }
-  .account__menu::-webkit-scrollbar-thumb,
-  .palette__list::-webkit-scrollbar-thumb,
-  .textarea::-webkit-scrollbar-thumb {
+  ::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb);
     background-clip: padding-box;
     border: 4px solid transparent;
     border-radius: var(--r-pill);
   }
-  .account__menu::-webkit-scrollbar-thumb:hover,
-  .palette__list::-webkit-scrollbar-thumb:hover,
-  .textarea::-webkit-scrollbar-thumb:hover {
+  ::-webkit-scrollbar-thumb:hover {
     background-color: var(--scrollbar-thumb-hover);
+  }
+  html.is-transitioning ::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+}
+
+/* — no scrollbars ---------------------------------------------------------------
+   Not thin, not styled: gone, on every scroller in the app and on every
+   platform — the page, the command palette's list, the account menu, a
+   textarea. The header draws a 2px amber line that fills as the page moves
+   (`.progress` in chrome.css) and that is the indicator now; a second one
+   down the right-hand edge, in the operating system's own idiom, was the
+   thing being replaced rather than something to keep beside it.
+
+   `:root` as well as `*`, and not for tidiness: `html` above is a type
+   selector and would win against a bare `*`, so the page — the one scroller
+   this matters most for — would have kept its thin bar.
+
+   **Scrolling itself is untouched.** This hides the indicator and nothing
+   else: the wheel, a trackpad, a finger, Page Down, Home and End, and
+   `scrollIntoView` all behave exactly as they did. Nothing here is
+   `overflow: hidden`.
+
+   ── the one browser that keeps its scrollbar, and why ───────────────────────
+   Gated on the feature that draws the replacement. An engine without
+   scroll-driven animations gets `display: none` on the bar (see chrome.css),
+   and taking its scrollbar away as well would leave it with no way at all to
+   see where it is in a page — the only state in this design that is worse
+   than the one being fixed. This is a narrower gate than it looks: the app
+   already requires `:has()` and `color-mix()` unconditionally, and the engines
+   that have those but not this are a closing window rather than a growing one.
+   -------------------------------------------------------------------------- */
+@supports (animation-timeline: scroll()) {
+  :root,
+  * {
+    scrollbar-width: none;
+  }
+  ::-webkit-scrollbar {
+    display: none;
   }
 }
 

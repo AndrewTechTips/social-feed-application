@@ -19,7 +19,6 @@ import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { mountOfflineBand } from "./offline.js";
-import { mountScrollbar } from "./scrollbar.js";
 import { takeSharedFromUrl } from "./share.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
 import { currentTheme, otherTheme, toggleTheme, syncThemeColor } from "./actions.js";
@@ -408,11 +407,6 @@ startRouter();
 // there is going to be one and this can sit underneath it. It is hidden until
 // the network actually goes, so it costs an empty div the rest of the time.
 mountOfflineBand();
-
-// After the router too, and for a plainer reason: the first screen has to be
-// on the page before there is a height worth measuring. It draws nothing at
-// all on a screen that fits.
-mountScrollbar();
 
 // — offline ---------------------------------------------------------------------
 // The published build has no server behind it, so there is nothing about this

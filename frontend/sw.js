@@ -96,7 +96,6 @@ const SHELL = [
   "./js/install.js",
   "./js/live.js",
   "./js/offline.js",
-  "./js/scrollbar.js",
   "./js/share.js",
   "./js/browserdata.js",
   "./js/components/vote.js",

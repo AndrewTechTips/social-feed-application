@@ -884,52 +884,56 @@ too, and retired with the others; what it decided is in
 
 ### Changed
 
-- **The page draws its own scrollbar now, and the native one is gone.** The
-  browser's was hard against the edge of the window, a hair from the
-  right-hand edge of the text, in whatever width the platform picked — and the
-  app paid for it twice. Screens here are wildly different heights, so a
-  scrollbar that comes and goes takes its own width of page with it every
-  time: every line of every card re-wraps and the layout slides sideways and
-  back, twice per visit to a post. `scrollbar-gutter: stable` bought that off
-  by reserving eleven pixels always instead of intermittently.
+- **The reading bar is the whole app's scroll indicator, and the scrollbar is
+  gone.** A 2px amber hairline has been lying along the header's bottom edge
+  and filling as you read since posts got one, on the argument that a long
+  serif post is the reading experience the type system was built for and a
+  reader forty percent into one has no other way to know it. All of that was
+  still true and none of it turned out to be special to a post: a fifty-card
+  feed, the colophon, and a settings screen five thousand pixels tall each
+  have a reader somewhere in the middle with no other way to know it either.
 
-  A scrollbar with no width cannot take any away, so hiding it does not need
-  the reservation — the reflow stops happening rather than being compensated
-  for. `js/scrollbar.js` draws the real one out of flow: a rounded thumb in a
-  rail inset from the edge, which fades in while the page is moving and fades
-  out a second after it stops. It is a scrollbar and not a decoration — drag
-  the thumb and the page follows, press the rail above or below it and the
-  page moves a screen — and it is `aria-hidden` with no tab stop, because it
-  duplicates what the arrow keys already do.
+  So the selector lost its `body:has(#view .detail)` gate, and the class lost
+  the name of the first screen it appeared on — `.reading` is `.progress` now,
+  the same rename for the same reason that turned `.typeset__*` into
+  `.choice`. The native scrollbar is hidden on every scroller in the app in
+  exchange: the page, the palette's list, the account menu, a textarea.
 
-  **The reserved strip had a second cost nobody had written down.** It is part
-  of the scroller's box, so everything centred inside it was centred against
-  1269 pixels and drawn five and a half short of the middle of a 1280 window.
-  The whole app sat very slightly to the left, on every screen, for as long as
-  the gutter existed. That is what the first test in `scrollbar.spec.js`
-  measures, and it is worth measuring from the outside: the gap is invisible
-  to `clientWidth`, which reads the same either way under a browser with
-  overlay scrollbars, so the obvious assertion would have passed whether this
-  was fixed or not.
+  **A page that fits draws nothing, and nothing had to be written to make that
+  happen.** A scroll progress timeline whose scroller has no scrollable
+  overflow is *inactive*, and an animation with an inactive timeline holds its
+  base style — which here is `scaleX(0)`. No `:has()`, no class, no measuring,
+  no JavaScript deciding it. That is asserted rather than assumed, because it
+  is the kind of thing that is true until an engine decides otherwise.
 
-  Two things it deliberately does not do. It is not the amber reading bar
-  under the header on a post — that answers "how much of this is left", is
-  drawn by a scroll-driven animation with no JavaScript at all, and only
-  exists on a post; this answers "where am I" and exists everywhere. And it is
-  not drawn on a page with nothing below the fold, which is the rule the
-  install block and the data panel's sweep are already built on.
+  The whole feature is still CSS. There is no scroll listener anywhere in this
+  app: `animation-timeline` hands the animation the document's own scroll
+  progress, so it is exact by construction, cannot drift out of step with the
+  page, and animates a transform, which never leaves the compositor. The bar
+  is `position: absolute` inside the header, so it takes no space and can
+  shift nothing.
 
-  Hiding the native bar is scoped to `html` rather than written bare. The
-  palette and the account menu scroll inside the page, and there the bar is
-  the only clue there is more below; a global `::-webkit-scrollbar { width: 0 }`
-  would have taken theirs with it.
+  **`scrollbar-gutter: stable` went with it, and that fixed something else.**
+  It had been holding eleven pixels open down the right of the page so the
+  layout would not jump when a short screen followed a tall one — a promise
+  `overflow-y: scroll` was already making on its own. Only one of the two
+  charged for it: the reserved strip is part of the scroller's box, so
+  everything centred inside it was centred against 1269 pixels and drawn five
+  and a half short of the middle of a 1280 window. The app sat very slightly
+  to the left, on every screen, for as long as that line existed.
 
-  One correction on the way: the phone got the desktop's geometry at first,
-  and at ten pixels wide and eight in from the edge the thumb ran two pixels
-  *under* the right-hand edge of the card — the original complaint reproduced
-  at a smaller size, on the screen where the side gutter is tightest. Phones
-  get six pixels, three from the edge of the screen, which puts it in the
-  margin instead of on the card.
+  One browser keeps its scrollbar on purpose. An engine without scroll-driven
+  animations gets `display: none` on the bar, and taking its scrollbar away as
+  well would leave it with no way at all to see where it is in a page — the
+  only state here worse than the one being fixed. So the hiding is gated on
+  the feature that draws the replacement.
+
+  A custom vertical scrollbar was built for this first and is reverted in
+  full — `js/scrollbar.js`, its spec, its tokens and its 210 lines of drag
+  handling are gone, and this entry replaces the one describing them. It was
+  the wrong answer to the right question: the app already had a scroll
+  indicator it liked, on the wrong number of screens. The off-centre page is
+  the one thing that pass turned up that was worth keeping, and it is kept.
 
 - **The controls on `#/settings` look like controls.** Every button on that
   screen was a `.btn--quiet` — transparent fill, transparent border,
