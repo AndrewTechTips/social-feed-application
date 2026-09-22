@@ -115,6 +115,15 @@
   --scrollbar-thumb: rgba(231, 237, 236, 0.16);
   --scrollbar-thumb-hover: rgba(231, 237, 236, 0.32);
 
+  /* The page's own scrollbar, which this app draws itself — see
+     js/scrollbar.js. Stronger than the two above because it is not a hairline
+     against the edge of the window any more: it is a floating pill with a gap
+     either side of it, and at 0.16 it read as a smudge. Still drawn from the
+     neutrals for the reason given above — a bar that runs the height of every
+     screen is the last thing that should be wearing the accent. */
+  --rail-thumb: rgba(231, 237, 236, 0.28);
+  --rail-thumb-hover: rgba(231, 237, 236, 0.52);
+
   color-scheme: dark;
 }
 
@@ -179,6 +188,8 @@
 
   --scrollbar-thumb: rgba(18, 40, 37, 0.22);
   --scrollbar-thumb-hover: rgba(18, 40, 37, 0.4);
+  --rail-thumb: rgba(18, 40, 37, 0.3);
+  --rail-thumb-hover: rgba(18, 40, 37, 0.55);
 
   color-scheme: light;
 }
@@ -213,6 +224,8 @@
     --aurora-cool: rgba(47, 138, 118, 0.1);
     --scrollbar-thumb: rgba(18, 40, 37, 0.22);
     --scrollbar-thumb-hover: rgba(18, 40, 37, 0.4);
+    --rail-thumb: rgba(18, 40, 37, 0.3);
+    --rail-thumb-hover: rgba(18, 40, 37, 0.55);
     color-scheme: light;
   }
 }

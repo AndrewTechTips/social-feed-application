@@ -884,6 +884,53 @@ too, and retired with the others; what it decided is in
 
 ### Changed
 
+- **The page draws its own scrollbar now, and the native one is gone.** The
+  browser's was hard against the edge of the window, a hair from the
+  right-hand edge of the text, in whatever width the platform picked — and the
+  app paid for it twice. Screens here are wildly different heights, so a
+  scrollbar that comes and goes takes its own width of page with it every
+  time: every line of every card re-wraps and the layout slides sideways and
+  back, twice per visit to a post. `scrollbar-gutter: stable` bought that off
+  by reserving eleven pixels always instead of intermittently.
+
+  A scrollbar with no width cannot take any away, so hiding it does not need
+  the reservation — the reflow stops happening rather than being compensated
+  for. `js/scrollbar.js` draws the real one out of flow: a rounded thumb in a
+  rail inset from the edge, which fades in while the page is moving and fades
+  out a second after it stops. It is a scrollbar and not a decoration — drag
+  the thumb and the page follows, press the rail above or below it and the
+  page moves a screen — and it is `aria-hidden` with no tab stop, because it
+  duplicates what the arrow keys already do.
+
+  **The reserved strip had a second cost nobody had written down.** It is part
+  of the scroller's box, so everything centred inside it was centred against
+  1269 pixels and drawn five and a half short of the middle of a 1280 window.
+  The whole app sat very slightly to the left, on every screen, for as long as
+  the gutter existed. That is what the first test in `scrollbar.spec.js`
+  measures, and it is worth measuring from the outside: the gap is invisible
+  to `clientWidth`, which reads the same either way under a browser with
+  overlay scrollbars, so the obvious assertion would have passed whether this
+  was fixed or not.
+
+  Two things it deliberately does not do. It is not the amber reading bar
+  under the header on a post — that answers "how much of this is left", is
+  drawn by a scroll-driven animation with no JavaScript at all, and only
+  exists on a post; this answers "where am I" and exists everywhere. And it is
+  not drawn on a page with nothing below the fold, which is the rule the
+  install block and the data panel's sweep are already built on.
+
+  Hiding the native bar is scoped to `html` rather than written bare. The
+  palette and the account menu scroll inside the page, and there the bar is
+  the only clue there is more below; a global `::-webkit-scrollbar { width: 0 }`
+  would have taken theirs with it.
+
+  One correction on the way: the phone got the desktop's geometry at first,
+  and at ten pixels wide and eight in from the edge the thumb ran two pixels
+  *under* the right-hand edge of the card — the original complaint reproduced
+  at a smaller size, on the screen where the side gutter is tightest. Phones
+  get six pixels, three from the edge of the screen, which puts it in the
+  margin instead of on the card.
+
 - **The controls on `#/settings` look like controls.** Every button on that
   screen was a `.btn--quiet` — transparent fill, transparent border,
   `--text-dim` type — and every block was separated from the next by a

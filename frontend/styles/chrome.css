@@ -123,6 +123,126 @@
   }
 }
 
+/* — the page's scrollbar --------------------------------------------------------
+   Built by js/scrollbar.js, which is also where the argument for having one at
+   all is written down. This is only what it looks like.
+
+   Out of flow and inset on every side, which is the whole point: the native
+   bar was drawn hard against the edge of the viewport, a hair from the
+   right-hand edge of the text, and it reserved its own width from the page
+   forever so that the layout would not jump. This costs the page nothing and
+   keeps two clear gaps — one to the edge of the window, one to the column.
+
+   It starts below the header because the header is sticky and translucent, and
+   a thumb travelling underneath it looked like a rendering fault rather than
+   like a scrollbar.
+   -------------------------------------------------------------------------- */
+.scrollbar {
+  position: fixed;
+  inset: calc(var(--header-h) + var(--s-3)) max(var(--s-2), env(safe-area-inset-right))
+    max(var(--s-3), env(safe-area-inset-bottom)) auto;
+  /* Above the page and below everything that is chrome: the header it already
+     starts underneath (20), the toast it must never cover (60), the account
+     menu (70) and the palette (80). This is page furniture, not something
+     that wins an argument with a dialogue. */
+  z-index: 15;
+  width: 10px;
+  border-radius: var(--r-pill);
+  /* Always laid out, never `display: none`, and that is load-bearing rather
+     than lazy: js/scrollbar.js sizes the thumb from this element's own height,
+     and a rail that hid itself on a page with nothing to scroll would measure
+     zero and could never decide it had become scrollable. So the box stays and
+     only the paint is conditional — `is-live` is added the moment there is
+     somewhere to go, and nothing below draws without it. */
+  pointer-events: none;
+}
+/* The rail takes presses — one above or below the thumb is a page up or down —
+   but only where there is a pointer that can be precise about it. A 10px
+   target is not something to hand a thumb, and a phone scrolls by dragging the
+   page rather than by dragging a bar. */
+@media (hover: hover) and (pointer: fine) {
+  .scrollbar.is-live {
+    pointer-events: auto;
+  }
+}
+/* The rail itself only appears under the pointer. Drawn all the time it would
+   be a second vertical line beside the text, which is the thing being removed
+   rather than a smaller version of it. */
+@media (hover: hover) {
+  .scrollbar.is-live:hover {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+.scrollbar__thumb {
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--rail-thumb);
+  /* A hair of lift, so the thumb reads as floating over the column rather
+     than as a mark painted on it. */
+  box-shadow: var(--shadow-card);
+  /* Set from JavaScript, and declared here so the first frame has a value
+     rather than an auto height it has to be talked out of. */
+  height: 0;
+  opacity: 0;
+  /* `transform` is written every frame and is deliberately not transitioned —
+     a thumb easing towards where the page already is would visibly lag the
+     content it is reporting on. It is a 3d translate so the move stays on the
+     compositor without a standing `will-change` layer on an element that is
+     on every screen. */
+  transition:
+    opacity var(--t-mid) var(--ease),
+    background-color var(--t-mid) var(--ease);
+}
+/* Awake while the page is moving, and for a second after it stops. Every one
+   of these needs `is-live` as well: the rail is always in the layout, so this
+   is what keeps a page that fits from drawing a thumb it has no use for. */
+.scrollbar.is-live.is-awake .scrollbar__thumb,
+.scrollbar.is-live.is-held .scrollbar__thumb,
+.scrollbar.is-live:hover .scrollbar__thumb {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .scrollbar.is-live:hover .scrollbar__thumb,
+  .scrollbar.is-live.is-held .scrollbar__thumb {
+    background: var(--rail-thumb-hover);
+  }
+}
+
+/* While a view transition runs the page is a pair of still images, and the
+   scrollbar is the one thing still moving: it snaps to the top because the
+   swap scrolled there, and changes size because the next screen is a different
+   height. Taking the thumb out for those two hundred milliseconds and putting
+   it back, already correct, is the whole fix. Set by tryTransition() in
+   js/transitions.js. */
+html.is-transitioning .scrollbar__thumb {
+  opacity: 0;
+}
+
+/* Focus mode is everything that isn't the post, gone — and on a post the
+   amber line under the header is already saying how far down you are. */
+:root[data-focus] .scrollbar {
+  display: none;
+}
+
+/* — narrow screens ---------------------------------------------------------
+   The page's side gutter is 16px on a phone, so every pixel the rail spends
+   is a pixel of clearance it does not have. At the desktop's 10px wide and
+   8px in, the thumb ran two pixels *under* the right-hand edge of the card —
+   which is the complaint this whole thing was built to answer, reproduced at
+   a smaller size. Slimmer and closer to the window edge puts it in the margin
+   instead of on the card: seven pixels clear of the content, three from the
+   edge of the screen.
+
+   Nothing is lost by the narrower target, because the rail takes no presses
+   on a touch screen anyway — see the pointer-events rule above. */
+@media (max-width: 640px) {
+  .scrollbar {
+    inset: calc(var(--header-h) + var(--s-2)) max(3px, env(safe-area-inset-right))
+      max(var(--s-2), env(safe-area-inset-bottom)) auto;
+    width: 6px;
+  }
+}
+
 .site-header__inner {
   /* The positioning context for .focus-out, which takes the place of the brand,
      the search and the account cluster while focus mode is on — see views.css. */
