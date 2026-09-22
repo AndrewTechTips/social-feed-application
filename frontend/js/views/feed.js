@@ -154,7 +154,7 @@ const SORTS = [
  * answer to the press.
  */
 function sortbar(current) {
-  return h(
+  const bar = h(
     "nav",
     { class: "sortbar", "aria-label": "Order the feed" },
     SORTS.map(([value, label, href]) =>
@@ -169,6 +169,51 @@ function sortbar(current) {
       )
     )
   );
+  // Stamped on the press, because afterwards there is no way to tell. See
+  // takeOrderPress. Modified clicks are the browser's to answer — ⌘-click
+  // opens the order in another tab and this page never re-renders — so they
+  // leave no stamp behind to be read by whatever renders next.
+  bar.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = /** @type {Element} */ (event.target);
+    if (target.closest(".sortbar__option")) orderPressedAt = Date.now();
+  });
+  return bar;
+}
+
+/**
+ * Did this render come from a press on the bar above the list?
+ *
+ * The options are ordinary links — that is deliberate, each order is a real
+ * address — so by the time the feed is rendering again there is nothing left
+ * to say who asked for it. And two presses that arrive here looking identical
+ * mean opposite things about where the page should end up:
+ *
+ *   · Pressing Warmest is a re-order. The reader is still looking at the bar
+ *     they pressed, a finger's width from it, and the page must not move under
+ *     them — not to the top, and not to wherever they happened to be the last
+ *     time they left that order.
+ *   · Pressing the brand from the feed means "give me a fresh feed", and a
+ *     fresh feed starts at the top. It reaches renderFeed as the same screen
+ *     with the same search term too (main.js drops the cache, then navigates),
+ *     so nothing about the address tells the two apart.
+ *
+ * Only the bar stamps, so only the bar holds its place.
+ *
+ * Read once at the top of a render and cleared by the reading: the mount it
+ * belongs to can be a fetch away (see `reordering`), and a stamp still
+ * standing by then would answer for whatever came next instead. The window is
+ * the one in view.js and for the same reason — a press nobody followed with a
+ * render is not this render's press.
+ */
+let orderPressedAt = 0;
+const ORDER_PRESS_WINDOW = 1000;
+
+function takeOrderPress() {
+  const pressed = Date.now() - orderPressedAt < ORDER_PRESS_WINDOW;
+  orderPressedAt = 0;
+  return pressed;
 }
 
 const SORT_VALUES = SORTS.map(([value]) => value);
@@ -699,6 +744,31 @@ export function renderFeed({ query, isStale }) {
   const reordering = sameScreen && wasSearching === search;
 
   /**
+   * ...and did the reader ask for it from the bar, where they can see it?
+   *
+   * This is what decides whether the page moves. A re-order is the one swap
+   * where the reader's position is still theirs — they have not gone anywhere,
+   * so neither should the page — and it used to be the swap that moved them
+   * furthest, in whichever direction happened to be wrong:
+   *
+   *   · Up, on an order this visit hasn't seen. mountView's default is the top,
+   *     because that is where an arrival goes, and the bar sits far enough down
+   *     a phone's masthead that reaching it means scrolling — so pressing
+   *     Warmest threw the reader three or four hundred pixels up the page and
+   *     left the bar they had just pressed off-screen above them.
+   *   · Down, on an order they had been on before, which has a cache entry with
+   *     a scroll position in it. That position is where they were when they
+   *     *left* that order, possibly minutes and a post screen ago. Restoring it
+   *     is exactly right coming back from a post and exactly wrong here.
+   *
+   * The press is the other half because `reordering` alone is also true of the
+   * brand's "fresh feed" — see takeOrderPress. Called unconditionally so the
+   * stamp is always spent, whether or not this render is the one it belongs to.
+   */
+  const pressedTheBar = takeOrderPress();
+  const holdingPlace = reordering && pressedTheBar;
+
+  /**
    * Put this screen on the page, once.
    *
    * There are three callers and two of them race — the timer that gives up
@@ -714,7 +784,14 @@ export function renderFeed({ query, isStale }) {
     shown = true;
     // "none", not false: false is still an arrival and still animates. See
     // mountView.
-    mountView(root, { ...options, transition: sameScreen ? "none" : true });
+    mountView(root, {
+      ...options,
+      // Overriding whatever the caller asked for, including the cache's
+      // remembered position: on a re-order the reader's own position is newer
+      // than both, and it is the only one that is still about them.
+      restoreScroll: holdingPlace ? "keep" : options.restoreScroll,
+      transition: sameScreen ? "none" : true,
+    });
     // After the mount, always. The sentinel has to be in the document for the
     // observer to have anything to say about it.
     setupObserver();

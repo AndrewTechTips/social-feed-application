@@ -47,9 +47,16 @@ const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view")
 
 /**
  * @param {Element | DocumentFragment} node
- * @param {{ restoreScroll?: number, focus?: HTMLElement, transition?: boolean | "none" }} [options]
+ * @param {{ restoreScroll?: number | "keep", focus?: HTMLElement, transition?: boolean | "none" }} [options]
  *   `focus` is where the cursor should land — a form's first field, say.
  *   Defaults to #view, which is what a reading screen wants.
+ *
+ *   `restoreScroll` says where to leave the page. A number puts it back to a
+ *   position it was at before — coming back to a list you had scrolled down.
+ *   Nothing at all means the top, which is where an arrival goes. `"keep"`
+ *   means the reader is already where they want to be and the page must not
+ *   move: the same screen answering differently under a control they are
+ *   still pointing at. See views/feed.js.
  *
  *   `transition` has three answers, because there are three things a swap can
  *   be.
@@ -74,6 +81,11 @@ const viewEl = () => /** @type {HTMLElement} */ (document.getElementById("view")
 export function mountView(node, { restoreScroll, focus, transition = true } = {}) {
   const view = viewEl();
 
+  // Read out here rather than inside the swap: with a view transition the swap
+  // runs a frame or more later, and by then this is the position the swap
+  // itself has put the page at rather than the one the reader had.
+  const stayAt = window.scrollY;
+
   const swap = () => {
     view.replaceChildren(node);
 
@@ -94,7 +106,13 @@ export function mountView(node, { restoreScroll, focus, transition = true } = {}
     // of ahead of it. See syncChrome in main.js.
     dispatchEvent(new CustomEvent("commons:screen"));
 
-    if (typeof restoreScroll === "number") window.scrollTo(0, restoreScroll);
+    // Re-asserting the position rather than leaving the scroll alone, which
+    // looks like it would do the same thing and doesn't: replaceChildren can
+    // leave the document shorter than it was for as long as it takes the new
+    // content to lay out, and the browser clamps the scroll when it does. This
+    // puts it back if that happened and is a no-op if it didn't.
+    if (restoreScroll === "keep") window.scrollTo(0, stayAt);
+    else if (typeof restoreScroll === "number") window.scrollTo(0, restoreScroll);
     else window.scrollTo(0, 0);
 
     // Focus belongs *inside* the swap, not after the call to it. With a view

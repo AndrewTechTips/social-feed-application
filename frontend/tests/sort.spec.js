@@ -336,3 +336,186 @@ test.describe("changing the order is not going anywhere", () => {
     expect(transitions).toBe(0);
   });
 });
+
+test.describe("a re-order leaves the page where it is", () => {
+  // ── the bar is not at the top of the page ─────────────────────────────────
+  //
+  // On a phone the masthead is four hundred-odd pixels of type, so reaching
+  // Newest / Warmest / Discussed means scrolling down to them — and the press
+  // used to throw the reader somewhere else the moment it landed:
+  //
+  //   · up to the top, on an order this visit hadn't shown yet. That is where
+  //     mountView leaves an arrival, and a re-order was being mounted as one,
+  //     so the bar they had just pressed ended up off-screen above them.
+  //   · down, or up, to wherever they were when they last *left* that order,
+  //     on one the feed cache still holds. That position is restored with the
+  //     list, which is exactly right coming back from a post and exactly wrong
+  //     under a control they are still pointing at.
+  //
+  // Both are the same mistake — a re-order treated as a journey — and both are
+  // measured from the press rather than from the test's own scrolling. See
+  // `holdingPlace` in js/views/feed.js.
+  test.use({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
+
+  const scrollY = (page) => page.evaluate(() => Math.round(window.scrollY));
+
+  /**
+   * Watch the press, and watch what the page does from the press onwards.
+   *
+   * Both halves start at `pointerdown` on purpose. What happens before it is
+   * the test getting into position — and the browser's scroll anchoring moving
+   * the page a hundred pixels while the first cards land is the test settling,
+   * not the app misbehaving. The claim is about the press: from the moment the
+   * reader touches the bar, the page holds still.
+   */
+  const watchFromPress = (page) =>
+    page.addInitScript(() => {
+      // Sampled three ways, because one is not enough to catch a jump that is
+      // put back. Frames catch a position the page rests at; the scroll event
+      // catches a move that is undone before the next one is painted; and the
+      // read at the end folds in where the page actually ended up, which is
+      // the one sample a swap that finishes between two frames would otherwise
+      // hide. Miss that and a page that went to the top and stayed there reads
+      // as a page that never moved.
+      const sample = () => {
+        window.__low = Math.min(window.__low, window.scrollY);
+        window.__high = Math.max(window.__high, window.scrollY);
+      };
+      window.__sample = sample;
+      addEventListener("scroll", () => window.__watching && sample(), {
+        passive: true,
+      });
+      addEventListener(
+        "pointerdown",
+        () => {
+          window.__pressedAt = Math.round(window.scrollY);
+          window.__watching = true;
+          window.__low = window.__high = window.scrollY;
+          cancelAnimationFrame(window.__raf);
+          const tick = () => {
+            sample();
+            window.__raf = requestAnimationFrame(tick);
+          };
+          window.__raf = requestAnimationFrame(tick);
+        },
+        true
+      );
+    });
+
+  const pressedAt = (page) => page.evaluate(() => window.__pressedAt);
+  const travelled = (page) =>
+    page.evaluate(() => {
+      cancelAnimationFrame(window.__raf);
+      window.__sample();
+      window.__watching = false;
+      return Math.round(window.__high - window.__low);
+    });
+
+  /**
+   * Scroll until the bar sits `gap` pixels below the sticky header.
+   *
+   * Measured from the header rather than from the top of the viewport because
+   * the two backends seed posts of different heights, which puts the masthead
+   * above the bar at 303px on one and 425px on the other — and because a press
+   * has to land on the bar rather than on the header sitting over it.
+   */
+  const barBelowHeader = (page, gap) =>
+    page.evaluate((below) => {
+      const bar = document.querySelector(".sortbar");
+      const header = document.querySelector(".site-header").getBoundingClientRect();
+      window.scrollTo(
+        0,
+        bar.getBoundingClientRect().top + window.scrollY - header.height - below
+      );
+    }, gap);
+
+  /**
+   * Press an option where it is, without Playwright scrolling first.
+   *
+   * `locator.click()` brings its target into view before pressing it, and on a
+   * page that is deliberately scrolled that moves the page out from under the
+   * test — which is the one thing this whole describe block is measuring. The
+   * mouse goes to the box as it stands instead, which is also what a thumb
+   * does.
+   */
+  async function press(page, label) {
+    const box = await page.locator(OPTION, { hasText: label }).boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+
+  /** Where the reader was when they pressed, and it must not be the top. */
+  async function pressedWhileScrolled(page) {
+    const y = await pressedAt(page);
+    // Otherwise every assertion below would be satisfied by a page that jumped
+    // to the top, which is the bug.
+    expect(y).toBeGreaterThan(100);
+    return y;
+  }
+
+  test("pressing an order does not move the page", async ({ page, api }) => {
+    await watchFromPress(page);
+    await api.seed(14);
+    await page.goto("/");
+    await ordered(page, "Newest", 10);
+
+    await barBelowHeader(page, 40);
+    await expect.poll(() => scrollY(page)).toBeGreaterThan(100);
+
+    await press(page, "Warmest");
+    await ordered(page, "Warmest", 10);
+
+    const y = await pressedWhileScrolled(page);
+    // The mount can land a frame or two after the list does.
+    await expect.poll(() => scrollY(page)).toBe(y);
+  });
+
+  test("and does not flinch to the top on the way", async ({ page, api }) => {
+    await watchFromPress(page);
+    await api.seed(14);
+    await page.goto("/");
+    await ordered(page, "Newest", 10);
+
+    await barBelowHeader(page, 40);
+    await expect.poll(() => scrollY(page)).toBeGreaterThan(100);
+
+    await press(page, "Warmest");
+    await ordered(page, "Warmest", 10);
+    await pressedWhileScrolled(page);
+
+    // Landing in the right place is half the claim. The other half is that the
+    // page never went anywhere else and came back — a scroll to the top and a
+    // restore a fetch later is just as visible as one that stays there, and
+    // sampling only the ends would call it still. Every frame since the press.
+    expect(await travelled(page)).toBeLessThanOrEqual(2);
+  });
+
+  test("an order you have been on before does not bring its old position back", async ({
+    page,
+    api,
+  }) => {
+    await watchFromPress(page);
+    await api.seed(14);
+    await page.goto("/");
+    await ordered(page, "Newest", 10);
+
+    // Leave Newest from near the top. This is the position its cache entry
+    // keeps, and the one that used to come back with the list.
+    await barBelowHeader(page, 180);
+    await press(page, "Warmest");
+    await ordered(page, "Warmest", 10);
+    const left = await pressedAt(page);
+
+    // ...and come back to it from further down the page.
+    await barBelowHeader(page, 40);
+    await expect.poll(() => scrollY(page)).toBeGreaterThan(left + 100);
+    await press(page, "Newest");
+    await ordered(page, "Newest", 10);
+
+    const here = await pressedWhileScrolled(page);
+    await expect.poll(() => scrollY(page)).toBe(here);
+    // Not vacuous: the remembered position is far enough above this one that
+    // restoring it would be plain to see, and would have failed the line
+    // above.
+    expect(here - left).toBeGreaterThan(100);
+  });
+});
