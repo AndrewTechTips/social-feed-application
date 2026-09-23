@@ -20,16 +20,31 @@
  * constant in this file. Get that wrong once and returning visitors are stuck
  * on the old app with no way to ask for the new one.
  *
- * What cache-first would buy is a few milliseconds, and it isn't even that:
- * `fetch()` inside a service worker goes through the HTTP cache like any other
- * request, so a network-first hit against an unchanged file is usually a
- * memory-cache read or a 304, not a download. The app already measures 100 for
- * performance without any of this.
+ * What cache-first would buy is a few milliseconds. A network-first hit
+ * against an unchanged file is a 304 with an empty body, not a download, and
+ * the app already measures 100 for performance without any of this.
  *
  * So: the network decides what is current, and the cache is what answers when
- * there is no network. There is no version to forget, no stale-asset failure
- * mode, and no "a new version is ready" prompt to build — a reload gets the new
- * files, exactly as it does with no service worker at all.
+ * there is no network. There is no version to forget and no stale-asset
+ * failure mode — a reload gets the new files, exactly as it does with no
+ * service worker at all.
+ *
+ * ── the ten minutes that used to be in the middle ──────────────────────────
+ * "The network decides" was not quite true until 2026-09-23. `fetch()` in here
+ * goes through the HTTP cache like any other request, and GitHub Pages serves
+ * everything with `max-age=600` and no way to configure it, so for ten minutes
+ * after a deploy this worker faithfully served the recent past. The fix is one
+ * word — `no-cache` on the request below — and the long version of why is
+ * written there.
+ *
+ * ── and the reload that had to be somebody's idea ──────────────────────────
+ * A reload gets the new files; nothing made anyone reload. A tab left open
+ * across a deploy ran the old app until its reader happened to refresh, which
+ * on an installed PWA can be days. js/update.js is the other half: it reads
+ * version.json — written by the Pages workflow, one line, the commit SHA —
+ * when the page becomes visible, and says so quietly if it has changed. That
+ * lives in the page and not in here on purpose: the sha the *document* was
+ * loaded under is the thing being compared, and the page is what knows it.
  *
  * ── what it does not touch ─────────────────────────────────────────────────
  * Anything that isn't a same-origin GET inside this directory. That is the
@@ -96,6 +111,7 @@ const SHELL = [
   "./js/install.js",
   "./js/live.js",
   "./js/offline.js",
+  "./js/update.js",
   "./js/share.js",
   "./js/browserdata.js",
   "./js/components/vote.js",
@@ -191,6 +207,12 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.startsWith(ROOT)) return;
+  // version.json is the one file whose whole job is to be current. js/update.js
+  // asks for it with `no-store` precisely so that nothing anywhere is allowed
+  // to answer from a copy; passing it through here would put it in a cache and
+  // make the update beacon capable of reporting the past. Declining leaves it
+  // to the browser, which honours the no-store it was asked for.
+  if (url.pathname === ROOT + "version.json") return;
 
   event.respondWith(networkFirst(request));
 });
@@ -199,7 +221,31 @@ self.addEventListener("fetch", (event) => {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
   try {
-    const response = await fetch(request);
+    // `no-cache` — revalidate, don't blindly reuse. This is the difference
+    // between "network-first" and "network-first, eventually".
+    //
+    // GitHub Pages serves every file with `Cache-Control: max-age=600` and
+    // gives no way to change it. A plain fetch() in here goes through the HTTP
+    // cache like any other request, so for ten minutes after a deploy this
+    // worker was serving a ten-minute-old answer and calling it the network's.
+    // Worse than the lateness was the mixing: max-age is per-file and each
+    // file's clock started when that file was last asked for, so a reader
+    // could be handed a new index.html and an old views/feed.js in the same
+    // load, with no content hashes and nothing to notice it.
+    //
+    // `no-cache` sends the conditional request instead. Unchanged files come
+    // back 304 with an empty body — a couple of hundred bytes, all forty of
+    // them in parallel on one HTTP/2 connection now that index.html preloads
+    // the graph — and changed files come back whole, immediately. The ten
+    // minutes are gone, and so is the mixing.
+    //
+    // Constructed rather than passed as an init to fetch(), because the cache
+    // mode belongs to the Request. And the trap: when a Request is built from
+    // another one, a `navigate` mode is downgraded to `same-origin`. That is
+    // harmless here — everything past the guards above is same-origin — but
+    // only as long as the mode is read off the *original* request. The catch
+    // block below does exactly that, and must keep doing it.
+    const response = await fetch(new Request(request, { cache: "no-cache" }));
     // Only what came back whole. Caching a 404 or a 500 here would mean
     // serving it back for the whole of the next outage, which is a worse
     // answer than the one the browser gives on its own.

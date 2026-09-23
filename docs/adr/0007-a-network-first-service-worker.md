@@ -1,6 +1,6 @@
 # 0007 — The service worker is network-first
 
-**Status:** accepted · 2026-09-19
+**Status:** accepted · 2026-09-19 · amended 2026-09-23 (see *The ten minutes nobody had measured*)
 
 ## What was decided
 
@@ -17,6 +17,11 @@ JavaScript.
 
 There is no "a new version is ready" prompt, and no version constant that has
 to be bumped to ship a change.
+
+> **Amended 2026-09-23.** There is a prompt now, and the sentence above is left
+> standing because the reasoning that follows it is still the reasoning — what
+> changed is one measurement, not the decision. See *The ten minutes nobody had
+> measured* and *And the reload that had to be somebody's idea* at the end.
 
 ## Why
 
@@ -86,3 +91,100 @@ If the second happens without the first, the honest middle is
 stale-while-revalidate plus a visible "a new version is ready — reload" prompt.
 That is more machinery than this app needs today, and a prompt is a worse thing
 to have to build correctly than it looks.
+
+## The ten minutes nobody had measured (2026-09-23)
+
+This document said "the network decides what is current". It was not quite
+true, and the gap was in a sentence above that was written as a *reassurance*:
+
+> `fetch()` inside a service worker goes through the HTTP cache like any other
+> request, so a network-first hit against an unchanged file is usually a
+> memory-cache read or a 304 rather than a download.
+
+Both halves are correct and the conclusion drawn from them was wrong. Going
+through the HTTP cache is not free when you do not control the HTTP cache.
+Measured against the published site:
+
+```
+$ curl -sSI https://andrewtechtips.github.io/social-feed-application/js/main.js
+cache-control: max-age=600
+etag: "6ab271b1-48be"
+```
+
+GitHub Pages puts `max-age=600` on every file it serves and offers no way to
+change it — there is no `_headers` file, and the source is a workflow artifact,
+not a configurable host. So for up to ten minutes after a deploy, "ask the
+network" meant "ask a cache that has been told it may answer for ten minutes",
+and this worker served the recent past while reporting it as current.
+
+**The lateness was the smaller half.** `max-age` is per-file, and each file's
+clock starts when that file was last requested, not when it was deployed. A
+returning reader could therefore be handed a new `index.html` and a ten-minute
+old `js/views/feed.js` in the same load. With no build step there are no
+content hashes, so nothing in the system could notice — which is the same
+mixed-version failure the decision above was written to avoid, arriving by a
+door nobody had checked.
+
+**The fix is one word.** The request is now built with `cache: "no-cache"`,
+which revalidates rather than reuses. Unchanged files come back `304` with an
+empty body, changed files come back whole and immediately, and the ten minutes
+are gone. The cost is a conditional request per file per load where there used
+to sometimes be none; they go out in parallel on one connection, and the same
+change that made this affordable — `modulepreload` hints in `index.html` —
+removed considerably more time than this adds.
+
+One trap, recorded because it is invisible and would survive review: building a
+Request from another Request downgrades a `navigate` mode to `same-origin`.
+Everything past this worker's guards is same-origin so the downgrade costs
+nothing, but the navigation fallback must read `mode` off the **original**
+request or it silently stops recognising navigations — and the symptom would be
+a blank page offline, months later, with nothing pointing here.
+
+## And the reload that had to be somebody's idea (2026-09-23)
+
+"A reload gets the new files" was also true and also not enough. Nothing made
+anyone reload. A tab left open across a deploy ran the old app until its reader
+happened to refresh, which on an installed PWA — which reopens to whatever it
+was last showing — can be days.
+
+So the app now has the prompt this document declined to build, and the reason
+the objection no longer holds is that the machinery turned out to be somewhere
+else. The version is `version.json`, one object with the commit sha in it,
+written by `.github/workflows/pages.yml` at deploy time. It is not committed
+(a sha in the repository names the commit *before* the one being deployed), not
+in `SHELL`, and never cached — the fetch handler declines that one path, and
+`js/update.js` asks for it with `no-store`.
+
+**The check lives in the page, not in here**, and that is the decision worth
+recording. The question is not "what is the newest version" but "is the newest
+version the one this document is running", and only the document knows the
+second half. A worker outlives its pages and is shared between them, so putting
+the comparison here would have meant inventing a message protocol to carry a
+fact the page already had. In the page it is about forty lines, it needs no
+worker at all, and it works on the first visit before one has installed.
+
+What it costs: one request when the tab becomes visible, and one when the
+connection returns. No timer — a poll would spend requests on a tab nobody is
+looking at, to deliver a notice nobody can read, and would still be slower in
+the only case that matters.
+
+Three things it must not do, all of which are silence, and all of which are
+therefore tested by making the band appear immediately afterwards
+(`tests/update.spec.js`):
+
+- **Never greet a first visit.** The first read is a baseline, not a
+  comparison. A comparison needs two sides.
+- **Never treat a failure as a change.** A 404, a parse error, an offline
+  reader and a Pages hiccup are all "no answer", and none of them is evidence
+  that the app moved.
+- **Never fire twice for one deploy.** It latches until the page reloads.
+
+## When to change our minds, again
+
+- **If `version.json` ever stops being written by the deploy**, the band simply
+  never appears — it fails to the behaviour that existed before it. That is the
+  right direction to fail in, and it is why the beacon is allowed to be this
+  simple.
+- **If the app grows a build step**, everything above is superseded rather than
+  extended: content hashes make the ten minutes harmless, cache-first becomes
+  correct, and the beacon becomes a build artifact rather than a workflow step.

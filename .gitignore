@@ -225,3 +225,8 @@ __marimo__/
 docs/media/.frames*/
 
 UPGRADE_PLAN.md
+
+# Written by the Pages workflow at deploy time, never committed: a sha in the
+# repository would name the commit before the one being deployed. See
+# js/update.js and .github/workflows/pages.yml.
+frontend/version.json

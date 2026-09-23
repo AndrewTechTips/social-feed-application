@@ -20,6 +20,7 @@ import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
 import { mountDemoStrip } from "./demo/strip.js";
 import { mountOfflineBand } from "./offline.js";
+import { mountUpdateBand, watchForUpdates } from "./update.js";
 import { takeSharedFromUrl } from "./share.js";
 import { get, subscribe, dropFeedCache } from "./store.js";
 import { currentTheme, otherTheme, toggleTheme, syncThemeColor } from "./actions.js";
@@ -425,6 +426,18 @@ startRouter();
 // there is going to be one and this can sit underneath it. It is hidden until
 // the network actually goes, so it costs an empty div the rest of the time.
 mountOfflineBand();
+
+// And after *that*, so it lands below the offline band rather than above it —
+// what has broken, then what is merely available. Both are empty almost all of
+// the time; between them they cost two empty divs.
+//
+// The watcher is started separately from the band it feeds because the two
+// have nothing to do with each other: the band is a place for an answer, and
+// watchForUpdates() is what eventually has one. Taking the baseline at boot
+// also means the first read happens while the reader is still arriving, which
+// is the cheapest moment in the page's life to spend a request on.
+mountUpdateBand();
+watchForUpdates();
 
 // — offline ---------------------------------------------------------------------
 // The published build has no server behind it, so there is nothing about this

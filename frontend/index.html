@@ -123,6 +123,77 @@
        rules; see the note at the top of the file. -->
     <link rel="stylesheet" href="./styles/print.css" media="print" />
 
+    <!-- The import graph, declared up front.
+
+       Without these the browser cannot know js/ exists until it has parsed
+       main.js, and cannot know about the second level until it has parsed the
+       first. Measured against the published site, that costs a round trip per
+       level: main.js alone took 762ms to arrive, and the 27 modules it names
+       did not *start* until 1069ms. Nothing was slow — the browser simply had
+       not been told yet.
+
+       A modulepreload hint is that telling. Every module below starts with the
+       document instead of after it, which is the same flattening a bundler
+       would do, without a bundle: the files a reader opens are still the files
+       the browser runs (ADR 0001).
+
+       Three deliberate absences:
+         · js/main.js — the <script> below already declares it. A hint as well
+           would be a second entry for the same file.
+         · js/types.js — JSDoc `@typedef`s only. Nothing imports it at runtime
+           and preloading it would fetch bytes no execution ever asks for.
+         · js/demo/backend.js — imported dynamically, and only in demo mode
+           (js/config.js). It is 67 KB that a developer on localhost never
+           loads, so it is left to be discovered when it is actually wanted.
+
+       After the stylesheets on purpose. CSS blocks the first paint and these
+       do not; a hint that outranked the stylesheets would be buying module
+       bytes with paint time.
+
+       Hand-written, like SHELL in sw.js, and held to the real graph the same
+       way — tests/offline.spec.js walks the imports from main.js and fails if
+       this list and that walk disagree in either direction. -->
+    <link rel="modulepreload" href="./js/actions.js" />
+    <link rel="modulepreload" href="./js/api.js" />
+    <link rel="modulepreload" href="./js/browserdata.js" />
+    <link rel="modulepreload" href="./js/config.js" />
+    <link rel="modulepreload" href="./js/dom.js" />
+    <link rel="modulepreload" href="./js/draft.js" />
+    <link rel="modulepreload" href="./js/format.js" />
+    <link rel="modulepreload" href="./js/install.js" />
+    <link rel="modulepreload" href="./js/live.js" />
+    <link rel="modulepreload" href="./js/notify.js" />
+    <link rel="modulepreload" href="./js/offline.js" />
+    <link rel="modulepreload" href="./js/reading.js" />
+    <link rel="modulepreload" href="./js/router.js" />
+    <link rel="modulepreload" href="./js/share.js" />
+    <link rel="modulepreload" href="./js/shelf.js" />
+    <link rel="modulepreload" href="./js/store.js" />
+    <link rel="modulepreload" href="./js/toast.js" />
+    <link rel="modulepreload" href="./js/transitions.js" />
+    <link rel="modulepreload" href="./js/update.js" />
+    <link rel="modulepreload" href="./js/view.js" />
+    <link rel="modulepreload" href="./js/components/accountmenu.js" />
+    <link rel="modulepreload" href="./js/components/card.js" />
+    <link rel="modulepreload" href="./js/components/comments.js" />
+    <link rel="modulepreload" href="./js/components/feedkeys.js" />
+    <link rel="modulepreload" href="./js/components/palette.js" />
+    <link rel="modulepreload" href="./js/components/quote.js" />
+    <link rel="modulepreload" href="./js/components/radiogroup.js" />
+    <link rel="modulepreload" href="./js/components/reader.js" />
+    <link rel="modulepreload" href="./js/components/vote.js" />
+    <link rel="modulepreload" href="./js/views/auth.js" />
+    <link rel="modulepreload" href="./js/views/colophon.js" />
+    <link rel="modulepreload" href="./js/views/compose.js" />
+    <link rel="modulepreload" href="./js/views/feed.js" />
+    <link rel="modulepreload" href="./js/views/notfound.js" />
+    <link rel="modulepreload" href="./js/views/notifications.js" />
+    <link rel="modulepreload" href="./js/views/post.js" />
+    <link rel="modulepreload" href="./js/views/profile.js" />
+    <link rel="modulepreload" href="./js/views/settings.js" />
+    <link rel="modulepreload" href="./js/views/shelf.js" />
+    <link rel="modulepreload" href="./js/demo/strip.js" />
+
     <script type="module" src="./js/main.js"></script>
   </head>
   <body>

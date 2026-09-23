@@ -52,6 +52,28 @@ jobs:
           # deploy step anyway.
           enablement: true
 
+      # The update beacon's one moving part.
+      #
+      # js/update.js reads this file when the tab becomes visible and compares
+      # the sha against the one the document booted under; a difference is a
+      # deploy that happened while somebody had the app open, and is what puts
+      # the "a new version is ready" band on their screen. There is no build
+      # step to fingerprint the app's files (ADR 0001), so this one generated
+      # line is what stands in for the whole of that — and it is generated
+      # *here*, at deploy time, rather than committed, because a sha in the
+      # repository would be a sha of the commit before the one being deployed.
+      #
+      # Written into the artifact rather than the checkout: nothing about the
+      # working tree should change because a deploy ran. It is deliberately not
+      # in sw.js's SHELL and is never cached — see the fetch handler there.
+      - name: Stamp the deployed version
+        run: |
+          printf '{\n  "sha": "%s",\n  "built": "%s"\n}\n' \
+            "$GITHUB_SHA" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > frontend/version.json
+          cat frontend/version.json
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: frontend

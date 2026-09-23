@@ -57,6 +57,100 @@ test("the shell list still matches what's on disk", () => {
   expect(stale, `these are in SHELL but not on disk:\n${stale.join("\n")}`).toEqual([]);
 });
 
+/** The modulepreload hints out of index.html, in the order they appear. */
+function preloadList() {
+  const html = fs.readFileSync(path.join(appDir, "index.html"), "utf8");
+  return [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map(
+    (m) => m[1]
+  );
+}
+
+/**
+ * The static import graph, walked from one entry module.
+ *
+ * Static only. A dynamic `import()` is a decision the app makes at runtime —
+ * js/demo/backend.js is loaded in demo mode and not otherwise — and a hint for
+ * a module that may never be asked for is bytes spent on a guess.
+ *
+ * Comments are stripped first, and that is not tidiness: every file in js/
+ * carries JSDoc, and `@param {import("./types.js").Post}` looks exactly like a
+ * dynamic import to a regular expression. types.js has no runtime importer at
+ * all, so a walk that believed its own comments would demand a hint for a file
+ * the browser never loads.
+ */
+function staticGraph(entry) {
+  const seen = new Map([[entry, 0]]);
+  const queue = [entry];
+  while (queue.length) {
+    const current = queue.shift();
+    const src = fs
+      .readFileSync(path.join(appDir, current), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    // `from "…"` covers both import and re-export; the `from`-less form is a
+    // side-effect import. [\s\S] rather than . because the named-import block
+    // in js/views/settings.js runs across sixty lines.
+    const imports = src.matchAll(
+      /(?:^|[\n;])\s*(?:import|export)\s+(?:[\s\S]*?\sfrom\s+)?["']([^"']+)["']/g
+    );
+    for (const [, spec] of imports) {
+      if (!spec.startsWith(".")) continue;
+      const target = `./${path
+        .normalize(path.join(path.dirname(current), spec))
+        .replace(/^\.\//, "")}`;
+      if (!fs.existsSync(path.join(appDir, target))) continue;
+      if (!seen.has(target)) {
+        seen.set(target, seen.get(current) + 1);
+        queue.push(target);
+      }
+    }
+  }
+  return seen;
+}
+
+// ── the hints ──────────────────────────────────────────────────────────────
+// Same arrangement as SHELL above, and for the same reason: a hand-written
+// list with no build step behind it is only as good as the thing that checks
+// it. A module added to the app and not to index.html silently costs the round
+// trip these exist to remove, and nothing on screen would ever say so.
+test("the modulepreload hints still match the import graph", () => {
+  const hints = preloadList();
+  const graph = staticGraph("./js/main.js");
+
+  const expected = [...graph.keys()].filter((f) => f !== "./js/main.js");
+  const missing = expected.filter((f) => !hints.includes(f));
+  expect(
+    missing.sort(),
+    `these are imported but not preloaded — add to index.html:\n${missing.join("\n")}`
+  ).toEqual([]);
+
+  // The other direction. A hint for a module nothing imports any more is a
+  // download with no importer, and Chrome says so in the console — which is a
+  // worse place to find out than here.
+  const orphaned = hints.filter((f) => !graph.has(f));
+  expect(
+    orphaned.sort(),
+    `these are preloaded but nothing imports them:\n${orphaned.join("\n")}`
+  ).toEqual([]);
+
+  // Belt and braces on the three deliberate absences, because each of them is
+  // a thing somebody would "fix" by adding it.
+  expect(hints, "main.js is declared by the <script> tag, not a hint").not.toContain(
+    "./js/main.js"
+  );
+  expect(hints, "types.js is JSDoc only — nothing imports it").not.toContain(
+    "./js/types.js"
+  );
+  expect(
+    hints,
+    "demo/backend.js is a dynamic import, loaded only in demo mode"
+  ).not.toContain("./js/demo/backend.js");
+
+  // No duplicates: two hints for one file is two entries in the priority queue
+  // for one download.
+  expect(hints.length, "a href appears twice in index.html").toBe(new Set(hints).size);
+});
+
 // ── it takes over ──────────────────────────────────────────────────────────
 test("a worker registers and takes control of the page", async ({ page, api }) => {
   await api.seed(1);

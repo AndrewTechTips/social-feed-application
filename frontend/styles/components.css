@@ -825,11 +825,13 @@
    warmth and on where you are, none of which this is. It is a state, and it
    should read like one: it is either there or it isn't.
    -------------------------------------------------------------------------- */
-.netband {
+.netband,
+.updateband {
   border-bottom: 1px solid var(--border);
   background: var(--glass-bg-fallback);
 }
-.netband__text {
+.netband__text,
+.updateband__text {
   max-width: var(--page-max);
   margin-inline: auto;
   padding: var(--s-2) max(var(--s-4), env(safe-area-inset-right)) var(--s-2)
@@ -839,9 +841,34 @@
   line-height: 1.5;
 }
 /* Weight, not colour — the same way the demo notice names itself. */
-.netband__label {
+.netband__label,
+.updateband__label {
   color: var(--text);
   font-weight: 600;
+}
+
+/* — the update band ----------------------------------------------------------
+   "A new version is ready — reload when you like." Same furniture as the
+   network band above, deliberately: it is the same kind of sentence, said in
+   the same place, and giving it its own colour would make a published deploy
+   look like something that had gone wrong.
+
+   The one addition is a button, because this is the one of the two bands the
+   reader can act on. `btn--quiet` and inline with the text rather than ranged
+   right: it is an offer, not an instruction, and a primary button here would
+   be the app interrupting a page it has no reason to interrupt.
+   -------------------------------------------------------------------------- */
+.updateband__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+/* Baseline-aligned with the sentence it ends, and small enough not to set the
+   band's height on its own. */
+.updateband__action {
+  padding-block: 0.15rem;
+  font-size: var(--fs-meta);
 }
 
 /* The composer's half of it: what has been kept, said at the moment it matters.
