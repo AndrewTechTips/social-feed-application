@@ -31,7 +31,7 @@
 // is only the browser's decision to offer it.
 
 import { chromium } from "../frontend/node_modules/playwright/index.mjs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "./serve.mjs";
@@ -52,6 +52,21 @@ const FIRE_INSTALL = `(() => {
   ev.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
   window.dispatchEvent(ev);
 })()`;
+
+// The deploy stamps version.json with the commit sha; js/update.js reads it and
+// compares against the sha the document booted under. Scene 5 needs both sides
+// of that comparison, so the file has to exist *before* the first page load —
+// a page that boots without one has no baseline and will never claim a change,
+// which is the first-visit rule working exactly as it should and would quietly
+// film nothing.
+//
+// It is gitignored and removed again in the finally below: a checkout has no
+// version.json, and leaving one behind would mean the next person's capture
+// started from a state a real checkout never has.
+const VERSION_FILE = path.join(APP_DIR, "version.json");
+const stamp = (sha) =>
+  writeFile(VERSION_FILE, JSON.stringify({ sha, built: "2026-09-23T12:00:00Z" }));
+await stamp("a1b2c3d");
 
 const server = process.env.APP_URL ? null : await serve(APP_DIR);
 const APP = process.env.APP_URL || (server && server.origin);
@@ -135,9 +150,37 @@ for (let i = 0; i < 2; i++) {
 }
 await frame(8); // and it loops back to the feed from here
 
+// — 5. a deploy happened while you were gone -----------------------------------
+// The sequence this is really about, and the reason it comes last: you were
+// offline, something shipped, and you came back. js/update.js listens for the
+// connection returning as well as for the tab becoming visible, precisely
+// because a reader who was offline across a deploy is the one whose check
+// failed and returned nothing. So this needs no synthetic event — putting the
+// network back is the event.
+await page.goto(`${APP}/?demo=1#/`);
+await page.waitForSelector(CARD);
+// Back to the top first. The feed remembers where it was scrolled to (view.js),
+// and scene 4 left it partway down a post — so without this the band appears
+// correctly, above the fold, and off the top of the frame. Same trap scene 4
+// notes for the offline band: both are in normal flow, so a scrolled page
+// takes the claim off screen just as the shot is making it.
+await page.evaluate(() => scrollTo(0, 0));
+await page.waitForTimeout(400);
+await frame(4);
+
+await stamp("e4f5a6b"); // somebody merged to main
 await ctx.setOffline(false);
+await page.waitForSelector(".updateband:not([hidden])", { timeout: 15000 });
+await beat(900);
+// Held long enough to read. It wears the offline band's furniture on purpose —
+// a published deploy is not news about your world, it is something you can act
+// on whenever you like — so the two bands in this one GIF should look like
+// what they are: the same voice, saying two different kinds of thing.
+await frame(12);
+
 console.log(`   ${n} frames in ${path.relative(path.join(HERE, ".."), FRAMES)}`);
 
 await ctx.close();
 await browser.close();
 if (server) await server.close();
+await rm(VERSION_FILE, { force: true });

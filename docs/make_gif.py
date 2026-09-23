@@ -68,7 +68,20 @@ def main() -> int:
         duration=MS_PER_FRAME,
         loop=0,
         optimize=True,
-        disposal=2,
+        # 1 = leave the previous frame in place, not 2 = clear it first.
+        #
+        # Clearing is what you need when frames carry transparency and would
+        # otherwise ghost through each other. Nothing here does: every frame is
+        # an opaque, full-canvas screenshot. What disposal=2 did instead was
+        # defeat `optimize=True` — a frame that must be drawn onto a cleared
+        # canvas cannot be stored as a difference from the one before it, so
+        # every frame was written in full.
+        #
+        # Measured on the 125-frame tour, decoding both and comparing each
+        # frame against its source PNG: identical output, worst per-pixel
+        # difference 0, 5.7 MB against 3.3 MB. The README loads a GIF a third
+        # smaller and nobody can tell which one they are looking at.
+        disposal=1,
     )
     size_mb = out.stat().st_size / 1_000_000
     print(f"wrote {out.relative_to(HERE.parent)}  "

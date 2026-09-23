@@ -36,6 +36,26 @@ const SETTLE = `
   }
   .aurora-bloom { animation: none !important; }
   * { caret-color: transparent !important; }
+
+  /* Except the scroll progress line, which is not that kind of animation.
+     .progress is driven by animation-timeline: scroll(root block) — its
+     "duration" is the document, not a clock — so collapsing it to 0s does not
+     freeze it, it snaps it to its end state. Measured, at the top of the feed
+     and at the bottom: without this exception scaleX reads 1 at both, against
+     a true 0 and 0.846.
+
+     The committed stills never showed it, because they were taken before the
+     line existed. This is a trap laid for whoever regenerated them next — a
+     progress bar reading 100% on a page nobody had scrolled, in every still,
+     and a full amber bar across the whole length of the tour.
+
+     chrome.css already makes exactly this exception, for exactly this reason,
+     under prefers-reduced-motion. This is the same exception for the same
+     cause: nothing here moves unless the page is scrolled, so there is no
+     motion to settle. */
+  @supports (animation-timeline: scroll()) {
+    .progress { animation-duration: auto !important; }
+  }
 `;
 
 async function page(browser, viewport, { theme = "dark" } = {}) {
@@ -126,6 +146,43 @@ console.log("stills:");
   await shot(p, "feed-mobile");
   await p.context().close();
 }
+{
+  // The settings screen, which is three parts signed in and has no still of
+  // its own until now. Framed on *This browser* rather than on the top of the
+  // page: the account half is a name, an email and two dangerous buttons, and
+  // the half worth showing is the one that is unusual — the theme as three
+  // choices, the reading controls with a line of type set the way a post will
+  // be, and the list of everything Commons keeps on your machine.
+  const p = await page(browser, READING);
+  await signIn(p);
+  await p.goto(`${APP}/#/settings`);
+  await p.waitForSelector(".settings__group");
+  // Signing in raises a "Signed in." toast, and it outlives the navigation —
+  // the first version of this shot had it sitting across the theme control.
+  // Wait it out rather than hiding it: a toast hidden by a capture-only style
+  // is a toast that could be covering something else next time.
+  await p.locator(".toast").first().waitFor({ state: "detached", timeout: 15000 })
+    .catch(() => {});
+  await p.addStyleTag({ content: SETTLE });
+  await p.evaluate(() => document.fonts.ready);
+  // Put *This browser* just under the header rather than merely on screen.
+  // scrollIntoViewIfNeeded stops as soon as the element is visible, which left
+  // the frame led by the red Delete-your-account button from the part above —
+  // a true picture of the screen and a poor picture of what is interesting
+  // about it.
+  await p.evaluate(() => {
+    const head = [...document.querySelectorAll(".settings__group-head")].find((h) =>
+      h.textContent.includes("This browser")
+    );
+    if (!head) throw new Error("no 'This browser' heading — did the parts rename?");
+    const header = document.querySelector(".site-header");
+    const offset = (header ? header.getBoundingClientRect().height : 0) + 24;
+    scrollTo({ top: head.getBoundingClientRect().top + scrollY - offset });
+  });
+  await p.waitForTimeout(500);
+  await shot(p, "settings-dark");
+  await p.context().close();
+}
 
 // — GIF frames ---------------------------------------------------------------
 // Smaller viewport and no deviceScaleFactor: this becomes an ~800px GIF and
@@ -167,13 +224,16 @@ await p.addStyleTag({ content: `* { caret-color: transparent !important; }` });
 await p.waitForTimeout(500);
 await frame(6); // hold on the feed
 
-// scroll down the feed
-for (let i = 0; i < 7; i++) {
-  await p.mouse.wheel(0, 180);
-  await p.waitForTimeout(70);
+// Scroll down the feed. More steps and smaller ones than this used to take,
+// because the amber line under the header is now filming truthfully (see
+// SETTLE) and it is worth letting it travel far enough to read as a measure of
+// the page rather than as a flicker.
+for (let i = 0; i < 14; i++) {
+  await p.mouse.wheel(0, 130);
+  await p.waitForTimeout(60);
   await frame();
 }
-await frame(3);
+await frame(4);
 
 // open a post
 await p.evaluate(() => window.scrollTo(0, 0));
@@ -218,6 +278,22 @@ await p.getByRole("button", { name: "Post" }).click();
 await p.waitForURL(/#\/posts\/\d+$/);
 await beat(1100);
 await frame(10); // hold on the result
+
+// and what the account menu opens onto
+await p.getByRole("button", { name: /^Your account/ }).click();
+await p.waitForSelector(".accmenu__panel");
+await beat(600, 70);
+await p.getByRole("menuitem", { name: "Settings" }).click();
+await p.waitForURL(/#\/settings$/);
+await p.waitForSelector(".settings__group");
+await beat(900);
+// down through the three parts, slowly enough to read what they are
+for (let i = 0; i < 12; i++) {
+  await p.mouse.wheel(0, 140);
+  await p.waitForTimeout(60);
+  await frame();
+}
+await frame(8); // hold on the data panel
 
 console.log(`   ${n} frames`);
 await ctx.close();

@@ -41,7 +41,7 @@ feed. Reading is public; writing needs a token.
 ## A look at it
 
 <p align="center">
-  <img alt="Reading a post, writing a post, upvoting" src="docs/media/tour.gif" width="720" />
+  <img alt="Scrolling the feed, reading a post, signing in, upvoting, writing one, and the settings screen" src="docs/media/tour.gif" width="720" />
 </p>
 
 <table>
@@ -53,17 +53,26 @@ feed. Reading is public; writing needs a token.
 <td><img alt="Light theme" src="docs/media/feed-light.png" /><br /><sub>Light theme — a cool off-white, never cream.</sub></td>
 <td align="center"><img alt="On a phone" src="docs/media/feed-mobile.png" width="260" /><br /><sub>390px. The header collapses to two rows.</sub></td>
 </tr>
+<tr>
+<td colspan="2"><img alt="The settings screen, showing the theme and reading controls" src="docs/media/settings-dark.png" /><br /><sub>Settings, part two of three. The theme as <em>three</em> choices rather than a toggle's two — <em>System</em> keeps following your device, which the header toggle alone can never get back to — and the reading controls with a line of type set the way a post will be, so the choice is something you can see rather than something you go and check. The amber line under the header is the scroll progress indicator, at the position the page is actually scrolled to.</sub></td>
+</tr>
 </table>
 
 <p align="center">
-  <img alt="The app offering to install, then the network going, then a post still reading" src="docs/media/pwa.gif" width="720" />
+  <img alt="The app offering to install, the network going, a post still reading, and a new version announcing itself when the connection returns" src="docs/media/pwa.gif" width="720" />
 </p>
 
 <sub>And the other half of it: the install offer in the masthead and in the
 command palette, the network switched off, and the reading carrying on —
 files from the service worker's cache, answers from a module that was itself
-served out of it. The network really is off in that recording. What isn't
-shown is the app in its own frameless window, because a screenshot is of a
+served out of it. The network really is off in that recording. It ends on the
+sequence the update beacon exists for: a deploy lands while you are offline,
+and the moment the connection returns the app says so, because
+<code>js/update.js</code> watches for the connection coming back as well as for
+the tab becoming visible — a reader who was offline across a deploy is exactly
+the one whose check failed and returned nothing. Nothing there is staged but the
+deploy itself; the band is the app's own, raised by its own comparison. What
+isn't shown is the app in its own frameless window, because a screenshot is of a
 page and a tab and an installed window make identical pixels; the difference
 is the browser chrome around it, which belongs to the operating system.</sub>
 
