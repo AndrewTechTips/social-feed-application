@@ -62,6 +62,7 @@ import { notifyPrefs, setNotifyPref } from "../notify.js";
 import { motionReduced, setMotionReduced } from "../transitions.js";
 import { isInstalled, installBlock, installButton, installHowTo } from "../install.js";
 import { isOffline } from "../offline.js";
+import { checkNow } from "../update.js";
 import { radioGroup, toggleSwitch } from "../components/radiogroup.js";
 
 // — keeping the reader's place -----------------------------------------------
@@ -1016,15 +1017,30 @@ function offlineSection() {
     const was = check.textContent;
     check.textContent = "Checking…";
     try {
+      // Two questions, and they are not the same one.
+      //
+      // `update()` asks for sw.js and installs a new worker if those bytes
+      // differ — which they only do when the worker itself changed, and a
+      // deploy that changes a view changes no part of it. On its own it would
+      // report "this is the current version" the day after a deploy and be
+      // wrong, which is worse than not offering to check at all.
+      //
+      // checkNow() asks version.json, which the deploy stamps with the commit
+      // sha every time. That is the question the button is really asking, so
+      // it is the one that decides what to say.
       const reg = await navigator.serviceWorker.getRegistration();
-      // `update()` asks the network for sw.js and installs a new one if the
-      // bytes differ. It resolves either way — there is no "nothing changed"
-      // signal — so the honest report is that we looked, not what we found.
-      if (reg) await reg.update();
+      const [verdict] = await Promise.all([
+        checkNow(),
+        reg ? reg.update().catch(() => {}) : Promise.resolve(),
+      ]);
       toast(
-        reg && reg.installing
-          ? "A new version is downloading. It takes over next time you open Commons."
-          : "Checked — this is the current version."
+        verdict === "superseded"
+          ? "A new version is ready — reload to move to it."
+          : verdict === "current"
+            ? "Checked — this is the current version."
+            : // No answer is not good news. Rounding it to "current" would be
+              // the one thing this button must never do.
+              "Couldn't reach the server to check. Try again when you're online?"
       );
     } catch (e) {
       toast("Couldn't check just now. Try again when you're online?");

@@ -98,6 +98,40 @@ async function check() {
 }
 
 /**
+ * Ask right now, and say what was found.
+ *
+ * The settings screen has a *Check for a new version* button, and before this
+ * existed the only thing it could do was `registration.update()` — which asks
+ * for sw.js and notices when *those* bytes differ. sw.js changes when the
+ * worker changes, which is rarely; a deploy that changes a view changes no
+ * part of it. So the button could say "this is the current version" the day
+ * after a deploy and be wrong, which is worse than not offering to check.
+ *
+ * This is the same comparison the beacon makes on visibility, exported so the
+ * button can make it on demand. It latches and paints exactly as that path
+ * does, so pressing the button when there *is* a new version also raises the
+ * band — one mechanism, asked two ways.
+ *
+ * @returns {Promise<"current" | "superseded" | "unknown">}
+ *   `unknown` means no answer, not good news: a checkout with no version.json,
+ *   an offline reader, a Pages hiccup. The caller must not round it to
+ *   "current" — saying nothing was learned is the honest report.
+ */
+export async function checkNow() {
+  if (superseded) return "superseded";
+  const sha = await read();
+  if (!sha) return "unknown";
+  if (baseline === null) {
+    baseline = sha;
+    return "current";
+  }
+  if (sha === baseline) return "current";
+  superseded = true;
+  board.notify();
+  return "superseded";
+}
+
+/**
  * The band under the header.
  *
  * Deliberately the same furniture as the offline notice in js/offline.js —

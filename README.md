@@ -32,7 +32,7 @@ feed. Reading is public; writing needs a token.
 | --- | --- |
 | **Backend** | FastAPI · SQLAlchemy 2.0 · PostgreSQL 17 · Alembic · JWT + bcrypt · slowapi |
 | **Frontend** | Plain HTML, CSS and ES modules. No framework, no bundler, no build step — type-checked anyway, with JSDoc and `tsc --noEmit`. |
-| **Tested** | 231 pytest tests (97% coverage) · 338 Playwright end-to-end tests, run against two API implementations · axe on every screen |
+| **Tested** | 383 pytest tests (98% coverage) · 1,230 Playwright end-to-end tests, run against two API implementations · axe on every screen |
 | **Checked** | `black` · `mypy --strict` · `pip-audit` · `alembic check` · Lighthouse CI |
 | **Shipped** | Docker · GitHub Actions → Docker Hub · GitHub Pages |
 
@@ -211,7 +211,7 @@ One page, hash routes.
 | `#/colophon` | How this was made, inside the thing it describes: the stack in prose, the repository's own measurements, four decisions linked to their records, what's honest about the demo, and a button that opens the palette rather than printing a list of shortcuts that could go wrong. Offered from the masthead and from ⌘K. |
 | `#/shelf` | What you've put aside, newest save first. The feed's column and cards with your saves in it. Saved posts are ids in this browser — the screen asks the API for each one, so a post that has been deleted drops off the shelf rather than sitting there pointing at nothing. |
 | `#/notifications` | What has been said to you: replies to your comments and comments on your posts, newest first, each line carrying who, the first words of what they said, and which post. The whole line is the link. A dot sits on the avatar in the header when something is waiting, and the count itself is in the account menu and in that button's accessible name — the signal stays where it can be seen, the number goes where there is room to say it in words. Opening the screen clears it, all of it, not just what you scrolled past. Votes make no notification: a vote is a number moving, and turning that into a notification is the mechanic this app's design refuses. |
-| `#/settings` | Three parts, or two signed out — the account half is the only one that needs an account, so a signed-out reader gets *This browser* and *About* rather than the sign-in form, and the parts renumber. **Your account** — change the name everybody sees, sign out on every device, or delete the account. Renaming keeps your posts, comments and votes, because they were joined to your account rather than to your name. Your email is shown and cannot be changed here — moving an account to a new address means sending a confirmation to it, and this app has no way to send mail, so it says so rather than offering a box that half-works. *Download your data* gives you a JSON file of your account, your posts including the drafts, and every comment wherever you left it — one request to `/users/me/export`, unpaged, because an export arrives whole or it is not one. Deleting asks you to type your own username and takes everything with it. **This browser** — the theme, as three choices rather than a toggle's two: *System* follows your device and keeps following it, including when your device changes its mind while Commons is open, and it is the state the header toggle alone could never get back to. Then the two reading settings the panel on a post offers — text size and line width, one value each rather than a default and an override — with a line of type set the way a post will be, so the choice is something you can see rather than something you go and check. Then what you are told about — replies, comments on your posts, and whether the count reaches the app icon — and a *Reduce motion in Commons* switch that turns the motion down here whatever your device says. Then every one of the keys Commons keeps on your machine, in plain English, with its size, what it buys, where it goes (nowhere), the key name so you can check it against your browser's own inspector, and a control that removes it; plus one that removes the lot. Emptying the shelf here empties the account's too, because otherwise the next sync would put it back. **About** — whether Commons is installed, whether it is being served from this machine's own cache, a *Check for a new version* that asks the service worker, and the way through to the colophon and the shortcuts; no version number, because there is no build step to number. Reached from the account menu in the header, from your own profile, and from ⌘K. |
+| `#/settings` | Three parts, or two signed out — the account half is the only one that needs an account, so a signed-out reader gets *This browser* and *About* rather than the sign-in form, and the parts renumber. **Your account** — change the name everybody sees, sign out on every device, or delete the account. Renaming keeps your posts, comments and votes, because they were joined to your account rather than to your name. Your email is shown and cannot be changed here — moving an account to a new address means sending a confirmation to it, and this app has no way to send mail, so it says so rather than offering a box that half-works. *Download your data* gives you a JSON file of your account, your posts including the drafts, and every comment wherever you left it — one request to `/users/me/export`, unpaged, because an export arrives whole or it is not one. Deleting asks you to type your own username and takes everything with it. **This browser** — the theme, as three choices rather than a toggle's two: *System* follows your device and keeps following it, including when your device changes its mind while Commons is open, and it is the state the header toggle alone could never get back to. Then the two reading settings the panel on a post offers — text size and line width, one value each rather than a default and an override — with a line of type set the way a post will be, so the choice is something you can see rather than something you go and check. Then what you are told about — replies, comments on your posts, and whether the count reaches the app icon — and a *Reduce motion in Commons* switch that turns the motion down here whatever your device says. Then every one of the keys Commons keeps on your machine, in plain English, with its size, what it buys, where it goes (nowhere), the key name so you can check it against your browser's own inspector, and a control that removes it; plus one that removes the lot. Emptying the shelf here empties the account's too, because otherwise the next sync would put it back. **About** — whether Commons is installed, whether it is being served from this machine's own cache, a *Check for a new version* that asks the deployed build what it is rather than asking the worker whether its own bytes moved — the second question answers "you are current" the day after a deploy, because a deploy that changes a screen changes no part of the worker — and the way through to the colophon and the shortcuts; no version number, because there is no build step to number. Reached from the account menu in the header, from your own profile, and from ⌘K. |
 | `#/compose`, `#/posts/:id/edit` | Title, body, publish toggle, and a count that reads the post back in the terms the card will use — *312 words, about 2 min*, from the same function the card calls. The character count appears only within four hundred characters of the limit. A new post is kept as you type, so a mistyped address doesn't take it with it: come back and the form is as you left it, with a way to start fresh. `POST` to create; `PATCH` with only the changed fields to edit. |
 
 ### The API
@@ -310,6 +310,7 @@ cd frontend && npm install && npx playwright install chromium
 | `shelf.spec.js` | Saving and unsaving, the header link — signed out, where the shelf has no other door — appearing with the first save and going with the last, surviving a reload without an account, newest save first, a deleted post dropping off, one missing id not taking the page with it, and the signed-in header still fitting at 320px. Then the account's half: signing in merging rather than replacing, a save surviving the local mirror being thrown away, signing out taking an account's shelf off a shared machine and leaving one that was never an account's, and a refused save putting the control back. |
 | `visual.spec.js` | Screenshots of the feed in both themes and on a phone, a post, a post in focus mode at the largest text, a post at the narrow measure, the account menu open in both themes, and the sign-in form. The only specs that would notice a stylesheet that stopped loading or a token that resolved to nothing. Run with `npm run test:visual`; CI runs them with `--ignore-snapshots`, because macOS and Linux do not rasterise type the same way and a shared baseline would be a permanently failing test rather than a strict one. |
 | `offline.spec.js` | The worker registering at the app's own scope, the API never reaching its cache, the shell list still matching what's on disk, and — in demo mode — the whole app opening with the network switched off. |
+| `update.spec.js` | The update beacon, which is mostly a set of things that must stay **quiet**: a first visit is never told it is out of date, an unchanged sha is not a change, and a `version.json` that stops answering is not evidence of one. Each silence test ends by making the band appear, so silence cannot pass by doing nothing. Plus the band's button reloading onto the new version, the latch that keeps it to one band per deploy, the worker never caching `version.json`, and the settings button reporting what was actually found rather than rounding "no answer" up to "you are current". |
 | `install.spec.js` | The four states of the install control: the event caught and cancelled so Chrome doesn't show its own infobar, the offer appearing whether the event arrives before or after the feed draws, a double press prompting exactly once, the control going whatever the reader chose, and **nothing at all** rendered once the app is installed or on a browser that can't. Plus iOS getting a sentence rather than a dead button, at a 44px target, and axe on a masthead carrying the offer. The event itself is dispatched by the test — Chrome suppresses it under automation, and the file says so at the top. |
 | `standalone.spec.js` | What changes when it is an app rather than a tab: the unread count reaching the icon and clearing at boot, sign-out and after a look; the title bar taking the reader's theme rather than the operating system's; the share sheet standing in for the clipboard where there is one, and a cancelled sheet saying nothing; Back still working where there is no address bar. The standalone stylesheet is checked inside a real frameless window opened with Chrome's `--app=` flag, on a machine that has a display. |
 | `share.spec.js` | The share target, which on a host with no server is a `method: "GET"` navigation and nothing else: the composer opening with what was shared in it whichever of `title`, `text` and `url` the sending app chose to fill, a link already inside the text not being pasted twice, the parameters coming back out of the address so a reload cannot deliver the same share again — and everything else in the query surviving that, `?demo=1` included. Plus the two it must never get wrong: a half-written post is added to rather than replaced, and a share that arrives while signed out is still there after signing in. |
@@ -499,6 +500,45 @@ from `localStorage`, the API from a module that was itself served from the
 cache. Network-first rather than cache-first because there's no build step here
 and therefore no content-hashed filenames, so cache-first would put a version
 constant between readers and every future change.
+
+**And then the two things that were true of it but not said out loud.** The
+first: "network-first" wasn't, quite. `fetch()` inside a worker goes through
+the HTTP cache like anything else, and GitHub Pages stamps every file it serves
+with `Cache-Control: max-age=600` and offers no way to change it — so for ten
+minutes after a deploy the worker was serving the recent past and reporting it
+as current. The lateness was the smaller half: `max-age` is per-file with
+per-file clocks, so a reader could be handed a new `index.html` and a
+ten-minute-old `views/feed.js` in one load, with no content hashes and nothing
+in the system able to notice. Requests now revalidate — unchanged files come
+back `304` with an empty body, changed files come back whole — and the window
+is gone.
+
+The second: a reload got the new files, and nothing made anyone reload. A tab
+left open across a deploy ran the old app until its reader happened to refresh,
+which on an installed app that reopens to whatever it was last showing can be
+days. The deploy now stamps a `version.json` with the commit sha, and
+[`js/update.js`](frontend/js/update.js) compares it against the sha the document
+booted under whenever the tab becomes visible — so the app is current by the
+time you are looking at it. A quiet band says so, wearing the offline notice's
+furniture, because a published deploy is not news about your world: it is
+something you can act on whenever you like. It is deliberately in the page and
+not in the worker — the question is not "what is the newest version" but "is
+the newest version the one *this document* is running", and only the document
+knows the second half.
+
+Both are written up as amendments to
+[ADR 0007](docs/adr/0007-a-network-first-service-worker.md), the second of which
+overturns that record's own decision not to build an update prompt.
+
+**The same pass flattened the load.** Forty-two hand-written ES modules with no
+bundler means the browser cannot discover the graph until it has parsed its way
+down to it: `main.js` alone took 762ms to arrive on the published site, and the
+twenty-seven modules it names did not *start* until 1069ms. Nothing was slow —
+the browser had not been told yet. `index.html` now declares the whole graph up
+front with `modulepreload`, which is the flattening a bundler would do without
+becoming one, and moves 40 of 41 modules to starting before `main.js` finishes.
+The list is hand-written like the worker's, and held to the real import graph by
+a test that walks it from `main.js` in both directions.
 
 All of that was true for a while before anything in the app mentioned it: the
 only way in was Chrome's address-bar icon. There is an install offer in the
@@ -714,7 +754,33 @@ decided is in
 [ADR 0012](docs/adr/0012-notification-preferences-are-a-view-filter.md) and
 [ADR 0013](docs/adr/0013-an-export-is-one-request-and-arrives-whole.md).
 
+After those, one more pass that was not a plan so much as a pair of
+measurements: the service worker's "network-first" turned out to have a
+ten-minute HTTP cache inside it, and the module graph turned out to be costing
+a round trip per level for want of a `modulepreload` list. Both are fixed and
+both are written up in the 2026-09-23 amendments to
+[ADR 0007](docs/adr/0007-a-network-first-service-worker.md) — including the part
+where that record's own decision *not* to build an update prompt was overturned,
+which felt more honest than quietly shipping one.
+
 There is no open plan. What comes next needs a decision rather than a lookup.
+
+## 📬 Let's connect
+
+<div align="center">
+
+**Andrei Condrea**
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Andrei_Condrea-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/andrei-condrea-b32148346)
+[![Email](https://img.shields.io/badge/Email-condrea.andrey777%40gmail.com-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:condrea.andrey777@gmail.com)
+
+<br />
+
+<i>Built solo, end to end — backend, frontend, design, infra, and everything in between.</i>
+
+</div>
+
+---
 
 ## License
 

@@ -197,3 +197,61 @@ test("version.json is never cached by the service worker", async ({ page, api })
   const shell = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
   expect(shell).not.toContain('"./version.json"');
 });
+
+/**
+ * Get to settings with a worker actually in charge.
+ *
+ * The *Check for a new version* button is only offered when a worker controls
+ * the page, and a worker claims the page on the load after it installs — so a
+ * first visit legitimately has none. settingsfocus.spec.js skips itself in
+ * that case, which means it can quietly test nothing; this waits for the
+ * worker and reloads instead, so the button is really there and the assertion
+ * really runs.
+ */
+async function settingsWithWorker(page, api) {
+  await api.seed(1);
+  await page.goto("/");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => !!navigator.serviceWorker.controller))
+    .toBe(true);
+  await page.goto("/#/settings");
+  const check = page.getByRole("button", { name: "Check for a new version" });
+  await expect(check).toBeVisible();
+  return check;
+}
+
+// ── the button in settings asks the same question ──────────────────────────
+// It used to ask a different one — registration.update(), which only notices
+// when sw.js itself changed — and would therefore answer "this is the current
+// version" the day after a deploy. These two tests are the ones that would
+// have caught that, and they are why the button now routes through checkNow().
+
+test("Check for a new version finds one when there is one", async ({ page, api }) => {
+  stamp("aaaaaaa");
+  const check = await settingsWithWorker(page, api);
+
+  // A deploy that changes app files and *not* sw.js — which is the ordinary
+  // kind, and exactly the kind the old implementation could not see.
+  stamp("bbbbbbb");
+  await check.click();
+  await expect(page.locator(".toast")).toContainText("A new version is ready");
+  // And it raises the band as well: one mechanism, asked two ways.
+  await expect(page.locator(BAND)).toBeVisible();
+});
+
+test("Check for a new version does not call silence good news", async ({
+  page,
+  api,
+}) => {
+  stamp("aaaaaaa");
+  const check = await settingsWithWorker(page, api);
+
+  // The server stops answering. Rounding that to "this is the current
+  // version" is the one thing this button must never do.
+  fs.rmSync(versionFile, { force: true });
+  await check.click();
+  await expect(page.locator(".toast")).toContainText("Couldn't reach the server");
+  await expect(page.locator(BAND)).toBeHidden();
+});
