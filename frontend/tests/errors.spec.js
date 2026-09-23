@@ -209,17 +209,27 @@ test("the boundary offers a way back, and it works", async ({ page, api }) => {
   await expect(page.locator(CARD).first()).toBeVisible();
 });
 
-test("a route that matches nothing goes home rather than to the boundary", async ({
+test("a route that matches nothing gets the 404, not the boundary", async ({
   page,
   api,
 }) => {
-  // Not every miss is a failure. A mistyped fragment is not a screen that broke,
-  // and sending somebody to an apology for it would be the app blaming itself
-  // for a typo.
+  // Not every miss is a failure, and this is the half of that which still
+  // holds: a mistyped fragment is not a screen that broke, so it must not be
+  // dressed as one. The boundary is for a view that threw; this is an address
+  // the app simply doesn't have, and the two say different things and look
+  // different on purpose.
+  //
+  // What changed on 2026-09-23 is the other half. This used to redirect to the
+  // feed, on the argument that an apology for a typo is the app blaming itself.
+  // The redirect was not a gentler answer, though — it was no answer, delivered
+  // by quietly replacing the reader's address with a different one. See the
+  // note at the top of js/views/notfound.js.
   await api.seed(1, "ada@commons.test");
   await page.goto("/#/not-a-route-at-all");
 
-  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator(".notfound")).toBeVisible();
   await expect(page.locator(".screen-error")).toHaveCount(0);
-  await expect(page.locator(CARD).first()).toBeVisible();
+  // The feed is gone, and the bad address is still in the bar.
+  await expect(page.locator(CARD)).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/not-a-route-at-all$/);
 });

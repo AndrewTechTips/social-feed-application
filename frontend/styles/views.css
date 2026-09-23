@@ -1914,3 +1914,247 @@
   justify-content: center;
   flex-wrap: wrap;
 }
+
+/* — the address that isn't here ---------------------------------------------
+   The 404 screen. See js/views/notfound.js for why it exists and why it is the
+   one screen in the app allowed to raise its voice.
+
+   The exception is a single gesture — large numerals, lit from inside — and it
+   is paid for in one place only. Everything below the numerals is the house
+   setting the error boundary uses: serif, centred in the reading column, no
+   panel, no red, no icon.
+
+   No theme override anywhere in this block, and the two stops are how that is
+   afforded: the gradient runs from --accent-text to --text, so it is amber
+   into near-white on the dark theme and a deeper amber into near-black on the
+   light one, without either being written down. The one colour decision is
+   "the accent, falling into the page's own ink", made once.
+
+   --accent-text rather than --accent, and the tokens file explains why better
+   than this could: the two are the same value on the dark theme, and on the
+   light one --accent is a *fill* colour that measures 1.84:1 as type on a page
+   while --accent-text is the same hue walked down until it reads. These
+   numerals are type. Drawn in --accent they came out bleached on the light
+   theme — the first glyph nearly gone, which is a poor first impression for
+   the one gesture this screen gets. */
+.notfound {
+  max-width: var(--measure);
+  margin: var(--s-7) auto var(--s-8);
+  padding: 0 var(--s-4);
+  text-align: center;
+}
+
+/* — the numerals ----------------------------------------------------------
+   The glyphs set the height of this block and the glow is taken out of the
+   flow behind them, which is the opposite of how it was first written and the
+   difference is a hundred and fifty pixels of nothing.
+
+   Both in one grid cell centres them on each other for free — but a grid cell
+   is as tall as its tallest occupant, and the glow is a circle half again as
+   tall as the numerals are. The wrapper inherited the circle's height, so on a
+   phone the heading sat a long way below a mark that looked, correctly, like
+   it had stopped. Positioned instead, the glow bleeds past the glyphs in both
+   directions the way light does, and costs the layout nothing. */
+.notfound__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--s-4);
+}
+.notfound__numerals {
+  display: block;
+  width: min(300px, 64vw);
+  height: auto;
+}
+.notfound__numerals text {
+  font-family: var(--font-serif);
+  font-size: 132px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.notfound__stop-a {
+  stop-color: var(--accent-text);
+}
+.notfound__stop-b {
+  stop-color: var(--text);
+}
+
+/* The lamp behind the nought.
+
+   A radial gradient and nothing else — no `filter: blur()`. A blurred layer is
+   what made the aurora the most expensive thing on a phone, and the finding
+   from that pass applies here without needing to be rediscovered: a gradient
+   with a soft stop is already soft, and costs a fraction of a blur radius over
+   the same area. This is why the glow can stay on small screens when the
+   aurora's second bloom cannot. */
+.notfound__glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  /* Narrower than the glyphs are wide, so the lamp reads as sitting inside the
+     nought rather than behind the whole word. */
+  width: min(260px, 58vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 26%, transparent),
+    transparent 66%
+  );
+  /* Transform and opacity only, so it composites and never lays out. The `from`
+     is the dimmer end deliberately: under reduced motion the global rule in
+     base.css collapses the duration and pins the iteration count, which lands
+     every animation on its `to` — so a reader who asked for no motion gets the
+     glow at full strength and perfectly still, rather than at half strength. */
+  animation: nf-breathe 7s var(--ease) infinite alternate;
+}
+@keyframes nf-breathe {
+  from {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+/* — what it says ----------------------------------------------------------- */
+.notfound__title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  margin-bottom: var(--s-3);
+  text-wrap: balance;
+}
+.notfound__line {
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: 1.5;
+  margin-bottom: var(--s-4);
+}
+
+/* The address they actually asked for, quoted back.
+
+   The one detail a redirect threw away, and the reason it is set apart rather
+   than folded into the sentence: it is a string to compare against whatever it
+   was copied from, so it has to be selectable and readable as a unit. Set in
+   the UI face rather than a monospace one — the app has two faces and this is
+   not worth a third — and allowed to break anywhere, because a pasted address
+   has no spaces in it and would otherwise push the column sideways on a
+   phone. */
+.notfound__asked {
+  margin-bottom: var(--s-6);
+}
+.notfound__asked code {
+  display: inline-block;
+  max-width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* — the ways out ----------------------------------------------------------- */
+.notfound__actions {
+  display: flex;
+  gap: var(--s-3);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--s-5);
+}
+
+/* Where they were, when the app happens to know. Absent rather than empty when
+   it doesn't — see resumeLine() — so nothing here has to reserve space for it. */
+.notfound__resume {
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  margin-bottom: var(--s-5);
+}
+.notfound__resume-link {
+  color: var(--text);
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+@media (hover: hover) {
+  .notfound__resume-link:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+/* The places that do exist, on a hairline. The rule is the same one the app
+   uses to separate a section from what follows it, and it is what keeps this
+   row reading as a footnote to the screen rather than as a second offer
+   competing with the button above. */
+.notfound__elsewhere {
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--border);
+}
+.notfound__elsewhere-label {
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  margin-bottom: var(--s-3);
+}
+.notfound__places {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-1) var(--s-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notfound__places a {
+  display: inline-flex;
+  align-items: center;
+  /* 44px of target, from 13px of text. The row is five small links side by
+     side and is the densest thing on the screen to aim at, which on a phone is
+     exactly where a tap target stops being a formality. The padding is on the
+     link rather than the item so the whole of it is the target. */
+  min-height: 44px;
+  padding: 0 var(--s-2);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  text-decoration: none;
+  border-radius: var(--r-sm);
+  transition:
+    color var(--t-mid) var(--ease),
+    background-color var(--t-mid) var(--ease);
+}
+@media (hover: hover) {
+  .notfound__places a:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+
+/* On a phone the numerals are the only thing that has to give. They are sized
+   in vw already, so this is about the space around them: a screen nobody chose
+   to be on should not make somebody scroll to reach the way off it. */
+@media (max-width: 480px) {
+  .notfound {
+    margin-top: var(--s-5);
+  }
+  .notfound__mark {
+    margin-bottom: var(--s-4);
+  }
+  /* One column, full width. Two 44px buttons wrapped onto two lines at
+     different widths is the untidiest thing a flex row does on a narrow
+     screen, and the primary action is worth the whole measure anyway. */
+  .notfound__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

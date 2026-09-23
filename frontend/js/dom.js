@@ -12,6 +12,11 @@
 // one.
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+// Which tags have to be created in the SVG namespace. `text`, `defs`,
+// `linearGradient` and `stop` joined the shape tags for the 404 screen, whose
+// numerals are SVG text filled from a gradient rather than HTML text with
+// `background-clip` — see js/views/notfound.js for why that choice is about
+// accessibility rather than about looks.
 const SVG_TAGS = new Set([
   "svg",
   "path",
@@ -21,6 +26,10 @@ const SVG_TAGS = new Set([
   "g",
   "polyline",
   "polygon",
+  "text",
+  "defs",
+  "linearGradient",
+  "stop",
 ]);
 
 // h("button", {class: "btn", onclick: fn}, "Label", childNode)

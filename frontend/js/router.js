@@ -8,6 +8,20 @@ import { mountView } from "./view.js";
 const routes = [];
 let generation = 0;
 
+/**
+ * The handler for an address none of the patterns claim — `route("*", fn)`.
+ *
+ * Held here rather than pushed onto `routes` with a regex that matches
+ * everything, and the difference is not stylistic. `resolve()` walks the array
+ * in registration order and stops at the first match, so a catch-all sitting in
+ * it would shadow every route registered *after* it — and routes are registered
+ * after it: tests/errors.spec.js imports this module at runtime and adds one to
+ * reach the error boundary. A catch-all in the array would answer that address
+ * first and the boundary would become untestable. Kept out of the array, it is
+ * unconditionally last no matter who registers what, when.
+ */
+let fallback = null;
+
 function compile(pattern) {
   const keys = [];
   const re = new RegExp(
@@ -22,7 +36,30 @@ function compile(pattern) {
 }
 
 export function route(pattern, handler) {
+  // "*" is the catch-all, and the only pattern that isn't a path. It gets its
+  // own slot rather than a regex — see `fallback` above.
+  if (pattern === "*") {
+    fallback = handler;
+    return;
+  }
   routes.push({ ...compile(pattern), handler });
+}
+
+/**
+ * Does any pattern claim this path? The catch-all deliberately doesn't count.
+ *
+ * One caller: the title. Everything else about a screen is decided by the
+ * screen, but `document.title` is set from out in the chrome (see syncChrome in
+ * main.js), and a chrome that can't tell a real address from a missing one puts
+ * "Commons" in the tab and the history entry for both. That is the one place
+ * the distinction leaks out of the router, so the router answers it rather than
+ * having main.js keep a second copy of the route table — or, worse, sniff the
+ * DOM for the screen that happens to be up.
+ *
+ * @param {string} path
+ */
+export function routeExists(path) {
+  return routes.some(({ re }) => re.test(path));
 }
 
 export function navigate(path) {
@@ -144,7 +181,25 @@ async function resolve() {
     return;
   }
 
-  // nothing matched — send them home
+  // Nothing matched. The catch-all is a route like any other as far as the
+  // error boundary is concerned — it runs inside the same try, so a 404 screen
+  // that throws is reported rather than swallowed.
+  if (fallback) {
+    try {
+      await fallback({ params: {}, query, isStale });
+    } catch (err) {
+      if (isStale()) return;
+      console.error(err);
+      mountScreenError(err);
+    }
+    return;
+  }
+
+  // No catch-all registered at all. main.js registers one, so this is not a
+  // state the app is ever in; it stays as the answer for a router driven
+  // without one — a test that imports this module and registers two routes of
+  // its own, say. Going home is right for that, because a screen nobody built
+  // cannot be the one to explain itself.
   navigate("/");
 }
 

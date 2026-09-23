@@ -127,10 +127,18 @@ test("a mistyped address is survivable, which is the whole point", async ({
   await body(page).fill("Three paragraphs of it.");
   await expect.poll(() => storedDraft(page, DRAFT_KEY)).not.toBeNull();
 
-  // Off to an address that isn't a route at all, which is what the router
-  // sends home — the fat-fingered hash this whole feature is named after.
+  // Off to an address that isn't a route at all — the fat-fingered hash this
+  // whole feature is named after, and the exact case js/views/notfound.js was
+  // built for. It used to be sent home; since 2026-09-23 it gets a screen
+  // saying so instead, and this waits on that rather than on the redirect.
+  //
+  // Which is the same assertion it always was, in substance: something has to
+  // pin the moment the misfire has finished misfiring, so that the draft check
+  // below is a real answer and not a race. What the screen underneath says is
+  // notfound.spec.js's business; what matters here is that three paragraphs
+  // survive a typo.
   await page.goto("/#/composr");
-  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator(".notfound")).toBeVisible();
 
   await page.goto("/#/compose");
   await expect(title(page)).toHaveValue("Nearly done");

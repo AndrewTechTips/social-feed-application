@@ -294,7 +294,26 @@ test("the screen that didn't load", async ({ page }) => {
     document.querySelector("#view").replaceChildren();
     location.hash = "#/__does-not-exist-and-throws";
   });
-  // Nothing routes there, so the router sends them home — which is the *other*
-  // half of the same code path and worth knowing still happens.
-  await expect(page).toHaveURL(/#\/$/);
+  // Nothing routes there, so the catch-all answers first and the boundary is
+  // never reached. The hash is deliberately one that no pattern claims, which
+  // is now a screen of its own — photographed below.
+  await expect(page.locator(".notfound")).toBeVisible();
+});
+
+test("the address that isn't here", async ({ page }) => {
+  // The one screen in the app with a flourish on it: large gradient numerals
+  // over a radial glow, both of which are exactly the kind of thing that
+  // survives a refactor in the stylesheet and not on the page.
+  await page.goto("/#/a-path-that-leads-nowhere");
+  await expect(page.locator(".notfound")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page).toHaveScreenshot("notfound.png", SHOT);
+});
+
+test("the address that isn't here, on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/a-path-that-leads-nowhere");
+  await expect(page.locator(".notfound")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page).toHaveScreenshot("notfound-phone.png", SHOT);
 });

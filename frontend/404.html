@@ -30,29 +30,70 @@
         location.replace(target);
       })();
     </script>
+    <!-- Deliberately small. This file is fetched for every path the host
+       doesn't have, and the script above usually redirects out of it before a
+       single pixel is painted — so everything below is for the one reader who
+       has JavaScript off, and is not worth a stylesheet, a font or an icon.
+       The values are the dark theme's, copied rather than imported for the
+       same reason: one file, no requests.
+
+       The app's own 404 is js/views/notfound.js and looks nothing like this,
+       because it can afford to. This is the same sentence in the same voice,
+       at a hundredth of the weight. -->
     <style>
       body {
         margin: 0;
         min-height: 100vh;
         display: grid;
         place-items: center;
+        padding: 24px;
         background: #0c1315;
         color: #93a3a1;
         font:
-          15px/1.5 -apple-system,
+          15px/1.6 -apple-system,
           BlinkMacSystemFont,
           "Segoe UI",
           Roboto,
           sans-serif;
       }
+      main {
+        max-width: 34em;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 12px;
+        color: #e7edec;
+        font-family: ui-serif, Georgia, "Times New Roman", serif;
+        font-size: 1.6rem;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0 0 24px;
+      }
       a {
-        color: #f0a63c;
+        display: inline-block;
+        min-height: 44px;
+        padding: 12px 20px;
+        border-radius: 10px;
+        background: #f0a63c;
+        color: #2a1c05;
+        font-weight: 600;
+        text-decoration: none;
       }
     </style>
   </head>
   <body>
     <!-- Only ever seen with JavaScript off, which is also the only case where
-       the app itself wouldn't work either. -->
-    <p>Taking you back to <a href="./">Commons</a>…</p>
+       the app itself wouldn't work either — so this says where to go rather
+       than promising to take them there. -->
+    <main>
+      <h1>There's nothing down this path.</h1>
+      <p>
+        You've landed on an address Commons doesn't have. Nothing is broken — the way in
+        is still open.
+      </p>
+      <a href="./">Take me to Commons</a>
+    </main>
   </body>
 </html>

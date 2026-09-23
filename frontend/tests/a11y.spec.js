@@ -75,6 +75,28 @@ test("a post has no violations", async ({ page, api }) => {
   await scan(page);
 });
 
+test("the 404 has no violations", async ({ page, api }) => {
+  // The one screen with a flourish on it, and therefore the one most worth
+  // scanning: the numerals are a gradient, the address chip is small dimmed
+  // type on a tinted pill, and the row of places is 13px links. All three are
+  // contrast decisions that were made by eye.
+  await api.seed(2, "ada@commons.test");
+  await page.goto("/#/no-such-address");
+  await expect(page.locator(".notfound")).toBeVisible();
+  await scan(page);
+});
+
+test("the 404 has no violations on the light theme", async ({ page, api }) => {
+  // The gradient ends in --text, which is near-white on one theme and
+  // near-black on the other; nothing in the block overrides per theme, so the
+  // light side is only ever checked here.
+  await api.seed(2, "ada@commons.test");
+  await page.goto("/#/no-such-address");
+  await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+  await expect(page.locator(".notfound")).toBeVisible();
+  await scan(page);
+});
+
 test("sign in has no violations", async ({ page, api }) => {
   await page.goto("/#/login");
   await expect(

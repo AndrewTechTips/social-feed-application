@@ -14,6 +14,7 @@ import {
   currentPath,
   currentQuery,
   forgetCurrentScreen,
+  routeExists,
 } from "./router.js";
 import { forgetConditional } from "./api.js";
 import { IS_DEMO } from "./config.js";
@@ -38,6 +39,7 @@ import { renderShelf } from "./views/shelf.js";
 import { renderColophon } from "./views/colophon.js";
 import { renderSettings } from "./views/settings.js";
 import { renderNotifications } from "./views/notifications.js";
+import { renderNotFound } from "./views/notfound.js";
 import { renderLogin, renderRegister } from "./views/auth.js";
 import { renderCompose, renderEdit } from "./views/compose.js";
 
@@ -239,6 +241,17 @@ function syncChrome() {
   }
   syncDemoStrip();
   const path = currentPath();
+
+  // An address the app doesn't have says so in the tab and in the history
+  // entry, not just on the page. A back-button list with three "Commons" in it,
+  // one of which was a dead link, is a list that has lost the only detail worth
+  // having. Asked first, because /u/:username matches any name at all and the
+  // profile branch below would otherwise claim a path no route wants.
+  if (!routeExists(path)) {
+    document.title = "Nothing here \u00b7 Commons";
+    return;
+  }
+
   const profile = path.match(/^\/u\/(.+)$/);
   if (profile) {
     document.title = `${decodeURIComponent(profile[1])} · Commons`;
@@ -308,6 +321,11 @@ route("/shelf", renderShelf);
 route("/colophon", renderColophon);
 route("/settings", renderSettings);
 route("/notifications", renderNotifications);
+// Last, and last on purpose — though the router enforces that rather than
+// trusting this line's position. Anything the patterns above don't claim is an
+// address Commons doesn't have, and gets a screen saying so instead of being
+// quietly redirected home. See js/views/notfound.js.
+route("*", renderNotFound);
 
 subscribe(renderAccount);
 // Saving the first post puts a way into the shelf in the header, and taking the

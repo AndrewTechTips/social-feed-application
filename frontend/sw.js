@@ -116,6 +116,7 @@ const SHELL = [
   "./js/views/notifications.js",
   "./js/views/auth.js",
   "./js/views/compose.js",
+  "./js/views/notfound.js",
   "./js/demo/backend.js",
   "./js/demo/strip.js",
   "./js/demo/seed.json",

@@ -29,6 +29,74 @@ too, and retired with the others; what it decided is in
 
 ### Added
 
+- **An address Commons doesn't have now says so, instead of quietly going
+  somewhere else.** The router answered an unmatched hash with a redirect to
+  the feed, and the test that pinned it made the case for tone: a mistyped
+  fragment is not a screen that broke, and sending somebody to an apology for
+  it would be the app blaming itself for a typo.
+
+  That is right about tone and wrong about silence. The redirect was not a
+  gentler answer — it was no answer, delivered by replacing the reader's
+  address with a different one and never mentioning it. If the link came out
+  of somebody's notes, or somebody else's message, the one fact worth having
+  (*this address is not a thing here*) is exactly the fact the redirect threw
+  away. The reader was left on a feed they hadn't asked for, with no way to
+  tell whether the link was wrong, the post was deleted, or they had simply
+  arrived.
+
+  So `#/anything-else` is now a screen. It says what was asked for — the hash
+  quoted back, cut if it is enormous, kept whole in the `title` — says plainly
+  that it isn't an address the app has, says nothing is broken, and then
+  spends the rest of its space getting the reader somewhere they wanted: the
+  feed, the command palette, and a row of the places that do exist.
+  **Notifications is in that row only when signed in**, because signed out it
+  turns straight around into the sign-in form, and a link that lies about
+  where it goes is worse than no link. The hash is left in the bar untouched,
+  for the reason the error boundary leaves it there: an address the app
+  rewrites is one nobody can bookmark, report or press Back out of.
+
+  It also offers **the list you were last on** — "pick up where you were, in
+  the feed" — from `knownPosts()`, which is already in memory. Nothing is
+  fetched for it: a screen whose job is to catch a failure must not have a
+  failure mode of its own, so when there is no list the line is absent rather
+  than empty, and nobody is shown a spinner on a dead end.
+
+  **It is the one screen in the app allowed to raise its voice**, and that is a
+  decision rather than a drift. Everything else here is deliberately unshowy —
+  the error boundary is serif, quiet, no red, no icon, no panel — but this is
+  the only screen nobody chose to be on, so it has to establish where it is in
+  one glance, before a word is read. It buys that with a single gesture, large
+  numerals lit from inside, and then returns to the house voice for everything
+  underneath. No second colour is introduced: the gradient runs from
+  `--accent-text` to `--text`, which is amber into near-white on the dark
+  theme and a deeper amber into near-black on the light one, so the block
+  carries no theme override at all. `--accent-text` rather than `--accent` is
+  the whole of that trick — the two are identical on the dark theme, and on
+  the light one `--accent` is a fill colour measuring 1.84:1 as type, which
+  had the first glyph all but bleached off the page.
+
+  Three smaller things fell out of building it:
+
+  - The numerals are **SVG text, not HTML text with `background-clip`**. That
+    is an accessibility decision: clipping a gradient to HTML text needs
+    `color: transparent`, which is a shape axe's contrast rule has to guess
+    about, and a decorative flourish has no business making a scan ambiguous.
+    `js/dom.js` gained four tags for it.
+  - The catch-all is **held outside the route table**, not pushed onto it as a
+    regex matching everything. `resolve()` stops at the first match in
+    registration order, so a catch-all in the array would shadow every route
+    registered after it — and `errors.spec.js` registers one at runtime to
+    reach the error boundary, which would have become unreachable.
+  - The tab and the history entry say **"Nothing here · Commons"**. The title
+    is set out in the chrome, which couldn't tell a real address from a
+    missing one; `routeExists()` is the one place that distinction leaks out
+    of the router, and it answers rather than letting main.js keep a second
+    copy of the route table.
+
+  The `404.html` that GitHub Pages serves — a redirect shim, and only ever
+  *seen* with JavaScript off — got the same sentence in the same voice at a
+  hundredth of the weight. Still one file, still no requests.
+
 - **Pressing a button on `#/settings` no longer costs you your place.**
   Every control there that says "Saving…" or "Deleting…" while it works
   disables itself to do it, and **disabling a focused control hands focus to
