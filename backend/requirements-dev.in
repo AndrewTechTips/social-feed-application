@@ -1,0 +1,24 @@
+# Development / test dependencies — the direct ones, hand-written.
+#
+# An input, like requirements.in beside it. The file to install is the compiled
+# `requirements-dev.txt`, which is the whole graph pinned and hashed:
+#
+#     pip install -r requirements-dev.txt
+#
+-r requirements.in
+
+black==26.5.1
+mypy==2.3.1
+# HTTP client used by starlette.testclient in Starlette 1.x. Pinned at 2.12+
+# rather than 2.7: pip-audit flags six advisories against the older line
+# (PYSEC-2026-3844..3849), and a dev-only dependency is still a dependency
+# CI has to install.
+httpx2==2.12.0
+pytest==9.1.1
+pip-audit==2.10.1
+pytest-cov==7.1.0
+# The resolver that compiles the two .in files into the two lockfiles. In here
+# rather than left to whoever is at the keyboard so that "how do I relock?" has
+# one answer, and so CI has the tool it needs to check the lock is in step with
+# these inputs — see the "Lockfile" step in .github/workflows/build-deploy.yml.
+uv==0.12.19

@@ -1,0 +1,31 @@
+# Runtime dependencies — the direct ones, hand-written. Dev / test tools live
+# in requirements-dev.in.
+#
+# This is an *input*, not something to install. `requirements.txt` beside it is
+# the compiled lockfile: every package in the graph, transitive ones included,
+# pinned to an exact version with a hash. Install that; edit this.
+#
+#     pip install -r requirements.txt          <- what CI and Docker do
+#     uv pip compile ... (see requirements.txt header)   <- after editing this
+#
+# Transitive dependencies used to be deliberately unpinned here, on the
+# reasoning that pip could resolve them and a shorter file is easier to read.
+# The cost of that showed up on 2026-09-28: Starlette 1.7 changed
+# `CORSMiddleware` to append `Vary: Origin` unconditionally, tests/test_etag.py
+# was asserting the whole header string, and a push that touched only frontend
+# code turned CI red. Nothing in this repository had changed. That is the
+# failure mode a lockfile removes — upstream releases now arrive when somebody
+# asks for them, by recompiling, rather than on the next `pip install`.
+
+alembic==1.18.5
+bcrypt==4.0.1
+email-validator==2.3.0
+fastapi==0.139.2
+psycopg2-binary==2.9.12
+pydantic==2.13.4
+pydantic-settings==2.14.2
+PyJWT==2.13.0
+python-multipart==0.0.32
+slowapi==0.1.10
+SQLAlchemy==2.0.51
+uvicorn[standard]==0.51.0
