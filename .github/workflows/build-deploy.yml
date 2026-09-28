@@ -155,9 +155,12 @@ jobs:
         # measures the repository, not the frontend.
         run: python docs/stats.py --check
 
-      - name: Install Chromium
+      - name: Install browsers
+        # WebKit as well as Chromium, and only for tests/progress.spec.js —
+        # see the "webkit" project in tests/playwright.config.js for why one
+        # file's claims are worth a second engine when the rest are not.
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run end-to-end tests
         # --ignore-snapshots covers exactly one file. tests/visual.spec.js

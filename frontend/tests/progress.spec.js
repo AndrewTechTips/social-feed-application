@@ -7,9 +7,12 @@
 // a page with no way to see where you are in it, and a bar with a scrollbar
 // beside it is the thing that was asked to go away.
 //
-// Both are pure CSS. Nothing here is driven by JavaScript, there is no scroll
-// listener anywhere in the app, and that is the point — so the only way to
-// know any of it still works is to measure it.
+// The bar is pure CSS wherever `animation-timeline: scroll()` exists, which is
+// the path to want and the one every assertion below is written against. On an
+// engine without it, js/progress.js draws the same bar from a passive,
+// frame-coalesced scroll listener — see "the engine without scroll timelines"
+// at the foot of this file. Either way the numbers are the only way to know it
+// works, which is what this file is for.
 
 const { test, expect, CARD, settled } = require("./support/fixtures");
 
@@ -162,10 +165,164 @@ test.describe("reduced motion", () => {
   });
 });
 
+// ── the shape of it, not just the ends ──────────────────────────────────────
+
+/**
+ * The bar's fill and the page's own progress, as fractions, at ten points down
+ * a page that holds still. Returns pairs so a failure prints the whole curve.
+ */
+async function curve(page) {
+  return page.evaluate(async () => {
+    const de = document.documentElement;
+    const bar = document.querySelector(".progress");
+    const max = de.scrollHeight - de.clientHeight;
+    const out = [];
+    for (let i = 0; i <= 10; i++) {
+      const f = i / 10;
+      window.scrollTo(0, Math.round(max * f));
+      await new Promise((r) => setTimeout(r, 120));
+      out.push([f, +(bar.getBoundingClientRect().width / innerWidth).toFixed(3)]);
+    }
+    return out;
+  });
+}
+
+test("it moves at the page's own pace, not its square", async ({ page }) => {
+  test.skip(!(await scrollDriven(page)), "no scroll-driven animations here");
+  // The regression this exists for, and why the ends are not enough to catch
+  // it: `@keyframes progress` used to declare only its `to`, leaving the
+  // `from` to be inferred from the element's own `transform: scaleX(0)`.
+  // Chrome infers it once. WebKit composed it against the style the animation
+  // was already producing, so the scale landed twice and the bar drew at
+  // progress² — 0 at the top and 1 at the bottom, both correct, and every
+  // point in between wrong. Half way down a post the bar was a quarter of the
+  // way across, barely moving through the first half of the page and then
+  // lunging for the end: a bar that reads as laggy while nothing is actually
+  // slow. Both keyframes are written out now; this measures the middle.
+  await page.goto("/#/colophon");
+  await expect(page.locator("h1")).toBeVisible();
+  await settled(page);
+
+  for (const [pageAt, barAt] of await curve(page)) {
+    expect(
+      Math.abs(barAt - pageAt),
+      `${pageAt * 100}% down the page, bar at ${barAt * 100}%`
+    ).toBeLessThan(0.02);
+  }
+});
+
+// ── the engine without scroll timelines ─────────────────────────────────────
+//
+// Everything above measures the CSS path. This is the other one: on an engine
+// with no `animation-timeline: scroll()`, chrome.css cannot draw the bar and
+// base.css has taken the scrollbar away regardless, so js/progress.js draws it
+// from script instead.
+//
+// Simulated rather than skipped, because the engine it is for is the one this
+// suite cannot run: the feature is told "no" through CSS.supports, which is
+// the exact check the module branches on, and the CSS animation is switched
+// off so the inline transform the module writes is the only thing moving the
+// bar. What is left is the real module doing its real work.
+
+test.describe("drawn from script", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const real = CSS.supports.bind(CSS);
+      CSS.supports = (...args) =>
+        String(args[0]).includes("animation-timeline") ? false : real(...args);
+    });
+  });
+
+  /** Take the CSS animation out of the way, as a browser without it would. */
+  const asUnsupported = async (page) =>
+    page.addStyleTag({ content: ".progress { animation: none !important; }" });
+
+  test("draws the same bar, at the same place on the page", async ({ page }) => {
+    await page.goto("/#/colophon");
+    await expect(page.locator("h1")).toBeVisible();
+    await asUnsupported(page);
+    await settled(page);
+
+    // The same assertion the CSS path gets, against the same curve. The two
+    // paths are interchangeable or one of them is a downgrade.
+    for (const [pageAt, barAt] of await curve(page)) {
+      expect(
+        Math.abs(barAt - pageAt),
+        `${pageAt * 100}% down the page, bar at ${barAt * 100}%`
+      ).toBeLessThan(0.02);
+    }
+  });
+
+  test("a burst of scroll events costs one write, not one each", async ({ page }) => {
+    await page.goto("/#/colophon");
+    await expect(page.locator("h1")).toBeVisible();
+    await asUnsupported(page);
+    await settled(page);
+
+    // The whole reason the handler is written the way it is. Scroll events
+    // arrive faster than the screen redraws and often in bursts; the listener
+    // does nothing but raise a flag, and one rAF per frame does the work. A
+    // handler that wrote on every event would schedule fifty here.
+    const frames = await page.evaluate(async () => {
+      const real = requestAnimationFrame;
+      let scheduled = 0;
+      window.requestAnimationFrame = (cb) => {
+        scheduled += 1;
+        return real(cb);
+      };
+      for (let i = 0; i < 50; i++) dispatchEvent(new Event("scroll"));
+      await new Promise((r) => real(() => real(r)));
+      window.requestAnimationFrame = real;
+      return scheduled;
+    });
+    expect(frames).toBe(1);
+  });
+
+  test("the listener never blocks the scroll", async ({ page }) => {
+    // `{ passive: true }` is what lets the browser keep scrolling on the
+    // compositor instead of waiting to learn whether this handler will call
+    // preventDefault(). It cannot be read back off the listener, so it is
+    // asserted the only way there is: a cancelable scroll-ish event dispatched
+    // at the same target stays uncancelled after the handler has run.
+    await page.goto("/#/colophon");
+    await expect(page.locator("h1")).toBeVisible();
+    await asUnsupported(page);
+    await settled(page);
+
+    const defaultPrevented = await page.evaluate(() => {
+      const ev = new Event("scroll", { cancelable: true });
+      dispatchEvent(ev);
+      return ev.defaultPrevented;
+    });
+    expect(defaultPrevented).toBe(false);
+  });
+
+  test("and the page still has no scrollbar to fall back on", async ({ page }) => {
+    await page.goto("/#/colophon");
+    await expect(page.locator("h1")).toBeVisible();
+    await asUnsupported(page);
+    await settled(page);
+
+    // The half of the bargain that changed. This engine used to keep its
+    // scrollbar precisely because it had no bar; now it has a bar, so it keeps
+    // no scrollbar either — and the page is still exactly as wide as the
+    // window, so nothing shifted to pay for it.
+    const { scrollbarWidth, gutter } = await page.evaluate(() => ({
+      scrollbarWidth: getComputedStyle(document.documentElement).scrollbarWidth,
+      gutter: window.innerWidth - document.documentElement.clientWidth,
+    }));
+    expect(scrollbarWidth).toBe("none");
+    expect(gutter).toBe(0);
+  });
+});
+
 // ── and the scrollbar it replaced ───────────────────────────────────────────
 
 test("no scroller in the app draws a scrollbar", async ({ page, api }) => {
-  test.skip(!(await scrollDriven(page)), "the fallback keeps its scrollbar, by design");
+  // No skip. This used to be gated on scroll-driven animations, because the
+  // engines without them deliberately kept their scrollbar as a stand-in for a
+  // bar they could not draw. They don't any more — js/progress.js draws it —
+  // so "hidden" is now unconditional and the test says so.
   await longFeed(page, api);
   await page.keyboard.press("Control+k");
   await expect(page.locator(".palette__list")).toBeVisible();
@@ -174,6 +331,7 @@ test("no scroller in the app draws a scrollbar", async ({ page, api }) => {
   // the standard property every current engine answers to; the WebKit
   // pseudo-element is the same instruction in the older dialect and cannot be
   // read back from script, so it is covered by the width check below instead.
+  // Both are declared unconditionally in base.css now.
   const widths = await page.evaluate(() =>
     [
       document.documentElement,
@@ -190,7 +348,6 @@ test("no scroller in the app draws a scrollbar", async ({ page, api }) => {
 });
 
 test("hiding it takes no width, so nothing can shift", async ({ page, api }) => {
-  test.skip(!(await scrollDriven(page)), "the fallback keeps its scrollbar, by design");
   await longFeed(page, api);
 
   const wide = await page.evaluate(() => {

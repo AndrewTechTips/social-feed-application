@@ -52,9 +52,27 @@ module.exports = defineConfig({
   // Running both is what stops the published site quietly drifting away from
   // the API this project actually ships. tests/support/fixtures.js picks its
   // target from the project name.
+  //
+  // And one more, against a different engine rather than a different backend:
+  //
+  //   webkit    Safari, running tests/progress.spec.js and nothing else
+  //
+  // Narrow on purpose. It is here because the scroll indicator shipped broken
+  // in Safari for as long as it existed and the Chromium suite could not see
+  // it: `@keyframes progress` declared only its `to`, Chrome inferred the
+  // `from` from the element's style once, and WebKit composed it against the
+  // style the animation was already producing — so the bar drew at progress²,
+  // correct at both ends and wrong everywhere in between. A whole-suite second
+  // engine is a different and much larger commitment; this is the one file
+  // whose claims are about what an engine does with a stylesheet.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "demo", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "webkit",
+      testMatch: /progress\.spec\.js/,
+      use: { ...devices["Desktop Safari"] },
+    },
   ],
 
   // Both projects need the static server; only "chromium" needs the mock API.

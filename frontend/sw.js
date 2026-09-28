@@ -114,6 +114,7 @@ const SHELL = [
   "./js/update.js",
   "./js/share.js",
   "./js/browserdata.js",
+  "./js/progress.js",
   "./js/components/vote.js",
   "./js/components/card.js",
   "./js/components/palette.js",

@@ -30,6 +30,7 @@ import { mountPalette, openPalette } from "./components/palette.js";
 import { accountMenu } from "./components/accountmenu.js";
 import { shelfCount } from "./shelf.js";
 import { startNotifications } from "./notify.js";
+import { startScrollProgress } from "./progress.js";
 import { wireFeedKeys } from "./components/feedkeys.js";
 import { wireReader } from "./components/reader.js";
 import { wireQuote } from "./components/quote.js";
@@ -459,6 +460,17 @@ watchForUpdates();
 // at boot, because the choice was restored from storage before first paint and
 // nothing has dispatched a change.
 syncThemeColor();
+
+// — the scroll indicator ---------------------------------------------------------
+// Only ever does anything on an engine without `animation-timeline: scroll()`,
+// where chrome.css cannot draw the bar and base.css has hidden the scrollbar
+// that used to stand in for it. Everywhere else this returns on its first line
+// and the bar stays pure CSS. See js/progress.js.
+//
+// At boot rather than per view: it listens to the document, which outlives
+// every screen, and a view swap that changes the page's length is a resize as
+// far as it is concerned.
+startScrollProgress();
 
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => {

@@ -106,14 +106,10 @@
   --aurora-cool: rgba(64, 176, 156, 0.14);
   --aurora-alpha: 1;
 
-  /* — scrollbar -------------------------------------------------------------
-     Quiet enough to belong to the page rather than to the operating system,
-     and drawn from the same neutrals as --border rather than from the accent:
-     a bar that runs the height of every screen is the last thing that should
-     be wearing the one colour reserved for what matters. It brightens under
-     the pointer, which is the only time anybody is looking at it. */
-  --scrollbar-thumb: rgba(231, 237, 236, 0.16);
-  --scrollbar-thumb-hover: rgba(231, 237, 236, 0.32);
+  /* There were --scrollbar-thumb tokens here, for a thin themed scrollbar kept
+     as the fallback on engines that could not draw `.progress`. base.css now
+     hides the scrollbar everywhere and js/progress.js draws the bar on those
+     engines instead, so nothing was left reading them. */
 
   color-scheme: dark;
 }
@@ -177,9 +173,6 @@
   --aurora-warm: rgba(226, 149, 47, 0.12);
   --aurora-cool: rgba(47, 138, 118, 0.1);
 
-  --scrollbar-thumb: rgba(18, 40, 37, 0.22);
-  --scrollbar-thumb-hover: rgba(18, 40, 37, 0.4);
-
   color-scheme: light;
 }
 
@@ -211,8 +204,6 @@
     --shadow-panel: 0 24px 54px -24px rgba(18, 40, 37, 0.3);
     --aurora-warm: rgba(226, 149, 47, 0.12);
     --aurora-cool: rgba(47, 138, 118, 0.1);
-    --scrollbar-thumb: rgba(18, 40, 37, 0.22);
-    --scrollbar-thumb-hover: rgba(18, 40, 37, 0.4);
     color-scheme: light;
   }
 }

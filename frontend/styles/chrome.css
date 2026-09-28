@@ -91,33 +91,41 @@
    decide that it should. Measured, not assumed: see tests/progress.spec.js.
 
    ── and it still costs nothing per frame ────────────────────────────────────
-   No JavaScript and no scroll listener: animation-timeline hands the animation
-   the document's own scroll progress, so it is exact by construction, cannot
-   drift out of step with the page, and animates a transform, which never
-   leaves the compositor. It is `position: absolute` inside the header, so it
-   takes no space and can shift nothing.
+   No JavaScript and no scroll listener on this path: animation-timeline hands
+   the animation the document's own scroll progress, so it is exact by
+   construction, cannot drift out of step with the page, and animates a
+   transform, which never leaves the compositor — measured, it has a layer of
+   its own, so filling the bar does not repaint the glass header it sits in.
+   It is `position: absolute` inside the header, so it takes no space and can
+   shift nothing.
 
-   Everything is inside @supports, and the element is display:none outside it,
-   so a browser without scroll-driven animations gets an empty span and no
-   stray amber rule — and keeps its native scrollbar, because base.css only
-   takes that away where this can be drawn instead.
+   ── the engine without scroll-driven animations is driven from script ───────
+   It used to be `display: none` out here, and the native scrollbar was left
+   switched on in base.css to stand in for it. That is no longer the deal: the
+   scrollbar is now hidden on every engine, so the bar has to be drawn on every
+   engine too, and js/progress.js drives it where CSS cannot. Everything below
+   is shared by both paths — the box, the colour, the `scaleX(0)` it rests at —
+   and only the *source of the number* differs. The @supports block adds the
+   timeline; the script only ever runs when that block did not apply.
    -------------------------------------------------------------------------- */
 .progress {
-  display: none;
+  display: block;
+  position: absolute;
+  /* -1px so it lies *on* the header's bottom border rather than under it:
+     the line the eye already reads as "the chrome ends here" is the one
+     that fills. */
+  inset: auto 0 -1px 0;
+  height: 2px;
+  z-index: 1;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  /* The resting state, and the fallback's starting point. Under @supports it
+     is also the animation's implicit base style. */
+  transform: scaleX(0);
 }
+
 @supports (animation-timeline: scroll()) {
   .progress {
-    display: block;
-    position: absolute;
-    /* -1px so it lies *on* the header's bottom border rather than under it:
-       the line the eye already reads as "the chrome ends here" is the one
-       that fills. */
-    inset: auto 0 -1px 0;
-    height: 2px;
-    z-index: 1;
-    background: var(--accent);
-    transform: scaleX(0);
-    transform-origin: 0 50%;
     animation: progress linear both;
     animation-timeline: scroll(root block);
   }
@@ -133,7 +141,31 @@
     }
   }
 }
+
+/* — why `from` is written out, and must stay written out ------------------------
+   This was a single `to { transform: scaleX(1) }` for as long as the bar has
+   existed, on the usual reasoning that the missing `from` is filled in from
+   the element's own style — which is `scaleX(0)` one rule up, exactly the
+   value wanted.
+
+   Chrome does that. WebKit composes the implicit keyframe against the style
+   the animation is *already* producing, so the scale got applied twice and the
+   bar drew at progress², not progress. Measured in Safari 26.6 at 10% steps
+   down the colophon: 0.1 → 0.01, 0.5 → 0.25, 0.9 → 0.81. A reader is half way
+   down the page and the bar is a quarter of the way across, crawling for the
+   first half of a long post and then lunging for the end — which is what a
+   "laggy, catchy" scroll indicator turns out to be. Nothing was dropping
+   frames; the bar was drawing the wrong number.
+
+   Writing both ends out costs nothing, changes nothing in Chrome, and removes
+   the ambiguity rather than relying on one engine's reading of it. Pinned by
+   "it moves at the page's own pace, not its square" in tests/progress.spec.js,
+   which runs against WebKit as well for this reason.
+   -------------------------------------------------------------------------- */
 @keyframes progress {
+  from {
+    transform: scaleX(0);
+  }
   to {
     transform: scaleX(1);
   }
