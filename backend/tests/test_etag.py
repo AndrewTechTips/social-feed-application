@@ -119,8 +119,27 @@ def test_two_readers_who_see_different_feeds_get_different_validators(
 
 def test_it_says_so_to_anything_caching_in_between(client, test_posts):
     """Without `Vary`, a shared cache is entitled to hand the answer it has to
-    the next person who asks, whoever they are."""
-    assert client.get("/posts/").headers["Vary"] == "Authorization"
+    the next person who asks, whoever they are.
+
+    Read as a list, not as a string, and deliberately. `Vary` is a set of field
+    names and the order of them means nothing, but more to the point this app
+    is not the only thing writing to it: `CORSMiddleware` appends `Origin`,
+    because a credentialed allow-list makes the response genuinely different
+    per origin. What app/etag.py is responsible for is that `Authorization` is
+    in there. Anything else in the header belongs to whoever put it there.
+
+    This used to assert the whole string, and it was only ever green because
+    `TestClient` sends no `Origin`. A browser always does, so the header a real
+    reader got has read `Authorization, Origin` the entire time — the test was
+    pinning a value nothing in production ever saw. Starlette 1.7 then started
+    appending `Origin` unconditionally, which is the stricter and more correct
+    behaviour (a cache must not replay a no-origin response to a cross-origin
+    request), and the assertion finally noticed.
+    """
+    vary = client.get("/posts/").headers["Vary"]
+    named = {field.strip().lower() for field in vary.split(",")}
+
+    assert "authorization" in named, vary
 
 
 def test_a_search_gets_its_own(client, test_posts):

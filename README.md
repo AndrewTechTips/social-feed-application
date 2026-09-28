@@ -131,13 +131,43 @@ API on <http://localhost:8000/api/v1>, interactive docs on <http://localhost:800
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements-dev.txt
+pip install -r backend/requirements-dev.txt   # generated lockfile — see below
 cp backend/.env.example .env      # point it at your Postgres
 
 # create the databases your config names (e.g. social_feed + social_feed_test)
 alembic -c backend/alembic.ini upgrade head
 uvicorn backend.app.main:app --reload
 ```
+
+### Dependencies
+
+Four files, two of them generated:
+
+| file | |
+|---|---|
+| `backend/requirements.in` | direct runtime dependencies, hand-written — **edit this** |
+| `backend/requirements-dev.in` | direct dev / test dependencies, hand-written — **edit this** |
+| `backend/requirements.txt` | generated: the full graph, pinned and hashed — **install this** |
+| `backend/requirements-dev.txt` | generated: the same, plus the dev tools — **install this** |
+
+Nothing installs a `.in`. After editing one, recompile and commit both files:
+
+```bash
+python backend/scripts/lock.py            # after editing a .in
+python backend/scripts/lock.py --upgrade  # take new upstream releases
+python backend/scripts/lock.py --check    # what CI runs
+```
+
+`--upgrade` is the only thing that moves a version you did not ask to move.
+A plain run keeps every existing pin and only resolves what the `.in` files
+changed, so CI can check the lock is in step without going red every time
+something is published to PyPI. That is the point of it: upstream releases
+arrive as a commit with a diff and a test run behind it.
+
+Resolved with [uv](https://github.com/astral-sh/uv) rather than `pip-compile`
+for one reason — `--universal`. The lock is compiled for every platform at
+once, so the same file is correct on a macOS laptop and on CI's Linux, and does
+not encode whichever machine last ran it.
 
 ### The web UI
 
