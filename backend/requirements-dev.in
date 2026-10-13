@@ -7,13 +7,13 @@
 #
 -r requirements.in
 
-black==26.5.1
-mypy==2.3.1
+black==26.10.1
+mypy==2.4.0
 # HTTP client used by starlette.testclient in Starlette 1.x. Pinned at 2.12+
 # rather than 2.7: pip-audit flags six advisories against the older line
 # (PYSEC-2026-3844..3849), and a dev-only dependency is still a dependency
 # CI has to install.
-httpx2==2.12.0
+httpx2==2.13.1
 pytest==9.1.1
 pip-audit==2.10.1
 pytest-cov==7.1.0
@@ -21,4 +21,4 @@ pytest-cov==7.1.0
 # rather than left to whoever is at the keyboard so that "how do I relock?" has
 # one answer, and so CI has the tool it needs to check the lock is in step with
 # these inputs — see the "Lockfile" step in .github/workflows/build-deploy.yml.
-uv==0.12.19
+uv==0.13.0

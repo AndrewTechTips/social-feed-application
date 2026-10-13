@@ -17,15 +17,15 @@
 # failure mode a lockfile removes — upstream releases now arrive when somebody
 # asks for them, by recompiling, rather than on the next `pip install`.
 
-alembic==1.18.5
-bcrypt==4.0.1
+alembic==1.20.0
+bcrypt==5.0.0
 email-validator==2.3.0
-fastapi==0.139.2
-psycopg2-binary==2.9.12
-pydantic==2.13.4
-pydantic-settings==2.14.2
-PyJWT==2.13.0
+fastapi==0.143.0
+psycopg2-binary==2.9.13
+pydantic==2.14.0
+pydantic-settings==2.15.0
+PyJWT==2.15.1
 python-multipart==0.0.32
 slowapi==0.1.10
-SQLAlchemy==2.0.51
-uvicorn[standard]==0.51.0
+SQLAlchemy==2.1.4
+uvicorn[standard]==0.54.0
